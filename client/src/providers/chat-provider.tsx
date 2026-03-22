@@ -1,0 +1,165 @@
+import { useToast } from '@/components/ui/use-toast'
+import { useI18n } from '@/hooks/useI18n'
+import { useStore } from '@/lib/store'
+import { PayloadType, User } from '@/types'
+import React, { createContext, useContext, useMemo } from 'react'
+import useWebSocket from 'react-use-websocket'
+
+type ChatProviderProps = {
+  children: React.ReactNode
+}
+
+type ChatProviderState = {
+  sendMessage?: (message: string) => void
+  connect?: () => void
+  setName?: (name: string) => void
+  stranger?: User
+  me?: User
+  emitTyping?: (typing: boolean) => void
+}
+
+const initialState: ChatProviderState = {
+  sendMessage: undefined,
+  connect: undefined,
+  setName: undefined,
+  stranger: undefined,
+  me: undefined,
+  emitTyping: undefined
+}
+
+const ChatProviderContext = createContext<ChatProviderState>(initialState)
+
+const toUser = (user: Partial<User> | undefined): User | undefined => {
+  if (!user?.id || !user?.name || !user?.state) return undefined
+
+  return {
+    id: user.id,
+    name: user.name,
+    state: user.state,
+    isTyping: user.isTyping ?? false
+  }
+}
+
+export const ChatProvider = ({ children }: ChatProviderProps) => {
+  const { toast } = useToast()
+  const { t } = useI18n()
+  const { addMessage, clear, setMe, setStranger, setStrangerTyping, me, stranger, disconnect } = useStore()
+
+  const onMessage = (event: MessageEvent) => {
+    const data = JSON.parse(event.data)
+
+    switch (data.type) {
+      case PayloadType.Disconnect:
+        disconnect()
+        addMessage({
+          sender: 'system',
+          message: t('system.strangerDisconnected')
+        })
+        break
+      case PayloadType.Message:
+        addMessage({
+          sender: data.payload.name,
+          message: data.payload.message
+        })
+        break
+      case PayloadType.UserInfo: {
+        const user = toUser(data.payload)
+        if (user) setMe(user)
+        break
+      }
+      case PayloadType.Match: {
+        const user = toUser(data.payload)
+        if (user) setStranger(user)
+        break
+      }
+      case PayloadType.Error:
+        if (data.payload === 'Client not found') {
+          disconnect()
+          addMessage({
+            sender: 'system',
+            message: t('system.strangerDisconnected')
+          })
+          break
+        }
+
+        toast({
+          title: t('common.error'),
+          description: data.payload,
+          variant: 'destructive'
+        })
+        break
+      case PayloadType.Typing:
+        setStrangerTyping(Boolean(data.payload.typing))
+        break
+    }
+  }
+
+  const ws = useWebSocket(import.meta.env.VITE_WS_ENDPOINT, {
+    shouldReconnect: () => true,
+    onOpen: () => {
+      console.info('Connected to websocket server.', me?.id)
+    },
+    onMessage
+  })
+
+  const value = useMemo<ChatProviderState>(
+    () => ({
+      emitTyping: (typing: boolean) => {
+        if (!stranger?.id) return
+
+        ws.sendJsonMessage({
+          type: PayloadType.Typing,
+          payload: {
+            id: stranger.id,
+            typing
+          }
+        })
+      },
+      sendMessage: (message: string) => {
+        if (!stranger?.id) return
+
+        ws.sendJsonMessage({
+          type: PayloadType.Message,
+          payload: {
+            id: stranger.id,
+            name: stranger.name ?? stranger.id,
+            message
+          }
+        })
+        addMessage({
+          sender: 'me',
+          message
+        })
+      },
+      connect: () => {
+        if (!me?.id) return
+
+        clear()
+        ws.sendJsonMessage({
+          payload: {
+            id: me.id
+          },
+          type: PayloadType.Queue
+        })
+      },
+      setName: (name: string) => {
+        ws.sendJsonMessage({
+          id: me?.id,
+          type: PayloadType.UserInfo,
+          payload: { name }
+        })
+      },
+      stranger,
+      me
+    }),
+    [addMessage, clear, me, stranger, ws]
+  )
+
+  return <ChatProviderContext.Provider value={value}>{children}</ChatProviderContext.Provider>
+}
+
+export const useChat = () => {
+  const context = useContext(ChatProviderContext)
+  if (context === undefined) throw new Error('useChat must be used within a ChatProvider')
+  return context
+}
