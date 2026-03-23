@@ -8,27 +8,73 @@ import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/providers/chat-provider'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Send } from 'lucide-react'
+import { CircleEllipsis, MessageSquare, Send, Settings2, ShieldAlert, UserCircle2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { Badge } from '../ui/badge'
 import { Textarea } from '../ui/textarea'
 import { useToast } from '../ui/use-toast'
 import SettingsDialog from './settings-dialog'
-import UserCount from './user-count'
 
 const formSchema = z.object({
   message: z.string().trim().min(1)
 })
 
+type MessageTone = {
+  alignClassName: string
+  rowClassName: string
+  bubbleClassName: string
+  metaClassName: string
+  iconClassName: string
+  icon: JSX.Element
+  label?: string
+  labelKey?: 'chat.you' | 'chat.system'
+}
+
+const getMessageTone = (sender: string, strangerName?: string, strangerId?: string): MessageTone => {
+  if (sender === 'me') {
+    return {
+      alignClassName: 'items-end',
+      rowClassName: 'flex-row-reverse',
+      bubbleClassName: 'border-primary/70 bg-primary text-primary-foreground',
+      metaClassName: 'text-primary-foreground/80',
+      iconClassName: 'border-primary/70 bg-primary text-primary-foreground',
+      icon: <UserCircle2 className="h-4 w-4" />,
+      labelKey: 'chat.you' as const
+    }
+  }
+
+  if (sender === 'system') {
+    return {
+      alignClassName: 'items-center',
+      rowClassName: '',
+      bubbleClassName: 'border-border border-dashed bg-muted/70 text-muted-foreground',
+      metaClassName: 'text-muted-foreground',
+      iconClassName: 'border-border bg-muted text-muted-foreground',
+      icon: <ShieldAlert className="h-4 w-4" />,
+      labelKey: 'chat.system' as const
+    }
+  }
+
+  return {
+    alignClassName: 'items-start',
+    rowClassName: '',
+    bubbleClassName: 'border-border bg-card text-card-foreground',
+    metaClassName: 'text-muted-foreground',
+    iconClassName: 'border-border bg-accent text-accent-foreground',
+    icon: <MessageSquare className="h-4 w-4" />,
+    label: sender === strangerId || sender === strangerName ? strangerName ?? sender : sender
+  }
+}
+
 const Chat = () => {
   const { t, formatUserState } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
-  const { messages, me } = useStore()
+  const { messages } = useStore()
   const { sendMessage, stranger, emitTyping: setTyping } = useChat()
   const { toast } = useToast()
   const [meTyping, setMeTyping] = useState(false)
+  const [isComposing, setIsComposing] = useState(false)
 
   const debouncedTyping = useRef<NodeJS.Timeout>()
 
@@ -52,7 +98,6 @@ const Chat = () => {
   })
 
   useEffect(() => {
-    // When a new message is received, scroll to the bottom of the chat
     ref?.current?.scrollTo(0, ref?.current?.scrollHeight)
   }, [messages])
 
@@ -66,6 +111,7 @@ const Chat = () => {
       })
       return
     }
+
     sendMessage?.(data.message.trim())
     form.reset()
     setMeTyping(false)
@@ -73,82 +119,128 @@ const Chat = () => {
   }
 
   return (
-    <div className="flex h-full w-full flex-grow flex-col">
-      <div className="flex justify-between gap-2 text-xl">
-        <h3>
-          {t('chat.log')}: <Badge>{formatUserState(me?.state)}</Badge>
-        </h3>
-        <UserCount />
-      </div>
-      <div className="flex h-5/6 flex-grow flex-col gap-4 overflow-y-auto py-8" ref={ref}>
-        <span
-          className={cn('animate-pulse ease-in-out ', {
-            visible: stranger?.isTyping,
-            hidden: !stranger?.isTyping
+    <div className="flex h-full w-full flex-grow flex-col rounded-[28px] border border-border/80 bg-card/70 p-3 shadow-sm backdrop-blur md:p-4">
+      <div className="flex min-h-0 flex-grow flex-col overflow-hidden rounded-[24px] border border-border/70 bg-background/70">
+        <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-accent p-2 text-accent-foreground">
+              <UserCircle2 className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">{stranger?.name ?? t('home.noPartner')}</p>
+              <p className="text-xs text-muted-foreground">{formatUserState(stranger?.state)}</p>
+            </div>
+          </div>
+          <span
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground transition-opacity',
+              {
+                'opacity-100': stranger?.isTyping,
+                'opacity-0': !stranger?.isTyping
+              }
+            )}
+          >
+            <CircleEllipsis className="h-3.5 w-3.5" />
+            {t('chat.strangerTyping')}
+          </span>
+        </div>
+
+        <div className="flex flex-grow flex-col gap-3 overflow-y-auto px-4 py-4" ref={ref}>
+          {messages.length === 0 && (
+            <div className="mx-auto my-auto max-w-sm rounded-3xl border border-dashed border-border/80 bg-muted/30 px-5 py-6 text-center text-sm text-muted-foreground">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <MessageSquare className="h-5 w-5" />
+              </div>
+              <p className="font-medium text-foreground">{t('chat.emptyTitle')}</p>
+              <p className="mt-2 leading-6">{t('chat.emptyDescription')}</p>
+            </div>
+          )}
+
+          {messages.map((message, i) => {
+            const tone = getMessageTone(message.sender, stranger?.name, stranger?.id)
+            const label = tone.labelKey ? t(tone.labelKey) : tone.label
+            const isSystem = message.sender === 'system'
+
+            return (
+              <div key={i} className={cn('flex flex-col gap-2', tone.alignClassName)}>
+                <div
+                  className={cn('flex max-w-[85%] items-end gap-3', tone.rowClassName, {
+                    'max-w-full items-center justify-center': isSystem
+                  })}
+                >
+                  <div
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border',
+                      tone.iconClassName
+                    )}
+                  >
+                    {tone.icon}
+                  </div>
+                  <div
+                    className={cn(
+                      'rounded-[22px] border px-4 py-2.5 shadow-sm',
+                      tone.bubbleClassName,
+                      isSystem ? 'max-w-2xl text-center' : 'min-w-[180px]'
+                    )}
+                  >
+                    <p className={cn('mb-1 text-xs font-semibold uppercase tracking-[0.18em]', tone.metaClassName)}>
+                      {label}
+                    </p>
+                    <p className="whitespace-pre-wrap break-words text-[15px] leading-6">{message.message}</p>
+                  </div>
+                </div>
+              </div>
+            )
           })}
-        >
-          {t('chat.strangerTyping')}
-        </span>
-        {messages.length === 0 && (
-          <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">{t('chat.emptyTitle')}</p>
-            <p>{t('chat.emptyDescription')}</p>
-          </div>
-        )}
-        {messages.map((message, i) => (
-          // 通过 sender 区分“我 / 系统 / 对方”，形成简单的消息展示语义。
-          <div key={i} className="flex flex-col gap-2">
-            <span
-              className={cn('font-bold', {
-                'text-accent': message.sender === stranger?.id || message.sender === stranger?.name
-              })}
-            >
-              {message.sender === 'me'
-                ? t('chat.you')
-                : message.sender === 'system'
-                  ? t('chat.system')
-                  : message.sender}
-              :
-            </span>
-            <span>{message.message}</span>
-          </div>
-        ))}
+        </div>
       </div>
-      <div className="flex w-full">
+
+      <div className="mt-3 flex w-full rounded-[24px] border border-border/70 bg-background/80 p-3">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className=" flex flex-col md:flex-row gap-4 w-full items-start">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full flex-col items-start gap-3 md:flex-row">
             <FormField
               control={form.control}
               name="message"
               render={({ field }) => (
-                <FormItem className="flex flex-grow flex-col w-full justify-center md:justify-normal">
+                <FormItem className="flex w-full flex-grow flex-col justify-center md:justify-normal">
                   <FormControl>
                     <Textarea
-                      rows={4}
+                      rows={3}
                       placeholder={t('chat.placeholder')}
+                      className="rounded-[20px] border-border/70 bg-muted/30 px-4 py-3 text-[15px] leading-6"
                       {...field}
+                      onCompositionStart={() => setIsComposing(true)}
+                      onCompositionEnd={() => setIsComposing(false)}
                       onKeyDown={(e) => {
                         if (!meTyping) {
                           setMeTyping(true)
                           setTyping?.(true)
                         }
-                        if (e.key === 'Enter' && !e.shiftKey) {
+
+                        // 输入法组合输入期间，Enter 应该只负责上屏候选词，不直接发送消息。
+                        const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean; keyCode?: number }
+                        const composing = isComposing || nativeEvent.isComposing || nativeEvent.keyCode === 229
+
+                        if (e.key === 'Enter' && !e.shiftKey && !composing) {
                           e.preventDefault()
                           form.handleSubmit(onSubmit)()
                         }
                       }}
                     />
                   </FormControl>
-                  <FormDescription className="">
-                    <span className="mr-2">{t('chat.connectedAs', { name: me?.name ?? '-' })}</span>
+                  <FormDescription className="flex flex-wrap items-center gap-3 text-xs leading-5">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-muted-foreground">
+                      <Settings2 className="h-3.5 w-3.5" />
+                      {t('chat.connectionHint')}
+                    </span>
                     <SettingsDialog />
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" size={'lg'} className="flex gap-2 w-full md:max-w-xs">
-              <Send className="w-4 h-4" />
+            <Button type="submit" size="lg" className="h-auto w-full rounded-[20px] px-6 py-4 text-sm md:max-w-[220px]">
+              <Send className="mr-2 h-4 w-4" />
               {t('chat.send')}
             </Button>
           </form>

@@ -28,6 +28,10 @@ class Queue<T> {
       this._queue.splice(index, 1)
     }
   }
+
+  includes(item: T) {
+    return this._queue.includes(item)
+  }
 }
 
 export default Queue

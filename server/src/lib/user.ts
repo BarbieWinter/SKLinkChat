@@ -9,10 +9,12 @@ class User implements IUser {
   id: string
   name?: string | undefined
   state: UserState
-  ws: WebSocket
+  ws: WebSocket | null
   isAlive: boolean
   history: string[] = []
   isTyping: boolean = false
+  disconnectedAt: number | null = null
+  reconnectDeadline: number | null = null
 
   constructor(id: string, ws: WebSocket) {
     this.id = id
@@ -22,11 +24,29 @@ class User implements IUser {
     this.name = generateUsername()
   }
 
+  attachSocket(ws: WebSocket) {
+    this.ws = ws
+    this.isAlive = true
+    this.disconnectedAt = null
+    this.reconnectDeadline = null
+  }
+
+  markDisconnected(reconnectWindowMs: number) {
+    this.ws = null
+    this.isAlive = false
+    this.disconnectedAt = Date.now()
+    this.reconnectDeadline = this.disconnectedAt + reconnectWindowMs
+  }
+
+  get isOnline() {
+    return this.ws !== null
+  }
+
   update(user: Partial<IUser>) {
     Object.assign(this, user)
 
     // 每次用户资料更新后，都立即把最新信息回推给前端，保证界面状态一致。
-    this.ws.send(
+    this.ws?.send(
       new WebSocketResponse(PayloadType.UserInfo, {
         id: this.id,
         name: this.name,
@@ -49,15 +69,17 @@ class User implements IUser {
 
   connect(stranger: User) {
     // 记录配对历史，避免短时间内被重复匹配到同一个对象。
-    this.history.push(stranger.id)
+    if (this.history[this.history.length - 1] !== stranger.id) {
+      this.history.push(stranger.id)
+    }
     this.update({ state: UserState.Connected })
-    this.ws.send(new WebSocketResponse(PayloadType.Match, stranger.serialize()).json()) // Maybe redundant
+    this.ws?.send(new WebSocketResponse(PayloadType.Match, stranger.serialize()).json())
   }
 
   disconnect() {
     // 断开时返回最近一次聊天对象，方便上层同步处理另一端的断连。
     this.update({ state: UserState.Idle })
-    this.ws.send(new WebSocketResponse(PayloadType.Disconnect, null).json())
+    this.ws?.send(new WebSocketResponse(PayloadType.Disconnect, null).json())
     return this.history[this.history.length - 1]
   }
 }

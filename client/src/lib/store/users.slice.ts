@@ -14,6 +14,7 @@ export interface UsersState {
   setStrangerTyping: (typing: boolean) => void
   setName: (name: string) => void
   disconnect: () => void
+  resetSession: () => void
 }
 
 export const createUsersSlice: StateCreator<State, [], [], UsersState> = (set) => ({
@@ -36,6 +37,11 @@ export const createUsersSlice: StateCreator<State, [], [], UsersState> = (set) =
   setName: (name: string) => set((state) => ({ me: { ...(state.me as User), name } })),
   disconnect: () =>
     set({
+      stranger: undefined
+    }),
+  resetSession: () =>
+    set({
+      me: undefined,
       stranger: undefined
     })
 })

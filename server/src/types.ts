@@ -18,7 +18,7 @@ export interface IUser {
   id: string
   name?: string
   state: UserState
-  ws: WebSocket
+  ws: WebSocket | null
   isAlive: boolean
 }
 

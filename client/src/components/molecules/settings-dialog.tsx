@@ -31,14 +31,14 @@ const formSchema = z.object({
 
 const SettingsDialog = () => {
   const { t } = useI18n()
-  const { keywords, saveSettings, me, setName, language, setLanguage } = useStore()
-  const [open, setOpen] = useState(!me?.name)
+  const { displayName, keywords, saveSettings, me, setName, language, setLanguage, setDisplayName } = useStore()
+  const [open, setOpen] = useState(!displayName)
   const { setName: setChatName } = useChat()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: me?.name || generateUsername(),
+      name: displayName || me?.name || generateUsername(),
       keywords: keywords?.join(', ') || '',
       language
     }
@@ -53,6 +53,7 @@ const SettingsDialog = () => {
         .map((keyword) => keyword.trim())
         .filter(Boolean) ?? []
     )
+    setDisplayName(data.name)
     setName(data.name)
     setLanguage(data.language as AppLanguage)
     setChatName?.(data.name)

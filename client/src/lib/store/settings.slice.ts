@@ -6,15 +6,19 @@ import { StateCreator } from 'zustand'
 import type { State } from '.'
 
 export interface SettingsState {
+  displayName: string
   keywords: string[]
   language: AppLanguage
+  setDisplayName: (name: string) => void
   saveSettings: (keywords: string[]) => void
   setLanguage: (language: AppLanguage) => void
 }
 
 export const createSettingsSlice: StateCreator<State, [], [], SettingsState> = (set) => ({
+  displayName: '',
   keywords: [],
   language: getDefaultLanguage(),
+  setDisplayName: (displayName: string) => set({ displayName }),
   saveSettings: (keywords: string[]) => set({ keywords }),
   setLanguage: (language: AppLanguage) => set({ language })
 })

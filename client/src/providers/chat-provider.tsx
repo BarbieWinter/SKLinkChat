@@ -5,8 +5,8 @@ import { useToast } from '@/components/ui/use-toast'
 import { useI18n } from '@/hooks/useI18n'
 import { WS_ENDPOINT } from '@/lib/config'
 import { useStore } from '@/lib/store'
-import { PayloadType, User } from '@/types'
-import React, { createContext, useContext, useMemo } from 'react'
+import { PayloadType, User, UserState } from '@/types'
+import React, { createContext, useContext, useEffect, useMemo } from 'react'
 import useWebSocket from 'react-use-websocket'
 
 type ChatProviderProps = {
@@ -33,6 +33,28 @@ const initialState: ChatProviderState = {
 
 const ChatProviderContext = createContext<ChatProviderState>(initialState)
 
+const SESSION_STORAGE_KEY = 'sklinkchat-session-id'
+
+const getOrCreateSessionId = () => {
+  if (typeof window === 'undefined') return ''
+
+  const existingSessionId = window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+  if (existingSessionId) return existingSessionId
+
+  const nextSessionId = crypto.randomUUID()
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, nextSessionId)
+  return nextSessionId
+}
+
+const getSocketUrl = () => {
+  const sessionId = getOrCreateSessionId()
+  if (!sessionId) return WS_ENDPOINT
+
+  const url = new URL(WS_ENDPOINT)
+  url.searchParams.set('sessionId', sessionId)
+  return url.toString()
+}
+
 const toUser = (user: Partial<User> | undefined): User | undefined => {
   // 把后端返回的部分用户结构收敛为前端界面需要的完整结构。
   if (!user?.id || !user?.name || !user?.state) return undefined
@@ -48,7 +70,8 @@ const toUser = (user: Partial<User> | undefined): User | undefined => {
 export const ChatProvider = ({ children }: ChatProviderProps) => {
   const { toast } = useToast()
   const { t } = useI18n()
-  const { addMessage, clear, setMe, setStranger, setStrangerTyping, me, stranger, disconnect } = useStore()
+  const { addMessage, clear, setMe, setStranger, setStrangerTyping, me, stranger, disconnect, setName, displayName } =
+    useStore()
 
   const onMessage = (event: MessageEvent) => {
     // 统一处理服务端推送的所有协议消息，并同步到本地 store/UI。
@@ -70,7 +93,13 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
         break
       case PayloadType.UserInfo: {
         const user = toUser(data.payload)
-        if (user) setMe(user)
+        if (user) {
+          setMe(user)
+          if (user.state !== UserState.Connected) {
+            disconnect()
+            clear()
+          }
+        }
         break
       }
       case PayloadType.Match: {
@@ -100,13 +129,24 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
     }
   }
 
-  const ws = useWebSocket(WS_ENDPOINT, {
+  const ws = useWebSocket(getSocketUrl(), {
     shouldReconnect: () => true,
     onOpen: () => {
       console.info('Connected to websocket server.', me?.id)
     },
     onMessage
   })
+
+  useEffect(() => {
+    if (!me?.id || !displayName || me.name === displayName) return
+
+    setName(displayName)
+    ws.sendJsonMessage({
+      id: me.id,
+      type: PayloadType.UserInfo,
+      payload: { name: displayName }
+    })
+  }, [displayName, me?.id, me?.name, setName, ws])
 
   const value = useMemo<ChatProviderState>(
     () => ({

@@ -27,11 +27,15 @@ export default class MessageHandler extends Handler {
       return ws.send(new WebSocketResponse(PayloadType.Error, 'Client not found').json())
     }
 
+    if (!client.ws) {
+      return ws.send(new WebSocketResponse(PayloadType.Error, 'Client temporarily unavailable').json())
+    }
+
     switch (payload.type) {
       case PayloadType.Message:
         // 把发送方消息转发给目标用户，并携带发送者信息供前端展示。
         const { message } = payload.payload as MessagePayload
-        return client.ws.send(
+        return client.ws?.send(
           new WebSocketResponse(PayloadType.Message, {
             id: ws.data.id,
             name: this.app.client(ws.data.id).name,
@@ -40,7 +44,7 @@ export default class MessageHandler extends Handler {
         )
       case PayloadType.Typing:
         // 输入状态是轻量即时信号，只转发当前是否正在输入。
-        return client.ws.send(
+        return client.ws?.send(
           new WebSocketResponse(PayloadType.Typing, {
             id: ws.data.id,
             typing: (payload.payload as TypingPayload).typing

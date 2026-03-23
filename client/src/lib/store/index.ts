@@ -21,9 +21,12 @@ export const useStore = create<State>()(
       {
         name: 'msn-storage',
         storage: createJSONStorage(() => sessionStorage),
-        partialize: (state) =>
-          // 当前陌生人不做持久化，避免刷新后残留失效连接信息。
-          Object.fromEntries(Object.entries(state).filter(([key]) => !['stranger'].includes(key))) as State
+        partialize: (state) => ({
+          displayName: state.displayName,
+          messages: state.messages,
+          keywords: state.keywords,
+          language: state.language
+        }) as State
       }
     )
   )

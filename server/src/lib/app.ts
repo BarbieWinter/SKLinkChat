@@ -10,12 +10,14 @@ import { WebSocketResponse } from './response'
 import User from './user'
 
 export class App {
+  reconnectWindowMs = 3 * 60 * 1000
   server: Server | null = null
   clients: Record<string, User> = {}
   heartbeat: ReturnType<typeof setInterval> | null = null
   matching: ReturnType<typeof setInterval> | null = null
   handlers: Handler[] = []
   queue: Queue<string> = new Queue()
+  reconnectTimers: Record<string, ReturnType<typeof setTimeout>> = {}
   debug: boolean = true
 
   constructor() {
@@ -37,10 +39,11 @@ export class App {
               }
             })
           case '/ws':
+            const sessionId = url.searchParams.get('sessionId')?.trim() || crypto.randomUUID()
             if (
               server.upgrade(req, {
                 data: {
-                  id: crypto.randomUUID()
+                  id: sessionId
                 }
               })
             ) {
@@ -48,7 +51,9 @@ export class App {
             }
             return new Response('Upgrade failed :(', { status: 500 })
           case '/users':
-            return new Response(JSON.stringify(Object.values(this.clients).map((user) => omit(user, 'ws'))), {
+            return new Response(
+              JSON.stringify(Object.values(this.clients).filter((user) => user.isOnline).map((user) => omit(user, 'ws'))),
+              {
               headers: {
                 'content-type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
@@ -62,12 +67,34 @@ export class App {
       websocket: {
         open: (ws: WebSocket) => {
           console.info('Client connected', ws.data.id)
+          const existingClient = this.clients[ws.data.id]
+
+          if (existingClient) {
+            this.clearReconnectTimer(existingClient.id)
+            existingClient.attachSocket(ws)
+            ws.send(new WebSocketResponse(PayloadType.UserInfo, existingClient.serialize()).json())
+
+            if (existingClient.state === UserState.Searching && !this.queue.includes(existingClient.id)) {
+              this.queue.push(existingClient.id)
+            }
+
+            if (existingClient.state === UserState.Connected) {
+              const partnerId = existingClient.history[existingClient.history.length - 1]
+              const partner = partnerId ? this.client(partnerId) : null
+              if (partner) {
+                ws.send(new WebSocketResponse(PayloadType.Match, partner.serialize()).json())
+              }
+            }
+
+            return
+          }
+
           this.clients[ws.data.id] = new User(ws.data.id, ws)
           ws.send(new WebSocketResponse(PayloadType.UserInfo, this.clients[ws.data.id].serialize()).json())
         },
         close: (ws: WebSocket) => {
           console.info('Client disconnected', ws.data.id)
-          this.removeClient(ws.data.id)
+          this.suspendClient(ws.data.id)
         },
         message: (ws: WebSocket, message) => {
           const payload = JSON.parse(message as string)
@@ -85,13 +112,20 @@ export class App {
     this.heartbeat = setInterval(() => {
       // 心跳循环：定时 ping 客户端，清除没有及时 pong 的失效连接。
       Object.values(this.clients).forEach((client) => {
+        if (!client.ws) {
+          if (client.reconnectDeadline && client.reconnectDeadline <= Date.now()) {
+            this.removeClient(client.id)
+          }
+          return
+        }
+
         if (!client.isAlive) {
           console.info('Client', client.id, 'is dead, removing from clients')
-          this.removeClient(client.id)
+          this.suspendClient(client.id)
           return
         }
         client.isAlive = false
-        client.ws.ping()
+        client.ws?.ping()
       })
     }, 5_000)
 
@@ -110,11 +144,11 @@ export class App {
         user2: user2?.serialize()
       })
 
-      if (!user1 || !user2 || !user1.canConnect(user2)) {
+      if (!user1 || !user2 || !user1.isOnline || !user2.isOnline || !user1.canConnect(user2)) {
         console.error('User not found in clients or cannot connect.')
         // 配对失败时把还能继续匹配的用户重新放回队列。
-        if (user1) this.queue.push(user1_id)
-        if (user2) this.queue.push(user2_id)
+        if (user1?.isOnline) this.queue.push(user1_id)
+        if (user2?.isOnline) this.queue.push(user2_id)
         return
       }
 
@@ -127,7 +161,29 @@ export class App {
 
   updateClient(id: string, data: Partial<IUser>) {
     // 更新指定用户的状态或资料。
+    if (!this.clients[id]) return
     this.clients[id].update(data)
+  }
+
+  clearReconnectTimer(id: string) {
+    if (!this.reconnectTimers[id]) return
+    clearTimeout(this.reconnectTimers[id])
+    delete this.reconnectTimers[id]
+  }
+
+  suspendClient(id: string) {
+    const client = this.client(id)
+    if (!client || !client.isOnline) return
+
+    this.queue.delete(id)
+    client.markDisconnected(this.reconnectWindowMs)
+    this.clearReconnectTimer(id)
+    this.reconnectTimers[id] = setTimeout(() => {
+      const currentClient = this.client(id)
+      if (!currentClient?.isOnline) {
+        this.removeClient(id)
+      }
+    }, this.reconnectWindowMs)
   }
 
   removeClient(id: string) {
@@ -135,6 +191,7 @@ export class App {
     const client = this.client(id)
     if (!client) return
 
+    this.clearReconnectTimer(id)
     this.queue.delete(id)
 
     if (client.state === UserState.Connected) {
@@ -155,7 +212,7 @@ export class App {
   }
 
   stop() {
-    Object.values(this.clients).forEach((client) => client.ws.close())
+    Object.values(this.clients).forEach((client) => client.ws?.close())
     this.server?.stop(true)
     clearInterval(this.heartbeat || undefined)
   }
