@@ -3,6 +3,7 @@
  */
 import { useToast } from '@/components/ui/use-toast'
 import { useI18n } from '@/hooks/useI18n'
+import { WS_ENDPOINT } from '@/lib/config'
 import { useStore } from '@/lib/store'
 import { PayloadType, User } from '@/types'
 import React, { createContext, useContext, useMemo } from 'react'
@@ -99,7 +100,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
     }
   }
 
-  const ws = useWebSocket(import.meta.env.VITE_WS_ENDPOINT, {
+  const ws = useWebSocket(WS_ENDPOINT, {
     shouldReconnect: () => true,
     onOpen: () => {
       console.info('Connected to websocket server.', me?.id)
