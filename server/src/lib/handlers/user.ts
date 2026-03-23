@@ -1,3 +1,6 @@
+/**
+ * 用户信息处理器：接收前端提交的资料更新并同步到服务端用户实例。
+ */
 import { IUser, PayloadType, WebSocket, WebSocketPayload } from '@/types'
 import Handler from './handler'
 

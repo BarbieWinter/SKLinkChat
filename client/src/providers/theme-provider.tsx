@@ -1,3 +1,6 @@
+/**
+ * 主题上下文：负责深色、浅色与跟随系统三种模式的切换和持久化。
+ */
 import React, { createContext, useContext, useEffect, useState } from 'react'
 
 type Theme = 'dark' | 'light' | 'system'
@@ -29,6 +32,7 @@ export const ThemeProvider = ({
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(storageKey) as Theme) || defaultTheme)
 
   useEffect(() => {
+    // 通过操作根节点 class 来驱动 Tailwind 的暗色主题变量切换。
     const root = window.document.documentElement
     root.classList.remove('light', 'dark')
     if (theme === 'system') {

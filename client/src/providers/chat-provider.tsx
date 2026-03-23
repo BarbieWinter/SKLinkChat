@@ -1,3 +1,6 @@
+/**
+ * 聊天 Provider：封装 WebSocket 连接、服务端消息分发、发送消息、开始匹配、修改昵称与输入状态同步。
+ */
 import { useToast } from '@/components/ui/use-toast'
 import { useI18n } from '@/hooks/useI18n'
 import { useStore } from '@/lib/store'
@@ -30,6 +33,7 @@ const initialState: ChatProviderState = {
 const ChatProviderContext = createContext<ChatProviderState>(initialState)
 
 const toUser = (user: Partial<User> | undefined): User | undefined => {
+  // 把后端返回的部分用户结构收敛为前端界面需要的完整结构。
   if (!user?.id || !user?.name || !user?.state) return undefined
 
   return {
@@ -46,6 +50,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
   const { addMessage, clear, setMe, setStranger, setStrangerTyping, me, stranger, disconnect } = useStore()
 
   const onMessage = (event: MessageEvent) => {
+    // 统一处理服务端推送的所有协议消息，并同步到本地 store/UI。
     const data = JSON.parse(event.data)
 
     switch (data.type) {
@@ -105,6 +110,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
   const value = useMemo<ChatProviderState>(
     () => ({
       emitTyping: (typing: boolean) => {
+        // 告知后端当前用户是否正在输入，后端会转发给当前聊天对象。
         if (!stranger?.id) return
 
         ws.sendJsonMessage({
@@ -116,6 +122,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
         })
       },
       sendMessage: (message: string) => {
+        // 发送消息后，前端也会先把“我”的消息写入本地消息列表，提升即时反馈体验。
         if (!stranger?.id) return
 
         ws.sendJsonMessage({
@@ -132,6 +139,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
         })
       },
       connect: () => {
+        // 开始匹配前先清空当前聊天记录，再把自己放入服务端队列。
         if (!me?.id) return
 
         clear()
@@ -143,6 +151,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
         })
       },
       setName: (name: string) => {
+        // 修改昵称时通过协议通知服务端同步用户信息。
         ws.sendJsonMessage({
           id: me?.id,
           type: PayloadType.UserInfo,

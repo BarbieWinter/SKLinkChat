@@ -1,3 +1,6 @@
+/**
+ * 兜底页面：用于显示未匹配路由或路由运行时错误信息。
+ */
 import { useI18n } from '@/hooks/useI18n'
 import { useRouteError } from 'react-router-dom'
 

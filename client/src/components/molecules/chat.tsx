@@ -1,3 +1,6 @@
+/**
+ * 聊天主组件：负责展示消息列表、发送消息、输入中提示、滚动定位和局部用户设置入口。
+ */
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form'
 import { useI18n } from '@/hooks/useI18n'
@@ -30,6 +33,7 @@ const Chat = () => {
   const debouncedTyping = useRef<NodeJS.Timeout>()
 
   useEffect(() => {
+    // 本地输入状态只保留一个短时间窗口，避免长期停留在“正在输入”。
     if (!meTyping) return
     if (debouncedTyping.current) {
       clearTimeout(debouncedTyping.current)
@@ -53,6 +57,7 @@ const Chat = () => {
   }, [messages])
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
+    // 只有存在聊天对象时才允许真正发送消息。
     if (!stranger?.id) {
       toast({
         title: t('common.error'),
@@ -91,13 +96,19 @@ const Chat = () => {
           </div>
         )}
         {messages.map((message, i) => (
+          // 通过 sender 区分“我 / 系统 / 对方”，形成简单的消息展示语义。
           <div key={i} className="flex flex-col gap-2">
             <span
               className={cn('font-bold', {
                 'text-accent': message.sender === stranger?.id || message.sender === stranger?.name
               })}
             >
-              {message.sender === 'me' ? t('chat.you') : message.sender === 'system' ? t('chat.system') : message.sender}:
+              {message.sender === 'me'
+                ? t('chat.you')
+                : message.sender === 'system'
+                  ? t('chat.system')
+                  : message.sender}
+              :
             </span>
             <span>{message.message}</span>
           </div>
@@ -129,9 +140,7 @@ const Chat = () => {
                     />
                   </FormControl>
                   <FormDescription className="">
-                    <span className="mr-2">
-                      {t('chat.connectedAs', { name: me?.name ?? '-' })}
-                    </span>
+                    <span className="mr-2">{t('chat.connectedAs', { name: me?.name ?? '-' })}</span>
                     <SettingsDialog />
                   </FormDescription>
                   <FormMessage />

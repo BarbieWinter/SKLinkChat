@@ -1,3 +1,6 @@
+/**
+ * 用户状态切片：维护“我”和“陌生人”的资料，以及对方输入状态和断开逻辑。
+ */
 import { User } from '@/types'
 import { StateCreator } from 'zustand'
 import type { State } from '.'

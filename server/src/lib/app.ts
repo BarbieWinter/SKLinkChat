@@ -1,3 +1,6 @@
+/**
+ * 应用核心：统一管理 HTTP 路由、WebSocket 生命周期、在线用户池、匹配队列和心跳检测。
+ */
 import { Server } from 'bun'
 import { omit } from 'lodash'
 import { IUser, PayloadType, UserState, WebSocket } from '../types'
@@ -16,6 +19,7 @@ export class App {
   debug: boolean = true
 
   constructor() {
+    // 把不同协议类型的处理逻辑拆到独立 Handler 中，降低主类复杂度。
     this.handlers = [MessageHandler, UserHandler, QueueHandler].map((HandlerClass) => new HandlerClass(this))
   }
 
@@ -23,6 +27,7 @@ export class App {
     this.server = Bun.serve({
       port,
       fetch: (req, server) => {
+        // 同一个 Bun 服务同时提供健康检查、在线人数接口和 WebSocket 升级入口。
         const url = new URL(req.url)
         switch (url.pathname) {
           case '/':
@@ -69,7 +74,7 @@ export class App {
           this.handlers.forEach((handler) => handler.listen(ws, payload))
         },
         pong: (ws) => {
-          // if (this.debug) console.debug('Pong received from', ws.data.id)
+          // 收到 pong 说明连接仍然存活，用于配合心跳机制清理失效客户端。
           const client = this.clients[ws.data.id]
           if (!client) return
           this.clients[ws.data.id].isAlive = true
@@ -78,6 +83,7 @@ export class App {
     })
 
     this.heartbeat = setInterval(() => {
+      // 心跳循环：定时 ping 客户端，清除没有及时 pong 的失效连接。
       Object.values(this.clients).forEach((client) => {
         if (!client.isAlive) {
           console.info('Client', client.id, 'is dead, removing from clients')
@@ -90,6 +96,7 @@ export class App {
     }, 5_000)
 
     this.matching = setInterval(() => {
+      // 匹配循环：每隔一段时间从队列中取出两个用户尝试建立会话。
       if (this.queue.length < 2) return
 
       const user1_id = this.queue.shift() as string
@@ -105,7 +112,7 @@ export class App {
 
       if (!user1 || !user2 || !user1.canConnect(user2)) {
         console.error('User not found in clients or cannot connect.')
-        // Put the users back in the queue
+        // 配对失败时把还能继续匹配的用户重新放回队列。
         if (user1) this.queue.push(user1_id)
         if (user2) this.queue.push(user2_id)
         return
@@ -119,11 +126,12 @@ export class App {
   }
 
   updateClient(id: string, data: Partial<IUser>) {
-    // Update the user with the new data
+    // 更新指定用户的状态或资料。
     this.clients[id].update(data)
   }
 
   removeClient(id: string) {
+    // 客户端离线时需要同时移出匹配队列，并处理其当前聊天对象的断开通知。
     const client = this.client(id)
     if (!client) return
 

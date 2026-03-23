@@ -1,3 +1,6 @@
+/**
+ * 国际化资源中心：维护中英文文案、默认语言判断、模板翻译和用户状态文案映射。
+ */
 import { UserState } from '@/types'
 
 export type AppLanguage = 'en' | 'zh-CN'
@@ -163,11 +166,7 @@ export const getDefaultLanguage = (): AppLanguage => {
   return navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en'
 }
 
-export const translate = (
-  language: AppLanguage,
-  key: TranslationKey,
-  values?: Record<string, string | number>
-) => {
+export const translate = (language: AppLanguage, key: TranslationKey, values?: Record<string, string | number>) => {
   const template = translations[language][key] ?? translations.en[key]
 
   if (!values) return template

@@ -1,3 +1,6 @@
+/**
+ * 在线人数组件：通过定时查询 `/users` 接口，显示当前在线连接数量。
+ */
 import { getUsers } from '@/lib/api'
 import { REFRESH_INTERVAL } from '@/lib/config'
 import { useI18n } from '@/hooks/useI18n'

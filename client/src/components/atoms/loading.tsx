@@ -1,3 +1,6 @@
+/**
+ * 通用加载态组件：用于显示一个轻量旋转中的图标。
+ */
 import { cn } from '@/lib/utils'
 import type { FC } from 'react'
 

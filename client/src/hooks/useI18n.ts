@@ -1,3 +1,6 @@
+/**
+ * 国际化 Hook：从全局设置中读取当前语言，并返回翻译函数和用户状态格式化函数。
+ */
 import { getUserStateLabel, translate } from '@/lib/i18n'
 import { useStore } from '@/lib/store'
 import { UserState } from '@/types'

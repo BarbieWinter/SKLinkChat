@@ -1,3 +1,6 @@
+/**
+ * 首页：负责展示当前用户信息、聊天对象信息和开始匹配入口，是聊天主工作台。
+ */
 import { useI18n } from '@/hooks/useI18n'
 import { useStore } from '@/lib/store'
 import { useChat } from '@/providers/chat-provider'
@@ -20,6 +23,7 @@ const Home = () => {
 
   return (
     <div className="flex h-full flex-col gap-8 md:flex-row">
+      {/* 左侧是匹配与用户资料区域，右侧是聊天主面板。 */}
       <div className="flex w-full flex-col gap-4 md:w-2/5 md:max-w-2xl">
         <div className="rounded-md border border-primary p-6">
           <div className="flex flex-col gap-3">

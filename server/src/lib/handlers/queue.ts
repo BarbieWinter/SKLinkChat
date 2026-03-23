@@ -1,3 +1,6 @@
+/**
+ * 匹配队列处理器：处理开始匹配、重新匹配和与当前对象断开的流程。
+ */
 import { PayloadType, UserState, WebSocket, WebSocketPayload } from '@/types'
 import Handler from './handler'
 
@@ -19,20 +22,20 @@ export default class QueueHandler extends Handler {
       return
     }
 
-    // Depending on the state of the client, we either search for a new user, disconnect from the current user, or do nothing
+    // 根据当前状态决定是忽略、断开当前会话后重排，还是直接加入匹配队列。
     switch (client.state) {
       case UserState.Searching:
         return
       case UserState.Connected:
-        // Disconnect
+        // 已连接状态下再次点击匹配，表示断开当前对象并重新排队。
         const lastUserId = client.disconnect()
         if (lastUserId) {
           const lastUser = this.app.client(lastUserId)
           lastUser?.disconnect()
         }
-      // No break here, we want to continue to the next case
+      // 这里故意不写 break，让已连接用户断开后继续执行“重新加入队列”。
       default:
-        // Search
+        // 进入搜索状态并加入待匹配队列。
         this.app.updateClient(id, { state: UserState.Searching })
         this.app.queue.push(id)
         break

@@ -1,3 +1,6 @@
+/**
+ * 简单队列结构：用于保存等待匹配的用户 ID。
+ */
 class Queue<T> {
   private _queue: T[] = []
 

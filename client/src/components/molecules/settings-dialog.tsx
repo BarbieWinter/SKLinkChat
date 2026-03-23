@@ -1,3 +1,6 @@
+/**
+ * 个人设置弹窗：用于编辑昵称、聊天关键词和界面语言，并同步到本地 store 与聊天上下文。
+ */
 import { useI18n } from '@/hooks/useI18n'
 import { AppLanguage } from '@/lib/i18n'
 import { useStore } from '@/lib/store'
@@ -42,8 +45,14 @@ const SettingsDialog = () => {
   })
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
+    // 设置保存后会同时更新本地状态和服务端昵称，保证展示与通信一致。
     setOpen(false)
-    saveSettings(data.keywords?.split(',').map((keyword) => keyword.trim()).filter(Boolean) ?? [])
+    saveSettings(
+      data.keywords
+        ?.split(',')
+        .map((keyword) => keyword.trim())
+        .filter(Boolean) ?? []
+    )
     setName(data.name)
     setLanguage(data.language as AppLanguage)
     setChatName?.(data.name)
@@ -59,9 +68,7 @@ const SettingsDialog = () => {
       <DialogContent>
         <DialogHeader className="gap-4">
           <DialogTitle>{t('settings.title')}</DialogTitle>
-          <DialogDescription className="text-start text-sm">
-            {t('settings.description')}
-          </DialogDescription>
+          <DialogDescription className="text-start text-sm">{t('settings.description')}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form
@@ -100,6 +107,7 @@ const SettingsDialog = () => {
               control={form.control}
               name="language"
               render={({ field }) => (
+                // 这里直接用按钮切换语言，而不是原生 select，保证交互风格与项目 UI 一致。
                 <FormItem className="flex-grow">
                   <FormDescription className="mb-2 text-foreground">{t('settings.language')}</FormDescription>
                   <div className="flex gap-2">

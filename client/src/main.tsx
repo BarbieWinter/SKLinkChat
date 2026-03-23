@@ -1,3 +1,6 @@
+/**
+ * 前端应用入口：负责挂载 React 根节点，并加载全局样式。
+ */
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'

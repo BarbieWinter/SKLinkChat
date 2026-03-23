@@ -1,3 +1,6 @@
+/**
+ * 后端协议与连接类型定义：统一 WebSocket 数据、消息体和用户状态枚举。
+ */
 import { ServerWebSocket } from 'bun'
 
 export type WebSocketData = {

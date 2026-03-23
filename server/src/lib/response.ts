@@ -1,3 +1,6 @@
+/**
+ * WebSocket 响应包装器：统一把类型和载荷序列化为 JSON 字符串。
+ */
 import { PayloadType } from '../types'
 
 export class WebSocketResponse {

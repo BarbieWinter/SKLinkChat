@@ -1,3 +1,6 @@
+/**
+ * 页面底部：展示作者信息和源代码链接。
+ */
 import { useI18n } from '@/hooks/useI18n'
 
 const Footer = () => {

@@ -1,3 +1,6 @@
+/**
+ * 主题切换组件：通过下拉菜单在浅色、深色与系统主题之间切换。
+ */
 import { Moon, Sun } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'

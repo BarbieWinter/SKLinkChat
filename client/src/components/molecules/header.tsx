@@ -1,3 +1,6 @@
+/**
+ * 页面头部：展示应用标题和主题切换入口。
+ */
 import { useI18n } from '@/hooks/useI18n'
 import { ModeToggle } from './mode-toggle'
 

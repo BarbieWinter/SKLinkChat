@@ -1,3 +1,6 @@
+/**
+ * 页面骨架布局：统一包裹 Provider、头部、主体内容和底部。
+ */
 import Providers from '@/providers'
 import { Outlet } from 'react-router-dom'
 import Footer from '../molecules/footer'

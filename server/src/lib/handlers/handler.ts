@@ -1,3 +1,6 @@
+/**
+ * 处理器基类：定义每类协议消息支持的类型集合和统一监听入口。
+ */
 import { PayloadType, WebSocket, WebSocketPayload } from '@/types'
 import { App } from '../app'
 
