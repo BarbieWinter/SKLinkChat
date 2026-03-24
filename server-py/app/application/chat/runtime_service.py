@@ -57,7 +57,7 @@ class ChatRuntimeService:
             session = await self._session_repository.load_or_create_session(session_id)
             session.reconnect_deadline = None
             session.is_typing = False
-            if session.partner_id is None and session.state is UserState.CONNECTED:
+            if session.partner_id is None and session.state in (UserState.CONNECTED, UserState.SEARCHING):
                 session.state = UserState.IDLE
             await self._session_repository.save_session(session)
 
@@ -199,11 +199,18 @@ class ChatRuntimeService:
             if partner is None:
                 return None
 
-            partner.partner_id = None
-            partner.state = UserState.IDLE
-            partner.is_typing = False
-            partner.reconnect_deadline = None
-            await self._session_repository.save_session(partner)
+            # Only reset the partner if they still consider us their partner.
+            # If the partner already clicked "next" (partner_id cleared or changed),
+            # they may be SEARCHING in queue — resetting them would silently invalidate their queue entry.
+            if partner.partner_id is not None and partner.partner_id != session_id:
+                return None
+
+            if partner.partner_id == session_id:
+                partner.partner_id = None
+                partner.state = UserState.IDLE
+                partner.is_typing = False
+                partner.reconnect_deadline = None
+                await self._session_repository.save_session(partner)
             await self._session_repository.append_history(
                 partner.session_id,
                 ChatHistoryEntry(

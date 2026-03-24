@@ -97,7 +97,6 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
           setMe(user)
           if (user.state !== UserState.Connected) {
             disconnect()
-            clear()
           }
         }
         break

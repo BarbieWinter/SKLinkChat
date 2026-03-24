@@ -15,8 +15,9 @@ const getDefaultBackendOrigin = () => {
 
   const url = new URL(window.location.origin)
 
-  // 本地开发时前端通常跑在 Vite 默认端口，FastAPI 后端固定跑在 8000。
-  if (url.port === '5173' || url.port === '4173') {
+  // 本地开发时前端通常跑在 Vite 默认端口（或端口被占用时的递增端口），FastAPI 后端固定跑在 8000。
+  const port = Number(url.port)
+  if ((port >= 5173 && port <= 5180) || (port >= 4173 && port <= 4180)) {
     url.port = '8000'
   }
 
