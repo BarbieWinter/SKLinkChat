@@ -2,7 +2,7 @@
  * Main chat panel UI.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CircleEllipsis, MessageSquare, Send, Settings2, ShieldAlert, UserCircle2 } from 'lucide-react'
+import { CircleEllipsis, MessageSquare, PanelLeftOpen, Send, Settings2, ShieldAlert, Sparkles, UserCircle2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -12,6 +12,7 @@ import { useChat } from '@/features/chat/chat-provider'
 import SettingsDialog from '@/features/settings/ui/settings-dialog'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { cn } from '@/shared/lib/utils'
+import { UserState } from '@/shared/types'
 import { Button } from '@/shared/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/shared/ui/form'
 import { Textarea } from '@/shared/ui/textarea'
@@ -68,11 +69,16 @@ const getMessageTone = (sender: string, strangerName?: string, strangerId?: stri
   }
 }
 
-const ChatPanel = () => {
+type ChatPanelProps = {
+  onOpenSidebar?: () => void
+  showSidebarToggle?: boolean
+}
+
+const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   const { t, formatUserState } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
   const { messages } = useAppStore()
-  const { sendMessage, stranger, emitTyping: setTyping } = useChat()
+  const { sendMessage, stranger, me, connect, emitTyping: setTyping } = useChat()
   const { toast } = useToast()
   const [meTyping, setMeTyping] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
@@ -80,7 +86,6 @@ const ChatPanel = () => {
   const debouncedTyping = useRef<number>()
 
   useEffect(() => {
-    // 本地输入状态只保留一个短时间窗口，避免长期停留在“正在输入”。
     if (!meTyping) return
     if (debouncedTyping.current) {
       clearTimeout(debouncedTyping.current)
@@ -103,7 +108,6 @@ const ChatPanel = () => {
   }, [messages])
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
-    // 只有存在聊天对象时才允许真正发送消息。
     if (!stranger?.id) {
       toast({
         title: t('common.error'),
@@ -119,11 +123,23 @@ const ChatPanel = () => {
     setTyping?.(false)
   }
 
+  const isNotConnected = !stranger && me?.state !== UserState.Searching
+
   return (
     <div className="flex h-full w-full flex-grow flex-col rounded-[28px] border border-border/80 bg-card/70 p-3 shadow-sm backdrop-blur md:p-4">
       <div className="flex min-h-0 flex-grow flex-col overflow-hidden rounded-[24px] border border-border/70 bg-background/70">
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
           <div className="flex items-center gap-2">
+            {showSidebarToggle && (
+              <button
+                type="button"
+                onClick={onOpenSidebar}
+                className="mr-1 flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                aria-label="Open sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            )}
             <div className="rounded-full bg-accent p-2 text-accent-foreground">
               <UserCircle2 className="h-4 w-4" />
             </div>
@@ -132,28 +148,51 @@ const ChatPanel = () => {
               <p className="text-xs text-muted-foreground">{formatUserState(stranger?.state)}</p>
             </div>
           </div>
-          <span
-            className={cn(
-              'inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground transition-opacity',
-              {
-                'opacity-100': stranger?.isTyping,
-                'opacity-0': !stranger?.isTyping
-              }
-            )}
-          >
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                'inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground transition-opacity',
+                {
+                  'opacity-100': stranger?.isTyping,
+                  'opacity-0': !stranger?.isTyping
+                }
+              )}
+            >
             <CircleEllipsis className="h-3.5 w-3.5" />
             {t('chat.strangerTyping')}
-          </span>
+            </span>
+            {me?.state === UserState.Connected && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => connect?.()}
+                className="rounded-full px-4 text-xs"
+              >
+                {t('home.reroll')}
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-grow flex-col gap-3 overflow-y-auto px-4 py-4" ref={ref}>
           {messages.length === 0 && (
-            <div className="mx-auto my-auto max-w-sm rounded-3xl border border-dashed border-border/80 bg-muted/30 px-5 py-6 text-center text-sm text-muted-foreground">
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <MessageSquare className="h-5 w-5" />
+            <div className="mx-auto my-auto max-w-sm rounded-3xl border border-dashed border-border/80 bg-muted/30 px-5 py-8 text-center text-sm text-muted-foreground">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Sparkles className="h-6 w-6" />
               </div>
-              <p className="font-medium text-foreground">{t('chat.emptyTitle')}</p>
+              <p className="text-base font-medium text-foreground">{t('chat.emptyTitle')}</p>
               <p className="mt-2 leading-6">{t('chat.emptyDescription')}</p>
+              {isNotConnected && (
+                <Button
+                  onClick={() => connect?.()}
+                  className="mt-5 h-11 rounded-2xl px-8 text-sm"
+                >
+                  {t('home.startChat')}
+                </Button>
+              )}
+              {me?.state === UserState.Searching && (
+                <p className="mt-4 text-sm text-muted-foreground">{t('home.searching')}</p>
+              )}
             </div>
           )}
 
@@ -218,7 +257,6 @@ const ChatPanel = () => {
                           setTyping?.(true)
                         }
 
-                        // 输入法组合输入期间，Enter 应该只负责上屏候选词，不直接发送消息。
                         const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean; keyCode?: number }
                         const composing = isComposing || nativeEvent.isComposing || nativeEvent.keyCode === 229
 

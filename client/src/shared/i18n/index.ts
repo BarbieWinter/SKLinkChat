@@ -49,6 +49,12 @@ type TranslationKey =
   | 'state.idle'
   | 'state.searching'
   | 'state.connected'
+  | 'welcome.title'
+  | 'welcome.subtitle'
+  | 'welcome.namePlaceholder'
+  | 'welcome.topicsPlaceholder'
+  | 'welcome.topicsHint'
+  | 'welcome.start'
   | 'notFound.title'
   | 'notFound.description'
   | 'system.strangerDisconnected'
@@ -62,7 +68,7 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'home.description': 'Match with a stranger instantly and keep the conversation focused on text.',
     'home.startChat': 'Start chatting',
     'home.searching': 'Matching...',
-    'home.reroll': 'Next stranger',
+    'home.reroll': 'Rematch',
     'home.profile': 'Your profile',
     'home.currentPartner': 'Current partner',
     'home.noPartner': 'No active chat',
@@ -100,7 +106,13 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'state.connected': 'Connected',
     'notFound.title': 'Page not found',
     'notFound.description': 'Sorry, an unexpected error has occurred.',
-    'system.strangerDisconnected': 'Stranger disconnected'
+    'system.strangerDisconnected': 'Stranger disconnected',
+    'welcome.title': 'Welcome to SKLink Chat',
+    'welcome.subtitle': 'Set your nickname to get started. You can change it anytime.',
+    'welcome.namePlaceholder': 'Pick a nickname',
+    'welcome.topicsPlaceholder': 'Topics you want to talk about (comma separated)',
+    'welcome.topicsHint': 'Optional — leave blank if you are open to any topic.',
+    'welcome.start': 'Get started'
   },
   'zh-CN': {
     'app.title': 'SKLink 聊天',
@@ -110,7 +122,7 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'home.description': '立即匹配陌生人，专注于文字交流，不再使用摄像头。',
     'home.startChat': '开始聊天',
     'home.searching': '匹配中...',
-    'home.reroll': '下一个陌生人',
+    'home.reroll': '重新匹配',
     'home.profile': '我的资料',
     'home.currentPartner': '当前聊天对象',
     'home.noPartner': '暂无聊天对象',
@@ -148,7 +160,13 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'state.connected': '已连接',
     'notFound.title': '页面不存在',
     'notFound.description': '抱歉，发生了未预期的错误。',
-    'system.strangerDisconnected': '对方已断开连接'
+    'system.strangerDisconnected': '对方已断开连接',
+    'welcome.title': '欢迎来到 SKLink 聊天',
+    'welcome.subtitle': '设置你的昵称即可开始，随时可以修改。',
+    'welcome.namePlaceholder': '输入一个昵称',
+    'welcome.topicsPlaceholder': '想聊的话题（用逗号分隔）',
+    'welcome.topicsHint': '可选 — 留空表示什么话题都可以。',
+    'welcome.start': '开始使用'
   }
 }
 

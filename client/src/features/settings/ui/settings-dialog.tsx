@@ -9,7 +9,6 @@ import { z } from 'zod'
 
 import { useAppStore } from '@/app/store'
 import { useChat } from '@/features/chat/chat-provider'
-import { AppLanguage } from '@/shared/i18n'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { Button } from '@/shared/ui/button'
 import {
@@ -28,19 +27,18 @@ import { getSettingsDialogInitialState } from '@/features/settings/ui/use-settin
 
 const formSchema = z.object({
   name: z.string().min(1),
-  keywords: z.string().optional(),
-  language: z.enum(['en', 'zh-CN'])
+  keywords: z.string().optional()
 })
 
 const SettingsDialog = () => {
   const { t } = useI18n()
-  const { displayName, keywords, saveSettings, me, setName, language, setLanguage, setDisplayName } = useAppStore()
-  const [open, setOpen] = useState(!displayName)
+  const { displayName, keywords, saveSettings, me, setName, setDisplayName } = useAppStore()
+  const [open, setOpen] = useState(false)
   const { setName: setChatName } = useChat()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: getSettingsDialogInitialState({ displayName, keywords, language, meName: me?.name, generateUsername })
+    defaultValues: getSettingsDialogInitialState({ displayName, keywords, meName: me?.name, generateUsername })
   })
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
@@ -54,7 +52,6 @@ const SettingsDialog = () => {
     )
     setDisplayName(data.name)
     setName(data.name)
-    setLanguage(data.language as AppLanguage)
     setChatName?.(data.name)
   }
 
@@ -99,33 +96,6 @@ const SettingsDialog = () => {
                     <Input placeholder={t('settings.keywordsPlaceholder')} {...field} />
                   </FormControl>
                   <FormDescription>{t('settings.keywordsHint')}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="language"
-              render={({ field }) => (
-                // 这里直接用按钮切换语言，而不是原生 select，保证交互风格与项目 UI 一致。
-                <FormItem className="flex-grow">
-                  <FormDescription className="mb-2 text-foreground">{t('settings.language')}</FormDescription>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={field.value === 'en' ? 'default' : 'outline'}
-                      onClick={() => field.onChange('en')}
-                    >
-                      {t('settings.english')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={field.value === 'zh-CN' ? 'default' : 'outline'}
-                      onClick={() => field.onChange('zh-CN')}
-                    >
-                      {t('settings.chinese')}
-                    </Button>
-                  </div>
                   <FormMessage />
                 </FormItem>
               )}

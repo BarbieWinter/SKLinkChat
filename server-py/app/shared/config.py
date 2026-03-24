@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     reconnect_window_seconds: int = 180
-    partner_disconnect_grace_seconds: float = 1.0
+    partner_disconnect_grace_seconds: float = 5.0
     redis_url: str = Field(...)
 
 
