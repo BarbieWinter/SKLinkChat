@@ -16,6 +16,7 @@ def test_settings_loads_valid_environment(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SERVER_PY_PORT", "8100")
     monkeypatch.setenv("SERVER_PY_RECONNECT_WINDOW_SECONDS", "180")
+    monkeypatch.setenv("SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS", "1")
     get_settings.cache_clear()
 
     settings = get_settings()
@@ -23,3 +24,4 @@ def test_settings_loads_valid_environment(monkeypatch: pytest.MonkeyPatch):
     assert settings.redis_url == "redis://localhost:6379/0"
     assert settings.port == 8100
     assert settings.reconnect_window_seconds == 180
+    assert settings.partner_disconnect_grace_seconds == 1

@@ -5,6 +5,7 @@ import React, { createContext, useContext, useMemo } from 'react'
 
 import { useAppStore } from '@/app/store'
 import { useSessionBootstrap } from '@/features/chat/hooks/use-session-bootstrap'
+import { usePageCloseSignal } from '@/features/chat/hooks/use-page-close-signal'
 import { useChatSocket } from '@/features/chat/hooks/use-chat-socket'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { User, UserState } from '@/shared/types'
@@ -58,6 +59,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
         variant: 'destructive'
       })
   })
+  usePageCloseSignal({ sessionId })
   const socketActions = useChatSocket({
     sessionId,
     meId: me?.id,
@@ -72,7 +74,6 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
       }),
     onDisconnect: () => {
       disconnect()
-      clear()
     },
     onSystemMessage: (messageKey) =>
       addMessage({

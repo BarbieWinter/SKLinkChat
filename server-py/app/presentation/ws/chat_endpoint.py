@@ -7,6 +7,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.bootstrap.container import ApplicationContainer
 from app.domain.chat.models import ChatSession
+from app.presentation.ws.disconnect_notices import cancel_pending_partner_disconnect_notice
 from app.shared.protocol import PayloadType
 
 router = APIRouter()
@@ -119,6 +120,11 @@ async def _handle_message(
     sender, partner, normalized_message = message_result
     partner_ws = container.connection_hub.get(partner.session_id)
     if partner_ws is None:
+        # A temporary transport loss should not tear down the chat relationship; the partner may still reconnect.
+        if partner.is_reconnect_pending:
+            await _send_error(websocket, "Partner temporarily unavailable")
+            return
+
         await _disconnect_current_chat(container, websocket, session_id=session_id)
         return
 
@@ -152,6 +158,10 @@ async def _handle_typing(
 
     partner_ws = container.connection_hub.get(partner_id)
     if partner_ws is None:
+        partner = await container.lookup_partner.execute(session_id)
+        if partner is not None and partner.is_reconnect_pending:
+            return
+
         await _disconnect_current_chat(container, websocket, session_id=session_id)
         return
 
@@ -162,6 +172,7 @@ async def _handle_typing(
 async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
     await websocket.accept()
     container: ApplicationContainer = websocket.app.state.container
+    cancel_pending_partner_disconnect_notice(websocket.app, sessionId)
     session = await container.bootstrap_connection.execute(sessionId, websocket)
     await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))
     if session.partner_id is not None:

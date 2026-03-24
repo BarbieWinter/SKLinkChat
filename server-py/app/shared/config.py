@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     reconnect_window_seconds: int = 180
+    partner_disconnect_grace_seconds: float = 1.0
     redis_url: str = Field(...)
 
 
@@ -24,6 +25,7 @@ class SettingsInitKwargs(TypedDict, total=False):
     port: int
     log_level: str
     reconnect_window_seconds: int
+    partner_disconnect_grace_seconds: float
     redis_url: str
 
 

@@ -20,6 +20,7 @@ async def lifespan(app: FastAPI):
     redis = init_redis_client()
     container = build_container(settings=settings, redis=redis)
     app.state.container = container
+    app.state.partner_disconnect_tasks = {}
     await container.presence_repository.reset_online()
     await container.chat_runtime_service.prepare_for_startup()
 
@@ -35,6 +36,8 @@ async def lifespan(app: FastAPI):
     app.state.expiration_task = asyncio.create_task(expire_disconnected_sessions())
     logger.info("application startup")
     yield
+    for task in app.state.partner_disconnect_tasks.values():
+        task.cancel()
     app.state.expiration_task.cancel()
     try:
         await app.state.expiration_task

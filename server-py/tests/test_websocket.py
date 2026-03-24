@@ -171,6 +171,9 @@ def test_websocket_partner_disconnect_emits_disconnect_event(websocket_client: T
                 },
             }
             _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
+            response = websocket_client.post("/api/session/close", json={"session_id": right_id})
+            assert response.status_code == 200
+            assert response.json() == {"status": "accepted"}
 
         time.sleep(1.2)
         assert ws_left.receive_json() == {"type": "disconnect", "payload": None}
@@ -207,6 +210,17 @@ def test_websocket_reconnect_within_window_restores_existing_match(websocket_cli
                     },
                 }
 
+                time.sleep(1.2)
+                ws_left.send_json({"type": "message", "payload": {"message": "still there?"}})
+                assert ws_right_reconnected.receive_json() == {
+                    "type": "message",
+                    "payload": {
+                        "id": left_id,
+                        "name": "Anonymous-0001",
+                        "message": "still there?",
+                    },
+                }
+
 
 def test_websocket_message_after_partner_disconnect_emits_disconnect(websocket_client: TestClient):
     left_id = "session-message-left"
@@ -218,11 +232,61 @@ def test_websocket_message_after_partner_disconnect_emits_disconnect(websocket_c
             assert ws_right.receive_json()["type"] == "user-info"
             _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
 
-            ws_right.close()
-            time.sleep(0.2)
+            response = websocket_client.post("/api/session/close", json={"session_id": right_id})
+            assert response.status_code == 200
+            assert response.json() == {"status": "accepted"}
+            time.sleep(1.2)
 
             ws_left.send_json({"type": "message", "payload": {"message": "are you there?"}})
             assert ws_left.receive_json() == {"type": "disconnect", "payload": None}
+
+
+def test_websocket_transport_disconnect_preserves_chat_until_reconnect(websocket_client: TestClient):
+    left_id = "session-network-left"
+    right_id = "session-network-right"
+
+    with websocket_client.websocket_connect(f"/ws?sessionId={left_id}") as ws_left:
+        with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right:
+            assert ws_left.receive_json()["type"] == "user-info"
+            assert ws_right.receive_json()["type"] == "user-info"
+            _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
+
+            ws_right.close()
+            time.sleep(1.2)
+
+            ws_left.send_json({"type": "message", "payload": {"message": "hold on"}})
+            assert ws_left.receive_json() == {
+                "type": "error",
+                "payload": "Partner temporarily unavailable",
+            }
+
+            with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right_reconnected:
+                assert ws_right_reconnected.receive_json() == {
+                    "type": "user-info",
+                    "payload": {
+                        "id": right_id,
+                        "name": "Anonymous-0002",
+                        "state": "connected",
+                    },
+                }
+                assert ws_right_reconnected.receive_json() == {
+                    "type": "match",
+                    "payload": {
+                        "id": left_id,
+                        "name": "Anonymous-0001",
+                        "state": "connected",
+                    },
+                }
+
+                ws_left.send_json({"type": "message", "payload": {"message": "welcome back"}})
+                assert ws_right_reconnected.receive_json() == {
+                    "type": "message",
+                    "payload": {
+                        "id": left_id,
+                        "name": "Anonymous-0001",
+                        "message": "welcome back",
+                    },
+                }
 
 
 def test_runtime_state_survives_service_restart():

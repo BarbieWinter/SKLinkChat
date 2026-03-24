@@ -16,6 +16,7 @@ from tests.fakes import FakeRedis
 def base_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SERVER_PY_RECONNECT_WINDOW_SECONDS", "1")
+    monkeypatch.setenv("SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS", "1")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

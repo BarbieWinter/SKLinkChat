@@ -77,7 +77,7 @@ export const useChatSocket = ({
             break
           }
           case PayloadType.Error:
-            if (data.payload === 'Client not found' || data.payload === 'Client temporarily unavailable') {
+            if (data.payload === 'Client not found') {
               onDisconnect()
               onSystemMessage('system.strangerDisconnected')
               break
