@@ -46,6 +46,7 @@ from app.infrastructure.postgres.repositories import (
     AuthSessionRepository,
     DurableChatRepositoryImpl,
     EmailVerificationTokenRepository,
+    PasswordResetTokenRepository,
     RiskEventRepository,
 )
 from app.infrastructure.readiness_probe import CompositeReadinessProbe
@@ -105,6 +106,7 @@ def build_container(
     account_repository = AccountRepository(session_factory)
     auth_session_repository = AuthSessionRepository(session_factory)
     verification_token_repository = EmailVerificationTokenRepository(session_factory)
+    password_reset_token_repository = PasswordResetTokenRepository(session_factory)
     risk_event_repository = RiskEventRepository(
         session_factory,
         retention_seconds=settings.registration_risk_retention_seconds,
@@ -122,6 +124,7 @@ def build_container(
         account_repository=account_repository,
         auth_session_repository=auth_session_repository,
         verification_token_repository=verification_token_repository,
+        password_reset_token_repository=password_reset_token_repository,
         risk_event_recorder=risk_event_repository,
         email_sender=build_email_sender(settings),
         turnstile_verifier=build_turnstile_verifier(settings),
@@ -129,6 +132,9 @@ def build_container(
         auth_session_ttl_seconds=settings.auth_session_ttl_seconds,
         verification_resend_cooldown_seconds=settings.verification_resend_cooldown_seconds,
         verification_resend_hourly_limit=settings.verification_resend_hourly_limit,
+        password_reset_token_ttl_seconds=settings.password_reset_token_ttl_seconds,
+        password_reset_resend_cooldown_seconds=settings.password_reset_resend_cooldown_seconds,
+        password_reset_hourly_limit=settings.password_reset_hourly_limit,
         frontend_base_url=settings.frontend_base_url,
     )
     account_service = AccountService(account_repository)
@@ -163,6 +169,7 @@ def build_container(
     retention_service = RetentionService(
         auth_session_repository=auth_session_repository,
         verification_token_repository=verification_token_repository,
+        password_reset_token_repository=password_reset_token_repository,
         durable_chat_repository=durable_chat_repository,
         risk_event_repository=risk_event_repository,
         audit_event_repository=audit_event_repository,

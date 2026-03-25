@@ -24,6 +24,7 @@ from app.infrastructure.postgres.repositories import (
     AuthSessionRepository,
     DurableChatRepositoryImpl,
     EmailVerificationTokenRepository,
+    PasswordResetTokenRepository,
     RiskEventRepository,
 )
 from tests.postgres_utils import ensure_database_exists, get_test_database_url
@@ -46,12 +47,14 @@ def test_retention_service_purges_expired_records():
 
         auth_session_repository = AuthSessionRepository(session_factory)
         verification_token_repository = EmailVerificationTokenRepository(session_factory)
+        password_reset_token_repository = PasswordResetTokenRepository(session_factory)
         durable_chat_repository = DurableChatRepositoryImpl(session_factory, chat_message_ttl_seconds=60)
         risk_event_repository = RiskEventRepository(session_factory, retention_seconds=60)
         audit_event_repository = AuditEventRepository(session_factory, retention_seconds=60)
         retention_service = RetentionService(
             auth_session_repository=auth_session_repository,
             verification_token_repository=verification_token_repository,
+            password_reset_token_repository=password_reset_token_repository,
             durable_chat_repository=durable_chat_repository,
             risk_event_repository=risk_event_repository,
             audit_event_repository=audit_event_repository,
@@ -60,14 +63,14 @@ def test_retention_service_purges_expired_records():
         now = utc_now()
         async with session_factory() as session:
             left_account = Account(
-                email="left@example.com",
-                email_normalized="left@example.com",
+                email="left@test.dev",
+                email_normalized="left@test.dev",
                 password_hash="hashed-password",
                 display_name="Left",
             )
             right_account = Account(
-                email="right@example.com",
-                email_normalized="right@example.com",
+                email="right@test.dev",
+                email_normalized="right@test.dev",
                 password_hash="hashed-password",
                 display_name="Right",
             )
@@ -122,7 +125,7 @@ def test_retention_service_purges_expired_records():
             session.add(
                 RegistrationRiskEvent(
                     account_id=left_account.id,
-                    email_normalized="left@example.com",
+                    email_normalized="left@test.dev",
                     outcome="registered",
                     details={},
                     expires_at=now - timedelta(days=1),

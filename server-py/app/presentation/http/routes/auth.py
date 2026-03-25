@@ -130,3 +130,24 @@ async def get_auth_session(auth: CurrentAuthDep) -> dict[str, object]:
         "display_name": session_view.display_name,
         "interests": session_view.interests or [],
     }
+
+
+class RequestPasswordResetRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8)
+
+
+@router.post("/api/auth/request-password-reset")
+async def request_password_reset(payload: RequestPasswordResetRequest, container: ContainerOnlyDep) -> dict[str, str]:
+    await container.auth_service.request_password_reset(email=payload.email)
+    return {"status": "ok"}
+
+
+@router.post("/api/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest, container: ContainerOnlyDep) -> dict[str, str]:
+    await container.auth_service.reset_password(raw_token=payload.token, new_password=payload.new_password)
+    return {"status": "ok"}

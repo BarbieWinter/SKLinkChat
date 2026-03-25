@@ -20,6 +20,7 @@ from app.infrastructure.postgres.repositories import (
     AccountRepository,
     AuthSessionRepository,
     EmailVerificationTokenRepository,
+    PasswordResetTokenRepository,
 )
 from app.shared.errors import AppError
 
@@ -29,6 +30,37 @@ def normalize_email(email: str) -> tuple[str, str]:
     if "@" not in parsed_email:
         raise AppError(message="Email is invalid", code="INVALID_EMAIL", status_code=422)
     return parsed_email, parsed_email.lower()
+
+
+_BLOCKED_EMAIL_DOMAINS: frozenset[str] = frozenset({
+    "example.com",
+    "example.org",
+    "example.net",
+    "test.com",
+    "test.org",
+    "invalid.com",
+    "localhost",
+    "mailinator.com",
+    "guerrillamail.com",
+    "tempmail.com",
+    "throwaway.email",
+    "yopmail.com",
+    "sharklasers.com",
+    "guerrillamailblock.com",
+    "grr.la",
+    "dispostable.com",
+    "trashmail.com",
+})
+
+
+def check_email_domain(email_normalized: str) -> None:
+    domain = email_normalized.rsplit("@", 1)[-1]
+    if domain in _BLOCKED_EMAIL_DOMAINS:
+        raise AppError(
+            message="This email domain is not allowed",
+            code="EMAIL_DOMAIN_BLOCKED",
+            status_code=422,
+        )
 
 
 def normalize_display_name(display_name: str) -> str:
@@ -66,6 +98,7 @@ class AuthService:
         account_repository: AccountRepository,
         auth_session_repository: AuthSessionRepository,
         verification_token_repository: EmailVerificationTokenRepository,
+        password_reset_token_repository: PasswordResetTokenRepository,
         risk_event_recorder: RiskEventRecorder,
         email_sender: EmailSender,
         turnstile_verifier: TurnstileVerifier,
@@ -73,11 +106,15 @@ class AuthService:
         auth_session_ttl_seconds: int,
         verification_resend_cooldown_seconds: int,
         verification_resend_hourly_limit: int,
+        password_reset_token_ttl_seconds: int,
+        password_reset_resend_cooldown_seconds: int,
+        password_reset_hourly_limit: int,
         frontend_base_url: str,
     ) -> None:
         self._account_repository = account_repository
         self._auth_session_repository = auth_session_repository
         self._verification_token_repository = verification_token_repository
+        self._password_reset_token_repository = password_reset_token_repository
         self._risk_event_recorder = risk_event_recorder
         self._email_sender = email_sender
         self._turnstile_verifier = turnstile_verifier
@@ -85,6 +122,9 @@ class AuthService:
         self._auth_session_ttl_seconds = auth_session_ttl_seconds
         self._verification_resend_cooldown_seconds = verification_resend_cooldown_seconds
         self._verification_resend_hourly_limit = verification_resend_hourly_limit
+        self._password_reset_token_ttl_seconds = password_reset_token_ttl_seconds
+        self._password_reset_resend_cooldown_seconds = password_reset_resend_cooldown_seconds
+        self._password_reset_hourly_limit = password_reset_hourly_limit
         self._frontend_base_url = frontend_base_url.rstrip("/")
 
     async def register(
@@ -102,6 +142,7 @@ class AuthService:
             raise AppError(message="Password is too short", code="PASSWORD_TOO_SHORT", status_code=422)
 
         email, email_normalized = normalize_email(email)
+        check_email_domain(email_normalized)
         display_name = normalize_display_name(display_name)
         interests = normalize_interests(interests)
         turnstile_result = await self._turnstile_verifier.verify(turnstile_token, remote_ip=ip_address)
@@ -274,3 +315,69 @@ class AuthService:
         if account is None:
             raise AppError(message="Authentication required", code="UNAUTHENTICATED", status_code=401)
         return account
+
+    async def request_password_reset(self, *, email: str) -> None:
+        try:
+            _, email_normalized = normalize_email(email)
+        except AppError:
+            return
+
+        account = await self._account_repository.get_by_email_normalized(email_normalized)
+        if account is None:
+            return
+
+        now = utc_now()
+        latest_created_at = await self._password_reset_token_repository.latest_created_at(account.id)
+        if (
+            latest_created_at is not None
+            and (now - ensure_utc(latest_created_at)).total_seconds() < self._password_reset_resend_cooldown_seconds
+        ):
+            return
+
+        sent_last_hour = await self._password_reset_token_repository.sent_count_since(
+            account.id,
+            now - timedelta(hours=1),
+        )
+        if sent_last_hour >= self._password_reset_hourly_limit:
+            return
+
+        raw_token = issue_token()
+        await self._password_reset_token_repository.revoke_active_for_account(
+            account_id=account.id,
+            revoked_at=now,
+        )
+        await self._password_reset_token_repository.create(
+            account_id=account.id,
+            token_hash=hash_secret(raw_token),
+            expires_at=make_expiry(self._password_reset_token_ttl_seconds),
+        )
+        await self._email_sender.send_password_reset_email(
+            recipient=account.email,
+            display_name=account.display_name,
+            reset_link=f"{self._frontend_base_url}/?reset_token={raw_token}",
+        )
+
+    async def reset_password(self, *, raw_token: str, new_password: str) -> None:
+        if len(new_password) < 8:
+            raise AppError(message="Password is too short", code="PASSWORD_TOO_SHORT", status_code=422)
+
+        token = await self._password_reset_token_repository.get_by_token_hash(hash_secret(raw_token))
+        if token is None:
+            raise AppError(message="Reset link is invalid", code="INVALID_RESET_TOKEN", status_code=400)
+        if token.consumed_at is not None:
+            raise AppError(message="Reset link is invalid", code="INVALID_RESET_TOKEN", status_code=400)
+        if token.revoked_at is not None:
+            raise AppError(message="Reset link is invalid", code="INVALID_RESET_TOKEN", status_code=400)
+        if ensure_utc(token.expires_at) <= utc_now():
+            raise AppError(message="Reset link has expired", code="RESET_LINK_EXPIRED", status_code=410)
+
+        await self._password_reset_token_repository.consume(token_id=token.id, consumed_at=utc_now())
+
+        account = await self._account_repository.get_by_id(token.account_id)
+        if account is None:
+            raise AppError(message="Account not found", code="ACCOUNT_NOT_FOUND", status_code=404)
+
+        await self._account_repository.update_password(
+            account_id=account.id,
+            password_hash=hash_password(new_password),
+        )

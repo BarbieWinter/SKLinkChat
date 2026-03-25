@@ -48,8 +48,8 @@ async def _list_reports(client) -> list[ChatReport]:
 
 
 def test_chat_report_accepts_active_match_participant(client):
-    reporter_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    reported_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    reporter_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    reported_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     reporter_session_id = _create_chat_session(client, session_cookie=reporter_cookie)
     reported_session_id = _create_chat_session(client, session_cookie=reported_cookie)
 
@@ -82,9 +82,9 @@ def test_chat_report_accepts_active_match_participant(client):
 
 
 def test_chat_report_rejects_non_participant_and_other_without_details(client):
-    reporter_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    partner_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
-    outsider_cookie = _register_and_verify(client, email="other@example.com", display_name="Other")
+    reporter_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    partner_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
+    outsider_cookie = _register_and_verify(client, email="other@test.dev", display_name="Other")
     reporter_session_id = _create_chat_session(client, session_cookie=reporter_cookie)
     partner_session_id = _create_chat_session(client, session_cookie=partner_cookie)
     outsider_session_id = _create_chat_session(client, session_cookie=outsider_cookie)

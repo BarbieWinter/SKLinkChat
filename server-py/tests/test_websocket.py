@@ -95,8 +95,8 @@ def _queue_and_match(ws_left, ws_right, *, left_id: str, right_id: str, left_nam
 
 
 def test_websocket_requires_owned_verified_chat_session(client):
-    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_session_id = _create_chat_session(client, session_cookie=left_cookie)
 
     with pytest.raises(WebSocketDisconnect):
@@ -108,8 +108,8 @@ def test_websocket_requires_owned_verified_chat_session(client):
 
 
 def test_websocket_queue_match_message_and_typing_flow(client):
-    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
 
@@ -147,8 +147,8 @@ def test_websocket_queue_match_message_and_typing_flow(client):
 
 
 def test_websocket_reconnect_preserves_existing_match(client):
-    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
 
@@ -189,9 +189,9 @@ def test_websocket_reconnect_preserves_existing_match(client):
 
 
 def test_create_match_closes_overlapping_active_match_for_shared_session(client):
-    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    middle_cookie = _register_and_verify(client, email="middle@example.com", display_name="Middle")
-    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    middle_cookie = _register_and_verify(client, email="middle@test.dev", display_name="Middle")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
 
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     middle_id = _create_chat_session(client, session_cookie=middle_cookie)

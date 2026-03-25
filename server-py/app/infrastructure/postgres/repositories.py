@@ -20,6 +20,7 @@ from app.infrastructure.postgres.models import (
     ChatReport,
     ChatSessionRecord,
     EmailVerificationToken,
+    PasswordResetToken,
     RegistrationRiskEvent,
     utc_now,
 )
@@ -95,6 +96,15 @@ class AccountRepository:
                 .order_by(AccountInterest.interest.asc())
             )
             return [row[0] for row in result.all()]
+
+    async def update_password(self, *, account_id: str, password_hash: str) -> None:
+        async with self._session_factory() as session:
+            account = await self._get_by_id(session, account_id)
+            if account is None:
+                raise LookupError("account not found")
+            account.password_hash = password_hash
+            account.updated_at = utc_now()
+            await session.commit()
 
     async def _get_by_email_normalized(self, session: AsyncSession, email_normalized: str) -> Account | None:
         result = await session.execute(select(Account).where(Account.email_normalized == email_normalized))
@@ -209,6 +219,74 @@ class EmailVerificationTokenRepository:
                 )
                 .values(revoked_at=revoked_at)
             )
+            await session.commit()
+
+
+class PasswordResetTokenRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def create(self, *, account_id: str, token_hash: str, expires_at: datetime) -> PasswordResetToken:
+        async with self._session_factory() as session:
+            token = PasswordResetToken(account_id=account_id, token_hash=token_hash, expires_at=expires_at)
+            session.add(token)
+            await session.commit()
+            await session.refresh(token)
+            return token
+
+    async def get_by_token_hash(self, token_hash: str) -> PasswordResetToken | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+            )
+            return result.scalar_one_or_none()
+
+    async def consume(self, *, token_id: str, consumed_at: datetime) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                update(PasswordResetToken)
+                .where(PasswordResetToken.id == token_id)
+                .values(consumed_at=consumed_at)
+            )
+            await session.commit()
+
+    async def revoke_active_for_account(self, *, account_id: str, revoked_at: datetime) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                update(PasswordResetToken)
+                .where(
+                    PasswordResetToken.account_id == account_id,
+                    PasswordResetToken.consumed_at.is_(None),
+                    PasswordResetToken.revoked_at.is_(None),
+                )
+                .values(revoked_at=revoked_at)
+            )
+            await session.commit()
+
+    async def latest_created_at(self, account_id: str) -> datetime | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(PasswordResetToken.created_at)
+                .where(PasswordResetToken.account_id == account_id)
+                .order_by(PasswordResetToken.created_at.desc())
+                .limit(1)
+            )
+            row = result.first()
+            return row[0] if row else None
+
+    async def sent_count_since(self, account_id: str, since: datetime) -> int:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(func.count(PasswordResetToken.id)).where(
+                    PasswordResetToken.account_id == account_id,
+                    PasswordResetToken.created_at >= since,
+                )
+            )
+            return int(result.scalar_one())
+
+    async def delete_expired(self, now: datetime) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(PasswordResetToken).where(PasswordResetToken.expires_at <= now))
             await session.commit()
 
 

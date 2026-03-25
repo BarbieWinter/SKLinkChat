@@ -8,6 +8,8 @@ from typing import Protocol
 class EmailSender(Protocol):
     async def send_verification_email(self, *, recipient: str, display_name: str, verification_link: str) -> None: ...
 
+    async def send_password_reset_email(self, *, recipient: str, display_name: str, reset_link: str) -> None: ...
+
 
 @dataclass(slots=True, frozen=True)
 class TurnstileVerificationResult:

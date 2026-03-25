@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     verification_token_ttl_seconds: int = 900
     verification_resend_cooldown_seconds: int = 60
     verification_resend_hourly_limit: int = 5
+    password_reset_token_ttl_seconds: int = 900
+    password_reset_resend_cooldown_seconds: int = 60
+    password_reset_hourly_limit: int = 5
     chat_message_ttl_seconds: int = 2592000
     registration_risk_retention_seconds: int = 15552000
     audit_event_retention_seconds: int = 31536000

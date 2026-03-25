@@ -76,8 +76,8 @@ async def _list_messages(client) -> list[ChatMessage]:
 
 
 def test_append_message_is_idempotent_with_client_message_id(client):
-    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
 
@@ -120,8 +120,8 @@ def test_append_message_is_idempotent_with_client_message_id(client):
 
 
 def test_malformed_websocket_message_does_not_persist_durable_row(client):
-    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
-    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
 

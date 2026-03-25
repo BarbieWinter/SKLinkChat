@@ -16,7 +16,7 @@ def _run(coro):
 
 def _register(client, **overrides):
     payload = {
-        "email": "user@example.com",
+        "email": "user@testuser.dev",
         "password": "CorrectHorseBatteryStaple!23",
         "display_name": "Traveler",
         "interests": ["music", "travel"],
@@ -95,7 +95,7 @@ def test_verify_email_rejects_expired_token(client):
 
 def test_duplicate_email_is_rejected(client):
     first_response = _register(client)
-    second_response = _register(client, email="USER@example.com")
+    second_response = _register(client, email="USER@testuser.dev")
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
@@ -120,7 +120,7 @@ def test_login_logout_and_session_flow(client):
 
     login_response = client.post(
         "/api/auth/login",
-        json={"email": "user@example.com", "password": "CorrectHorseBatteryStaple!23"},
+        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
     )
 
     assert login_response.status_code == 200
@@ -185,3 +185,68 @@ def test_resend_verification_returns_idempotent_success_for_verified_account(cli
 
     assert response.status_code == 200
     assert response.json()["email_verified"] is True
+
+
+def test_register_rejects_blocked_email_domain(client):
+    for blocked_domain in ("example.com", "mailinator.com", "yopmail.com"):
+        response = _register(client, email=f"user@{blocked_domain}")
+        assert response.status_code == 422
+        assert response.json()["code"] == "EMAIL_DOMAIN_BLOCKED"
+
+
+def _extract_reset_link(client) -> str:
+    fake_sender = client.app.state.container.auth_service._email_sender
+    reset_messages = [m for m in fake_sender.sent_messages if m.get("type") == "password_reset"]
+    return reset_messages[-1]["reset_link"]
+
+
+def _extract_reset_token(client) -> str:
+    reset_link = _extract_reset_link(client)
+    query = parse_qs(urlparse(reset_link).query)
+    return query["reset_token"][0]
+
+
+def test_request_password_reset_sends_email(client):
+    _register(client)
+    response = client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
+    assert response.status_code == 200
+    _extract_reset_link(client)
+
+
+def test_request_password_reset_silent_for_unknown_email(client):
+    response = client.post("/api/auth/request-password-reset", json={"email": "nobody@testuser.dev"})
+    assert response.status_code == 200
+
+
+def test_reset_password_flow(client):
+    _register(client)
+    client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
+    reset_token = _extract_reset_token(client)
+
+    response = client.post("/api/auth/reset-password", json={"token": reset_token, "new_password": "NewSecurePassword!99"})
+    assert response.status_code == 200
+
+    login_response = client.post("/api/auth/login", json={"email": "user@testuser.dev", "password": "NewSecurePassword!99"})
+    assert login_response.status_code == 200
+    assert login_response.json()["authenticated"] is True
+
+
+def test_reset_password_rejects_reused_token(client):
+    _register(client)
+    client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
+    reset_token = _extract_reset_token(client)
+
+    first = client.post("/api/auth/reset-password", json={"token": reset_token, "new_password": "NewSecurePassword!99"})
+    second = client.post("/api/auth/reset-password", json={"token": reset_token, "new_password": "AnotherPassword!88"})
+    assert first.status_code == 200
+    assert second.status_code == 400
+    assert second.json()["code"] == "INVALID_RESET_TOKEN"
+
+
+def test_reset_password_rejects_short_password(client):
+    _register(client)
+    client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
+    reset_token = _extract_reset_token(client)
+
+    response = client.post("/api/auth/reset-password", json={"token": reset_token, "new_password": "short"})
+    assert response.status_code == 422
