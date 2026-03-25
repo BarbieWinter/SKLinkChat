@@ -75,3 +75,5 @@ export const WS_ENDPOINT = (() => {
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return url.toString()
 })()
+
+export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''

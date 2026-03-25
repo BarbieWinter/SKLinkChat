@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sklinkchat
+      POSTGRES_USER: sklinkchat
+      POSTGRES_PASSWORD: sklinkchat
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sklinkchat -d sklinkchat"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7-alpine
     ports:
@@ -9,20 +25,41 @@ services:
       timeout: 3s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   server-py:
     build:
       context: ./server-py
     environment:
+      SERVER_PY_DATABASE_URL: postgresql+psycopg://sklinkchat:sklinkchat@postgres:5432/sklinkchat
       SERVER_PY_REDIS_URL: redis://redis:6379/0
       SERVER_PY_HOST: 0.0.0.0
       SERVER_PY_PORT: 8000
       SERVER_PY_LOG_LEVEL: INFO
       SERVER_PY_RECONNECT_WINDOW_SECONDS: 180
+      SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS: 1
+      SERVER_PY_EMAIL_PROVIDER: mailpit
+      SERVER_PY_EMAIL_FROM_ADDRESS: noreply@example.com
+      SERVER_PY_SMTP_HOST: mailpit
+      SERVER_PY_SMTP_PORT: 1025
+      SERVER_PY_FRONTEND_BASE_URL: http://localhost:4173
+      SERVER_PY_TURNSTILE_PROVIDER: fake
+      SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS: "true"
+      SERVER_PY_SECURE_COOKIES: "false"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "8000:8000"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 10s
@@ -35,8 +72,12 @@ services:
       args:
         VITE_ENDPOINT: http://localhost:8000
         VITE_WS_ENDPOINT: ws://localhost:8000/ws
+        VITE_TURNSTILE_SITE_KEY: ""
     ports:
       - "4173:4173"
     depends_on:
       server-py:
         condition: service_healthy
+
+volumes:
+  postgres_data:

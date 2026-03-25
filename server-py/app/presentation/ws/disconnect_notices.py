@@ -26,9 +26,12 @@ def schedule_partner_disconnect_notice(app: FastAPI, container: ApplicationConta
             if partner_session_id is None:
                 return
 
-            partner_websocket = container.connection_hub.get(partner_session_id)
-            if partner_websocket is not None:
-                await partner_websocket.send_json({"type": PayloadType.DISCONNECT.value, "payload": None})
+            envelope = {"type": PayloadType.DISCONNECT.value, "payload": None}
+            for ws in container.connection_hub.get_all(partner_session_id):
+                try:
+                    await ws.send_json(envelope)
+                except Exception:
+                    pass
         except asyncio.CancelledError:
             return
         finally:

@@ -36,7 +36,7 @@ def test_readyz_returns_503_when_redis_fails(monkeypatch):
 
     assert response.status_code == 503
     body = response.json()
-    assert body["code"] == "REDIS_UNAVAILABLE"
+    assert body["code"] == "DEPENDENCY_UNAVAILABLE"
     assert body["request_id"] == "req-ready-fail"
 
 
@@ -60,12 +60,13 @@ def test_users_count_returns_online_count_from_redis(monkeypatch):
     assert response.json() == {"online_count": 7}
 
 
-def test_session_endpoint_allows_local_frontend_origin(client):
-    response = client.post(
-        "/api/session",
+def test_auth_session_endpoint_allows_local_frontend_origin(client):
+    response = client.get(
+        "/api/auth/session",
         headers={"Origin": "http://localhost:4173"},
     )
 
     assert response.status_code == 200
-    assert "session_id" in response.json()
+    assert response.json()["authenticated"] is False
     assert response.headers["access-control-allow-origin"] == "http://localhost:4173"
+    assert response.headers["access-control-allow-credentials"] == "true"

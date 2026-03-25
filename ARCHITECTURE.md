@@ -2,182 +2,103 @@
 
 ## Overview
 
-当前仓库只保留一个活跃运行时：
+当前系统采用“PostgreSQL 持久化 + Redis 实时协调”的双存储模型：
 
-- `client/`：React 18 + Vite 前端
-- `server-py/`：FastAPI WebSocket/HTTP 后端
-- `redis`：在线状态、会话存在性与实时协调
+- `client/`: React 18 + Vite 前端
+- `server-py/`: FastAPI HTTP/WebSocket 后端
+- `postgres`: 账号、认证、验证令牌、聊天持久化、审计与风险记录
+- `redis`: 在线状态、等待队列、实时 chat session、断线恢复窗口
+- `mailpit`: 本地开发邮件收件箱
 
 ## Runtime Topology
 
 ```mermaid
 flowchart LR
     A[Browser] --> B[React Client]
-    B --> C[POST /api/session]
-    B <--> D[WebSocket /ws?sessionId=...]
-    C --> E[FastAPI server-py]
-    D --> E
-    E <--> F[Redis]
+    B --> C[Auth APIs]
+    B --> D[POST /api/session]
+    B <--> E[WebSocket /ws?sessionId=...]
+    C --> F[FastAPI server-py]
+    D --> F
+    E --> F
+    F <--> G[(PostgreSQL)]
+    F <--> H[(Redis)]
+    F --> I[Mailpit / Resend]
 ```
 
-## Active Contracts
+## Ownership Boundaries
 
-- `POST /api/session`
-- `GET /healthz`
-- `GET /readyz`
-- `GET /api/users/count`
-- `GET /ws?sessionId=<session_id>`
+### PostgreSQL owns
 
-## Frontend Structure
+- `accounts`
+- `account_interests`
+- `auth_sessions`
+- `email_verification_tokens`
+- `registration_risk_events`
+- `chat_sessions`
+- `chat_matches`
+- `chat_messages`
+- `audit_events`
 
-```text
-client/src/
-  app/
-  pages/
-  features/
-    chat/
-      api/
-      hooks/
-      model/
-      services/
-      ui/
-    settings/
-      model/
-      ui/
-    presence/
-      api/
-      ui/
-  shared/
-    api/
-    config/
-    i18n/
-    lib/
-    ui/
-    types/
-```
+### Redis owns
 
-### Frontend Ownership
+- online presence
+- waiting queue
+- websocket runtime session state
+- reconnect deadlines
+- recent in-memory chat history for live UX
 
-- `app/`：根组件、providers、layout、store 组合
-- `pages/`：页面容器和布局状态
-- `features/chat/`：session bootstrap、socket transport、chat store/UI
-- `features/settings/`：昵称、关键字、语言设置
-- `features/presence/`：在线人数查询与展示
-- `shared/`：无业务归属的公共能力
+## Auth and Chat Gating
 
-## Backend Structure
+### Registration flow
 
-```text
-server-py/app/
-  bootstrap/
-  presentation/
-    http/
-      routes/
-    ws/
-  application/
-    chat/
-    platform/
-  domain/
-    chat/
-    platform/
-  infrastructure/
-    redis/
-    realtime/
-    observability/
-    jobs/
-  shared/
-```
+1. Client submits email, password, display name, interests, Turnstile token
+2. Backend verifies Turnstile
+3. Backend creates account and risk event
+4. Backend creates HttpOnly auth session cookie
+5. Backend sends single-use verification link
 
-### Backend Ownership
+### Verification flow
 
-- `bootstrap/`：应用工厂、依赖装配、lifespan
-- `presentation/http/routes/`：HTTP transport layer
-- `presentation/ws/`：WebSocket endpoint layer
-- `application/chat/`：聊天 use cases 与 orchestration
-- `application/platform/`：ports 与平台级 use cases
-- `domain/chat/`：`ChatSession`、`MatchResult` 等领域模型
-- `infrastructure/redis/`：session、presence、readiness、event bus 适配器
-- `infrastructure/realtime/`：单实例内存连接中心
-- `infrastructure/observability/`：审计 sink
-- `infrastructure/jobs/`：内联任务分发器
-- `shared/`：配置、日志、协议、错误定义
+1. User opens email link containing verification token
+2. Frontend calls `POST /api/auth/verify-email`
+3. Backend validates token hash, expiry, and single-use status
+4. Backend sets `email_verified_at`
 
-## Active Request Flow
+### Chat bootstrap flow
 
-### Session bootstrap
+1. Verified authenticated user calls `POST /api/session`
+2. Backend creates account-owned anonymous chat session row in PostgreSQL
+3. Frontend opens `/ws?sessionId=...`
+4. Backend authorizes both cookie session and `sessionId` ownership before accepting websocket
+5. Redis runtime handles queueing, matching, typing, disconnect, reconnect
 
-1. 前端调用 `POST /api/session`
-2. 后端返回匿名 `session_id`
-3. 前端通过 `ws://.../ws?sessionId=...` 建立连接
+## Privacy Rules
 
-### Match flow
+- Peer-visible websocket payloads only include `session_id`, `display_name`, `state`
+- `email` and `account_id` never appear in client session payloads or peer-facing transport events
+- Auth session token and verification token are stored hashed, never raw
 
-1. 用户点击开始聊天
-2. 前端发送 `{ type: "queue", payload: ... }`
-3. 后端把会话置为 `searching`
-4. 运行时从等待队列中取出两个在线会话
-5. 双方收到 `user-info` 和 `match`
+## Retention
 
-### Message flow
+- `chat_messages`: 30 days
+- `email_verification_tokens`: 15 minutes validity, single use
+- `registration_risk_events`: 180 days
+- `audit_events`: 365 days
 
-1. 前端发送 `message`
-2. FastAPI 校验当前 partner
-3. 消息转发到目标会话
-4. 本地消息也写入前端 store
+第一版 retention 使用应用内定时任务，不引入外部 worker。
 
-### Reconnect flow
-
-1. 刷新页面后，浏览器保留同一个 `sessionId`
-2. 后端在恢复窗口内保留该会话
-3. 用户重新进入时自动附着回原会话
-4. 超过 `SERVER_PY_RECONNECT_WINDOW_SECONDS` 未恢复，服务端才真正清理并通知对端
-
-## Active Protocol
-
-当前活跃事件：
-
-- `message`
-- `user-info`
-- `error`
-- `queue`
-- `match`
-- `disconnect`
-- `typing`
-
-## Deployment
-
-推荐本地联调方式：
+## Local Deployment
 
 ```bash
-docker compose up -d --build
-```
-
-服务：
-
-- `client`
-- `server-py`
-- `redis`
-
-## Verification
-
-```bash
+docker compose up -d postgres redis mailpit
+cd server-py && alembic upgrade head
 cd server-py && ./.venv/bin/python -m pytest -q
-cd server-py && ./.venv/bin/ruff check .
-cd server-py && python -m compileall app tests
 cd client && npm run test -- --run
-cd client && npm run build
-docker compose config
 ```
 
-## Key Files
+## Future Extension Boundary
 
-- [client/src/app/App.tsx](/Users/lizhenwei/Documents/SKLinkChat/client/src/app/App.tsx)
-- [client/src/features/chat/chat-provider.tsx](/Users/lizhenwei/Documents/SKLinkChat/client/src/features/chat/chat-provider.tsx)
-- [client/src/features/chat/hooks/use-chat-socket.ts](/Users/lizhenwei/Documents/SKLinkChat/client/src/features/chat/hooks/use-chat-socket.ts)
-- [client/src/features/presence/api/get-online-count.ts](/Users/lizhenwei/Documents/SKLinkChat/client/src/features/presence/api/get-online-count.ts)
-- [server-py/app/main.py](/Users/lizhenwei/Documents/SKLinkChat/server-py/app/main.py)
-- [server-py/app/bootstrap/app_factory.py](/Users/lizhenwei/Documents/SKLinkChat/server-py/app/bootstrap/app_factory.py)
-- [server-py/app/presentation/http/routes/session.py](/Users/lizhenwei/Documents/SKLinkChat/server-py/app/presentation/http/routes/session.py)
-- [server-py/app/presentation/http/routes/health.py](/Users/lizhenwei/Documents/SKLinkChat/server-py/app/presentation/http/routes/health.py)
-- [server-py/app/presentation/ws/chat_endpoint.py](/Users/lizhenwei/Documents/SKLinkChat/server-py/app/presentation/ws/chat_endpoint.py)
-- [server-py/app/application/chat/runtime_service.py](/Users/lizhenwei/Documents/SKLinkChat/server-py/app/application/chat/runtime_service.py)
+- 未来论坛功能可以复用 `accounts` 和审计/风险基础设施
+- 论坛必须新增独立 `forum_*` 表
+- 当前 `chat_*` 表只服务 1:1 匿名聊天，不复用为论坛帖子模型

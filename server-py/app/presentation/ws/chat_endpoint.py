@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, WebSocketException, status
 from starlette.websockets import WebSocketDisconnect
 
 from app.bootstrap.container import ApplicationContainer
 from app.domain.chat.models import ChatSession
 from app.presentation.ws.disconnect_notices import cancel_pending_partner_disconnect_notice
 from app.presentation.ws.presence_updates import schedule_presence_count_broadcast
+from app.shared.errors import AppError
 from app.shared.protocol import PayloadType
 
 router = APIRouter()
@@ -34,21 +35,22 @@ async def _send_error(websocket: WebSocket, message: str) -> None:
     await _send_envelope(websocket, PayloadType.ERROR, message)
 
 
-async def _send_disconnect(websocket: WebSocket) -> None:
-    await _send_envelope(websocket, PayloadType.DISCONNECT, None)
+async def _broadcast_to_session(container: ApplicationContainer, session_id: str, payload_type: PayloadType, payload: Any) -> None:
+    """Send a message to ALL WebSocket connections for a given session (all tabs)."""
+    envelope = _make_envelope(payload_type, payload)
+    for ws in container.connection_hub.get_all(session_id):
+        try:
+            await ws.send_json(envelope)
+        except Exception:
+            pass
 
 
 async def _send_match_notifications(container: ApplicationContainer, match) -> None:
-    left_ws = container.connection_hub.get(match.left.session_id)
-    right_ws = container.connection_hub.get(match.right.session_id)
+    await _broadcast_to_session(container, match.left.session_id, PayloadType.USER_INFO, _serialize_user(match.left))
+    await _broadcast_to_session(container, match.left.session_id, PayloadType.MATCH, _serialize_user(match.right))
 
-    if left_ws is not None:
-        await _send_envelope(left_ws, PayloadType.USER_INFO, _serialize_user(match.left))
-        await _send_envelope(left_ws, PayloadType.MATCH, _serialize_user(match.right))
-
-    if right_ws is not None:
-        await _send_envelope(right_ws, PayloadType.USER_INFO, _serialize_user(match.right))
-        await _send_envelope(right_ws, PayloadType.MATCH, _serialize_user(match.left))
+    await _broadcast_to_session(container, match.right.session_id, PayloadType.USER_INFO, _serialize_user(match.right))
+    await _broadcast_to_session(container, match.right.session_id, PayloadType.MATCH, _serialize_user(match.left))
 
 
 async def _handle_user_info(
@@ -68,21 +70,18 @@ async def _handle_user_info(
         return
 
     session = await container.update_profile.execute(session_id, name=name)
-    await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))
+    await _broadcast_to_session(container, session_id, PayloadType.USER_INFO, _serialize_user(session))
 
 
 async def _notify_partner_disconnect(container: ApplicationContainer, partner_session_id: str | None) -> None:
     if partner_session_id is None:
         return
-
-    partner_ws = container.connection_hub.get(partner_session_id)
-    if partner_ws is not None:
-        await _send_disconnect(partner_ws)
+    await _broadcast_to_session(container, partner_session_id, PayloadType.DISCONNECT, None)
 
 
-async def _disconnect_current_chat(container: ApplicationContainer, websocket: WebSocket, *, session_id: str) -> None:
+async def _disconnect_current_chat(container: ApplicationContainer, session_id: str) -> None:
     await container.disconnect_session.execute(session_id)
-    await _send_disconnect(websocket)
+    await _broadcast_to_session(container, session_id, PayloadType.DISCONNECT, None)
 
 
 async def _handle_queue(container: ApplicationContainer, websocket: WebSocket, *, session_id: str) -> None:
@@ -90,7 +89,7 @@ async def _handle_queue(container: ApplicationContainer, websocket: WebSocket, *
     await _notify_partner_disconnect(container, partner_disconnected)
 
     session = await container.enter_queue.execute(session_id)
-    await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))
+    await _broadcast_to_session(container, session_id, PayloadType.USER_INFO, _serialize_user(session))
 
     match = await container.try_match.execute()
     if match is not None:
@@ -115,25 +114,23 @@ async def _handle_message(
 
     message_result = await container.send_message.execute(session_id, raw_message)
     if message_result is None:
-        await _disconnect_current_chat(container, websocket, session_id=session_id)
+        await _disconnect_current_chat(container, session_id=session_id)
         return
 
     sender, partner, normalized_message = message_result
-    partner_ws = container.connection_hub.get(partner.session_id)
-    if partner_ws is None:
-        # A temporary transport loss should not tear down the chat relationship; the partner may still reconnect.
+    message_payload = {"id": sender.session_id, "name": sender.name, "message": normalized_message}
+
+    partner_has_connection = container.connection_hub.has(partner.session_id)
+    if not partner_has_connection:
         if partner.is_reconnect_pending:
             await _send_error(websocket, "Partner temporarily unavailable")
             return
 
-        await _disconnect_current_chat(container, websocket, session_id=session_id)
+        await _disconnect_current_chat(container, session_id=session_id)
         return
 
-    await _send_envelope(
-        partner_ws,
-        PayloadType.MESSAGE,
-        {"id": sender.session_id, "name": sender.name, "message": normalized_message},
-    )
+    # Deliver to all partner tabs
+    await _broadcast_to_session(container, partner.session_id, PayloadType.MESSAGE, message_payload)
 
 
 async def _handle_typing(
@@ -154,27 +151,39 @@ async def _handle_typing(
 
     partner_id = await container.set_typing.execute(session_id, is_typing=typing)
     if partner_id is None:
-        await _disconnect_current_chat(container, websocket, session_id=session_id)
+        await _disconnect_current_chat(container, session_id=session_id)
         return
 
-    partner_ws = container.connection_hub.get(partner_id)
-    if partner_ws is None:
+    partner_has_connection = container.connection_hub.has(partner_id)
+    if not partner_has_connection:
         partner = await container.lookup_partner.execute(session_id)
         if partner is not None and partner.is_reconnect_pending:
             return
 
-        await _disconnect_current_chat(container, websocket, session_id=session_id)
+        await _disconnect_current_chat(container, session_id=session_id)
         return
 
-    await _send_envelope(partner_ws, PayloadType.TYPING, {"id": session_id, "typing": typing})
+    await _broadcast_to_session(container, partner_id, PayloadType.TYPING, {"id": session_id, "typing": typing})
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
-    await websocket.accept()
     container: ApplicationContainer = websocket.app.state.container
+    raw_session_token = websocket.cookies.get(container.settings.auth_cookie_name)
+    account_id, auth_session = await container.resolve_auth_session.execute(raw_session_token)
+    if account_id is None or not auth_session.authenticated:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="UNAUTHENTICATED")
+    try:
+        authorized_session = await container.authorize_chat_session.execute(account_id=account_id, session_id=sessionId)
+    except AppError as error:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason=error.code) from error
+    await websocket.accept()
     cancel_pending_partner_disconnect_notice(websocket.app, sessionId)
-    session = await container.bootstrap_connection.execute(sessionId, websocket)
+    session = await container.bootstrap_connection.execute(
+        sessionId,
+        websocket,
+        display_name=authorized_session.display_name,
+    )
     schedule_presence_count_broadcast(websocket.app, container)
     await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))
     if session.partner_id is not None:
@@ -199,5 +208,9 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
             else:
                 await _send_error(websocket, "Unsupported payload type")
     except WebSocketDisconnect:
-        await container.mark_disconnected.execute(sessionId)
-        schedule_presence_count_broadcast(websocket.app, container)
+        # Remove only this specific WebSocket from the hub.
+        remaining = container.connection_hub.unregister_ws(sessionId, websocket)
+        # Only tear down the session if this was the last tab.
+        if remaining == 0:
+            await container.mark_disconnected.execute(sessionId)
+            schedule_presence_count_broadcast(websocket.app, container)

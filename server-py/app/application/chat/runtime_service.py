@@ -14,6 +14,7 @@ from app.application.platform.ports import (
     PresenceRepository,
     SessionRepository,
 )
+from app.application.platform.services import DurableChatRepository
 from app.domain.chat.models import ChatHistoryEntry, ChatSession, MatchResult, utc_now
 from app.shared.protocol import PayloadType, UserState
 
@@ -30,6 +31,7 @@ class ChatRuntimeService:
         audit_sink: AuditSink,
         event_bus: EventBus,
         job_dispatcher: JobDispatcher,
+        durable_chat_repository: DurableChatRepository,
         *,
         reconnect_window_seconds: int = 180,
     ) -> None:
@@ -42,6 +44,7 @@ class ChatRuntimeService:
         self._audit_sink = audit_sink
         self._event_bus = event_bus
         self._job_dispatcher = job_dispatcher
+        self._durable_chat_repository = durable_chat_repository
         self._reconnect_window = timedelta(seconds=reconnect_window_seconds)
         self._lock = asyncio.Lock()
 
@@ -51,14 +54,17 @@ class ChatRuntimeService:
 
     async def register_connection(self, session_id: str, websocket) -> None:
         async with self._lock:
+            is_first = not self._connection_hub.has(session_id)
             self._connection_hub.register(session_id, websocket)
             await self._presence_repository.mark_online(session_id)
 
             session = await self._session_repository.load_or_create_session(session_id)
             session.reconnect_deadline = None
-            session.is_typing = False
-            if session.partner_id is None and session.state in (UserState.CONNECTED, UserState.SEARCHING):
-                session.state = UserState.IDLE
+            # Only reset state for the first connection; additional tabs inherit the current state.
+            if is_first:
+                session.is_typing = False
+                if session.partner_id is None and session.state in (UserState.CONNECTED, UserState.SEARCHING):
+                    session.state = UserState.IDLE
             await self._session_repository.save_session(session)
 
     async def get_or_create_session(self, session_id: str, name: str | None = None) -> ChatSession:
@@ -103,10 +109,20 @@ class ChatRuntimeService:
                 if left_id is None:
                     return None
 
-                right_id = await self._pop_matchable_session_id_unlocked(exclude_session_id=left_id)
-                if right_id is None:
-                    await self._session_repository.enqueue_waiting_front(left_id)
-                    return None
+                deferred_session_ids: list[str] = []
+                right_id: str | None = None
+                while True:
+                    candidate_id = await self._pop_matchable_session_id_unlocked(exclude_session_id=left_id)
+                    if candidate_id is None:
+                        await self._requeue_waiting_front_unlocked([left_id, *deferred_session_ids])
+                        return None
+                    if await self._sessions_belong_to_same_account_unlocked(left_id, candidate_id):
+                        deferred_session_ids.append(candidate_id)
+                        continue
+                    right_id = candidate_id
+                    break
+
+                await self._requeue_waiting_front_unlocked(deferred_session_ids)
 
                 left_session = await self._session_repository.load_session(left_id)
                 right_session = await self._session_repository.load_session(right_id)
@@ -127,6 +143,10 @@ class ChatRuntimeService:
                 await self._event_bus.publish(
                     "chat.match.created",
                     {"left_session_id": left_id, "right_session_id": right_id},
+                )
+                await self._durable_chat_repository.create_match(
+                    left_chat_session_id=left_id,
+                    right_chat_session_id=right_id,
                 )
                 return MatchResult(left=left_session, right=right_session)
 
@@ -160,6 +180,11 @@ class ChatRuntimeService:
             )
             await self._session_repository.append_history(sender.session_id, entry)
             await self._session_repository.append_history(partner.session_id, entry)
+            await self._durable_chat_repository.append_message(
+                sender_chat_session_id=sender.session_id,
+                recipient_chat_session_id=partner.session_id,
+                content=normalized_message,
+            )
             await self._audit_sink.record("chat.message.sent", {"session_id": sender_session_id})
             return sender, partner, normalized_message
 
@@ -191,6 +216,7 @@ class ChatRuntimeService:
             session.state = UserState.IDLE
             session.is_typing = False
             await self._session_repository.save_session(session)
+            await self._durable_chat_repository.end_active_match_for_session(session_id)
 
             if partner_id is None:
                 return None
@@ -222,9 +248,14 @@ class ChatRuntimeService:
             await self._audit_sink.record("chat.partner.disconnected", {"session_id": session_id})
             return partner_id
 
-    async def mark_disconnected(self, session_id: str) -> None:
+    async def mark_disconnected(self, session_id: str, *, force: bool = False) -> None:
         async with self._lock:
-            self._connection_hub.unregister(session_id)
+            if force:
+                self._connection_hub.unregister(session_id)
+            elif self._connection_hub.has(session_id):
+                # Other tabs still hold an active connection; do not tear down the session.
+                return
+
             await self._presence_repository.mark_offline(session_id)
             await self._session_repository.remove_from_waiting_queue(session_id)
 
@@ -274,12 +305,25 @@ class ChatRuntimeService:
             return False
         return await self._presence_repository.is_online(session_id)
 
+    async def _sessions_belong_to_same_account_unlocked(self, left_id: str, right_id: str) -> bool:
+        left_account_id = await self._durable_chat_repository.get_account_id_for_chat_session(left_id)
+        right_account_id = await self._durable_chat_repository.get_account_id_for_chat_session(right_id)
+        # If either account lookup fails, conservatively treat as same account to prevent self-chat.
+        if left_account_id is None or right_account_id is None:
+            return True
+        return left_account_id == right_account_id
+
+    async def _requeue_waiting_front_unlocked(self, session_ids: list[str]) -> None:
+        for session_id in reversed(session_ids):
+            await self._session_repository.enqueue_waiting_front(session_id)
+
     async def _remove_session_unlocked(self, session_id: str) -> str | None:
         self._connection_hub.unregister(session_id)
         await self._presence_repository.mark_offline(session_id)
 
         session = await self._session_repository.load_session(session_id)
         await self._session_repository.delete_session(session_id)
+        await self._durable_chat_repository.end_active_match_for_session(session_id)
         if session is None or session.partner_id is None:
             return None
 

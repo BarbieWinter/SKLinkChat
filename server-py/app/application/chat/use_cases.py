@@ -12,9 +12,9 @@ from app.domain.chat.models import ChatSession, MatchResult
 class BootstrapConnectionUseCase:
     runtime: ChatRuntimeService
 
-    async def execute(self, session_id: str, websocket: WebSocket) -> ChatSession:
+    async def execute(self, session_id: str, websocket: WebSocket, *, display_name: str | None = None) -> ChatSession:
         await self.runtime.register_connection(session_id, websocket)
-        return await self.runtime.get_or_create_session(session_id)
+        return await self.runtime.get_or_create_session(session_id, name=display_name)
 
 
 @dataclass(slots=True)
@@ -77,8 +77,8 @@ class LookupPartnerUseCase:
 class MarkDisconnectedUseCase:
     runtime: ChatRuntimeService
 
-    async def execute(self, session_id: str) -> None:
-        await self.runtime.mark_disconnected(session_id)
+    async def execute(self, session_id: str, *, force: bool = False) -> None:
+        await self.runtime.mark_disconnected(session_id, force=force)
 
 
 @dataclass(slots=True)

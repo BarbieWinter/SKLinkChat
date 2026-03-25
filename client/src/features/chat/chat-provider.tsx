@@ -5,6 +5,7 @@ import React, { createContext, useContext, useMemo } from 'react'
 import { useQueryClient } from 'react-query'
 
 import { useAppStore } from '@/app/store'
+import { useAuth } from '@/features/auth/auth-provider'
 import { useSessionBootstrap } from '@/features/chat/hooks/use-session-bootstrap'
 import { usePageCloseSignal } from '@/features/chat/hooks/use-page-close-signal'
 import { useChatSocket } from '@/features/chat/hooks/use-chat-socket'
@@ -47,6 +48,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { t } = useI18n()
+  const { authSession } = useAuth()
   const {
     addMessage,
     clear,
@@ -61,6 +63,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
     displayName
   } = useAppStore()
   const { retry, sessionId, status } = useSessionBootstrap({
+    enabled: authSession.authenticated && authSession.email_verified,
     onError: () => undefined
   })
   usePageCloseSignal({ sessionId })

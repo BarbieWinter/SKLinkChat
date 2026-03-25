@@ -1,20 +1,27 @@
 # SKLinkChat
 
-匿名纯文本聊天平台。当前唯一有效的本地运行时是：
+匿名纯文本聊天平台。当前活跃运行时为：
 
-- `client/`：React + Vite 前端
-- `server-py/`：FastAPI + Redis 后端
-- `docker-compose.yml`：`client + server-py + redis` 的本地编排入口
+- `client/`: React + Vite 前端
+- `server-py/`: FastAPI + PostgreSQL + Redis 后端
+- `docker-compose.yml`: `client + server-py + postgres + redis + mailpit` 本地编排入口
+
+## Runtime Model
+
+- PostgreSQL: 账号、认证会话、邮箱验证令牌、聊天持久化、风险/审计记录
+- Redis: 在线状态、匹配队列、断线恢复、实时会话状态
+- Mailpit: 本地 SMTP 调试收件箱
+- 聊天前必须先注册并完成邮箱验证
 
 ## Local Development
 
-### 1. Start Redis
+### 1. Start infrastructure
 
 ```bash
-docker compose up -d redis
+docker compose up -d postgres redis mailpit
 ```
 
-如果本机已经有 Redis，可跳过这一步。
+Mailpit UI 默认地址：`http://localhost:8025`
 
 ### 2. Start Python backend
 
@@ -23,6 +30,7 @@ cd server-py
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
+alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -30,6 +38,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 cd client
+npm install
 npm run dev
 ```
 
@@ -45,11 +54,22 @@ docker compose up -d --build
 
 - Frontend: `http://localhost:4173`
 - FastAPI backend: `http://localhost:8000`
+- PostgreSQL: `postgresql://sklinkchat:sklinkchat@localhost:5432/sklinkchat`
 - Redis: `redis://localhost:6379/0`
+- Mailpit UI: `http://localhost:8025`
 
 ## Active Contracts
 
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `POST /api/auth/verify-email`
+- `POST /api/auth/resend-verification`
+- `GET /api/auth/session`
+- `GET /api/account/profile`
+- `PATCH /api/account/profile`
 - `POST /api/session`
+- `POST /api/session/close`
 - `GET /healthz`
 - `GET /readyz`
 - `GET /api/users/count`
@@ -59,55 +79,34 @@ docker compose up -d --build
 
 ```bash
 cd server-py && ./.venv/bin/python -m pytest -q
-cd server-py && ./.venv/bin/ruff check .
+cd server-py && ./.venv/bin/ruff check app tests
 cd server-py && python -m compileall app tests
+cd server-py && alembic upgrade head
 cd client && npm run test -- --run
 cd client && npm run build
 docker compose config
 curl -s http://localhost:8000/healthz
 curl -s http://localhost:8000/readyz
-curl -s http://localhost:8000/api/users/count
 ```
 
 ## Environment
 
-参考根目录 [.env.example](/Users/lizhenwei/Documents/SKLinkChat/.env.example)。
+参考根目录 `.env.example`。
 
 关键变量：
 
 - `VITE_ENDPOINT`
 - `VITE_WS_ENDPOINT`
+- `VITE_TURNSTILE_SITE_KEY`
+- `SERVER_PY_DATABASE_URL`
 - `SERVER_PY_REDIS_URL`
-- `SERVER_PY_HOST`
-- `SERVER_PY_PORT`
-- `SERVER_PY_LOG_LEVEL`
-- `SERVER_PY_RECONNECT_WINDOW_SECONDS`
+- `SERVER_PY_EMAIL_PROVIDER`
+- `SERVER_PY_TURNSTILE_PROVIDER`
+- `SERVER_PY_FRONTEND_BASE_URL`
 
-## Target Frontend Structure
+## Security Notes
 
-- `client/src/app/`：应用入口、providers、layout、store 组合
-- `client/src/pages/`：页面级容器
-- `client/src/features/chat/`：会话引导、WebSocket 运行时、聊天 UI
-- `client/src/features/settings/`：资料设置状态与 UI
-- `client/src/features/presence/`：在线人数 API 与 UI
-- `client/src/shared/`：跨 feature 共享的 config、i18n、lib、ui、types
-
-## Target Backend Structure
-
-- `server-py/app/bootstrap/`：应用工厂、容器装配、lifespan
-- `server-py/app/presentation/http/routes/`：HTTP transport adapters
-- `server-py/app/presentation/ws/`：WebSocket endpoint
-- `server-py/app/application/chat/`：聊天 use cases 与 runtime service
-- `server-py/app/application/platform/`：平台 ports 与通用 use cases
-- `server-py/app/domain/chat/`：聊天领域模型
-- `server-py/app/domain/platform/`：预留的平台领域命名空间
-- `server-py/app/infrastructure/`：Redis、实时连接、观测、任务等适配器
-- `server-py/app/shared/`：配置、协议、错误、日志等共享原语
-
-## Runtime Behavior
-
-- 匿名会话通过 `POST /api/session` 获取 `session_id`
-- WebSocket 使用 `/ws?sessionId=...`
-- 刷新页面时会尝试恢复原会话
-- 断线恢复窗口默认 `3 分钟`
-- 超过恢复窗口未重连，服务端才会真正清理会话并通知对端
+- 浏览器认证使用服务端 `HttpOnly` Cookie
+- 注册成功后自动登录，但 `email_verified = false` 时禁止创建 chat session 或进入 websocket
+- 对端只能看到 `display_name` 和匿名 `session_id`
+- 不向前端或 peer payload 返回 `email`、`account_id`

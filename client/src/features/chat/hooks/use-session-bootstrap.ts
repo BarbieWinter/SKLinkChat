@@ -11,12 +11,13 @@ import {
 } from '@/features/chat/api/session-ownership'
 
 type UseSessionBootstrapOptions = {
+  enabled: boolean
   onError: (error: unknown) => void
 }
 
 export type SessionBootstrapStatus = 'bootstrapping' | 'ready' | 'error'
 
-export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => {
+export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOptions) => {
   const [sessionId, setSessionId] = useState('')
   const [status, setStatus] = useState<SessionBootstrapStatus>('bootstrapping')
   const [attempt, setAttempt] = useState(0)
@@ -76,6 +77,13 @@ export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => 
   }, [channel, instanceId, sessionId])
 
   useEffect(() => {
+    if (!enabled) {
+      setSessionId('')
+      setStatus('ready')
+      clearStoredSessionId()
+      return
+    }
+
     if (sessionId) {
       return
     }
@@ -130,7 +138,7 @@ export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => 
       cancelled = true
       pendingClaimsRef.current.clear()
     }
-  }, [attempt, channel, instanceId, onError, sessionId])
+  }, [attempt, channel, enabled, instanceId, onError, sessionId])
 
   return {
     retry: () => {

@@ -6,8 +6,7 @@ describe('settings store behavior', () => {
     useAppStore.setState({
       ...useAppStore.getState(),
       displayName: '',
-      keywords: [],
-      language: 'zh-CN'
+      keywords: []
     })
   })
 
@@ -17,6 +16,5 @@ describe('settings store behavior', () => {
 
     expect(useAppStore.getState().displayName).toBe('Plan User')
     expect(useAppStore.getState().keywords).toEqual(['music', 'movies'])
-    expect(useAppStore.getState().language).toBe('zh-CN')
   })
 })

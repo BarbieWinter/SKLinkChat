@@ -6,7 +6,8 @@ export type SessionResponse = {
 
 export const createSession = async (): Promise<SessionResponse> => {
   const response = await fetch(`${API_BASE_URL}/api/session`, {
-    method: 'POST'
+    method: 'POST',
+    credentials: 'include'
   })
 
   if (!response.ok) {

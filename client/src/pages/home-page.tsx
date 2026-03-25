@@ -1,7 +1,10 @@
-/**
- * Home page container for chat.
- */
+import { Contact, LockKeyhole, LogOut, MailCheck, MessageCircle, PanelLeftClose, Users, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { generateUsername } from 'unique-username-generator'
+
 import { useAppStore } from '@/app/store'
+import { useAuth } from '@/features/auth/auth-provider'
+import { TurnstileField } from '@/features/auth/turnstile-field'
 import { useChat } from '@/features/chat/chat-provider'
 import ChatPanel from '@/features/chat/ui/chat-panel'
 import SettingsDialog from '@/features/settings/ui/settings-dialog'
@@ -11,22 +14,42 @@ import { UserState } from '@/shared/types'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { Contact, MessageCircle, PanelLeftClose, Users, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { generateUsername } from 'unique-username-generator'
+import { useToast } from '@/shared/ui/use-toast'
+
+
+const parseInterestInput = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
 
 const HomePage = () => {
   const { t, formatUserState } = useI18n()
-  const { displayName, keywords, setDisplayName, saveSettings } = useAppStore()
-  const { stranger, me, setName: setChatName } = useChat()
+  const { toast } = useToast()
+  const { keywords } = useAppStore()
+  const { authSession, status, verifyMessage, verifyStatus, login, logout, register, resendVerificationEmail } =
+    useAuth()
+  const { stranger, me } = useChat()
+
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isCompactViewport, setCompactViewport] = useState(false)
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const previousState = useRef<UserState | undefined>(me?.state)
 
-  // Welcome form state
-  const [welcomeName, setWelcomeName] = useState(() => generateUsername())
-  const [welcomeTopics, setWelcomeTopics] = useState('')
+  const [authMode, setAuthMode] = useState<'register' | 'login'>('register')
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [registerForm, setRegisterForm] = useState({
+    email: '',
+    password: '',
+    displayName: generateUsername(),
+    interests: ''
+  })
+  const [loginForm, setLoginForm] = useState({
+    email: '',
+    password: ''
+  })
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -57,68 +80,239 @@ const HomePage = () => {
     previousState.current = me?.state
   }, [isCompactViewport, me?.state])
 
-  const handleWelcomeSubmit = () => {
-    const name = welcomeName.trim() || generateUsername()
-    const kw = welcomeTopics
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    setDisplayName(name)
-    setChatName?.(name)
-    saveSettings(kw)
+  const handleRegister = async () => {
+    if (!turnstileToken) {
+      toast({
+        title: t('common.error'),
+        description: 'Turnstile 校验尚未完成。',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await register({
+        email: registerForm.email.trim(),
+        password: registerForm.password,
+        displayName: registerForm.displayName.trim(),
+        interests: parseInterestInput(registerForm.interests),
+        turnstileToken
+      })
+      toast({
+        title: '注册成功',
+        description: '验证邮件已发送，请先完成邮箱验证。'
+      })
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : '注册失败。',
+        variant: 'destructive'
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  // Welcome onboarding screen
-  if (!displayName) {
+  const handleLogin = async () => {
+    setSubmitting(true)
+    try {
+      await login({
+        email: loginForm.email.trim(),
+        password: loginForm.password
+      })
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : '登录失败。',
+        variant: 'destructive'
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (status === 'loading') {
     return (
       <div className="flex h-full items-center justify-center px-4">
-        <div className="animate-slide-up w-full max-w-md space-y-5 rounded-2xl border border-border/50 bg-card/90 p-6 shadow-xl shadow-black/5 dark:shadow-black/20">
+        <div className="w-full max-w-md rounded-2xl border border-border/50 bg-card/90 p-6 text-center shadow-xl shadow-black/5 dark:shadow-black/20">
+          <p className="text-sm text-muted-foreground">正在加载账户状态...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authSession.authenticated) {
+    return (
+      <div className="flex h-full items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-5 rounded-2xl border border-border/50 bg-card/90 p-6 shadow-xl shadow-black/5 dark:shadow-black/20">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-blue-400/20 text-primary">
-              <MessageCircle className="h-5 w-5" />
+              {authMode === 'register' ? <MessageCircle className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
             </div>
             <div>
-              <h1 className="text-xl font-bold sm:text-2xl">{t('welcome.title')}</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">{t('welcome.subtitle')}</p>
+              <h1 className="text-xl font-bold sm:text-2xl">{authMode === 'register' ? '注册账号' : '登录账号'}</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">聊天前必须先完成注册和邮箱验证。</p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <Input
-              value={welcomeName}
-              onChange={(e) => setWelcomeName(e.target.value)}
-              placeholder={t('welcome.namePlaceholder')}
-              className="h-11 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-primary/20"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleWelcomeSubmit()
+          {verifyMessage && (
+            <div
+              className={cn(
+                'rounded-xl px-3 py-2 text-sm',
+                verifyStatus === 'success'
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-destructive/10 text-destructive'
+              )}
+            >
+              {verifyMessage}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-1">
+            <button
+              type="button"
+              className={cn(
+                'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                authMode === 'register' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+              )}
+              onClick={() => setAuthMode('register')}
+            >
+              注册
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                authMode === 'login' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+              )}
+              onClick={() => setAuthMode('login')}
+            >
+              登录
+            </button>
+          </div>
+
+          {authMode === 'register' ? (
+            <div className="space-y-3">
+              <Input
+                value={registerForm.email}
+                onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
+                placeholder="邮箱地址"
+                className="h-11 rounded-xl"
+              />
+              <Input
+                type="password"
+                value={registerForm.password}
+                onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))}
+                placeholder="密码（至少 8 位）"
+                className="h-11 rounded-xl"
+              />
+              <Input
+                value={registerForm.displayName}
+                onChange={(event) => setRegisterForm((current) => ({ ...current, displayName: event.target.value }))}
+                placeholder="聊天展示名"
+                className="h-11 rounded-xl"
+              />
+              <Input
+                value={registerForm.interests}
+                onChange={(event) => setRegisterForm((current) => ({ ...current, interests: event.target.value }))}
+                placeholder="兴趣标签（逗号分隔，可选）"
+                className="h-11 rounded-xl"
+              />
+              <TurnstileField onTokenChange={setTurnstileToken} />
+              <Button
+                onClick={handleRegister}
+                disabled={submitting}
+                className="h-11 w-full rounded-xl bg-gradient-to-r from-primary to-blue-500"
+              >
+                注册并登录
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Input
+                value={loginForm.email}
+                onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
+                placeholder="邮箱地址"
+                className="h-11 rounded-xl"
+              />
+              <Input
+                type="password"
+                value={loginForm.password}
+                onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                placeholder="密码"
+                className="h-11 rounded-xl"
+              />
+              <Button onClick={handleLogin} disabled={submitting} className="h-11 w-full rounded-xl">
+                登录
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (!authSession.email_verified) {
+    return (
+      <div className="flex h-full items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-5 rounded-2xl border border-border/50 bg-card/90 p-6 shadow-xl shadow-black/5 dark:shadow-black/20">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-400/20 text-amber-600">
+              <MailCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold sm:text-2xl">等待邮箱验证</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">验证完成前，无法进入匹配和聊天。</p>
+            </div>
+          </div>
+
+          {verifyMessage && (
+            <div
+              className={cn(
+                'rounded-xl px-3 py-2 text-sm',
+                verifyStatus === 'success'
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-destructive/10 text-destructive'
+              )}
+            >
+              {verifyMessage}
+            </div>
+          )}
+
+          <div className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">
+            当前账号已登录，但还没有通过邮箱验证。你可以重新发送验证邮件，验证完成后刷新页面即可进入聊天。
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              className="flex-1 rounded-xl"
+              onClick={async () => {
+                try {
+                  await resendVerificationEmail()
+                  toast({ title: '已发送', description: '新的验证邮件已发送。' })
+                } catch (error) {
+                  toast({
+                    title: t('common.error'),
+                    description: error instanceof Error ? error.message : '发送失败。',
+                    variant: 'destructive'
+                  })
                 }
               }}
-            />
-            <div>
-              <Input
-                value={welcomeTopics}
-                onChange={(e) => setWelcomeTopics(e.target.value)}
-                placeholder={t('welcome.topicsPlaceholder')}
-                className="h-11 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-primary/20"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleWelcomeSubmit()
-                  }
-                }}
-              />
-              <p className="mt-2 text-xs text-muted-foreground">{t('welcome.topicsHint')}</p>
-            </div>
+            >
+              重新发送验证邮件
+            </Button>
+            <Button
+              variant="outline"
+              className="group rounded-xl transition-all duration-200 hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              onClick={async () => {
+                await logout()
+              }}
+            >
+              <LogOut className="mr-1.5 h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+              退出登录
+            </Button>
           </div>
-
-          <Button
-            onClick={handleWelcomeSubmit}
-            className="h-11 w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 text-sm font-medium shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-xl hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {t('welcome.start')}
-          </Button>
         </div>
       </div>
     )
@@ -126,7 +320,6 @@ const HomePage = () => {
 
   const sidebarContent = (
     <div className="space-y-4 p-3">
-      {/* Close button */}
       <div className="flex justify-end">
         {!isCompactViewport && (
           <Button
@@ -152,7 +345,6 @@ const HomePage = () => {
         )}
       </div>
 
-      {/* Profile section */}
       <div className="rounded-xl bg-muted/30 p-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -163,7 +355,7 @@ const HomePage = () => {
           </div>
           <Badge className="rounded-full text-[10px]">{formatUserState(me?.state)}</Badge>
         </div>
-        <p className="mt-3 text-base font-semibold">{me?.name ?? '-'}</p>
+        <p className="mt-3 text-base font-semibold">{me?.name ?? authSession.display_name ?? '-'}</p>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {keywords.length > 0 ? (
             keywords.map((keyword) => (
@@ -175,12 +367,21 @@ const HomePage = () => {
             <span className="text-xs text-muted-foreground">{t('home.interestsEmpty')}</span>
           )}
         </div>
-        <div className="mt-3 text-sm text-muted-foreground">
+        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
           <SettingsDialog />
+          <button
+            type="button"
+            className="group flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive active:scale-95"
+            onClick={async () => {
+              await logout()
+            }}
+          >
+            <LogOut className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+            <span>退出登录</span>
+          </button>
         </div>
       </div>
 
-      {/* Partner section */}
       <div className="rounded-xl bg-muted/30 p-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -189,7 +390,9 @@ const HomePage = () => {
             </div>
             <h3 className="text-sm font-semibold">{t('home.currentPartner')}</h3>
           </div>
-          <Badge variant="outline" className="rounded-full text-[10px]">{formatUserState(stranger?.state)}</Badge>
+          <Badge variant="outline" className="rounded-full text-[10px]">
+            {formatUserState(stranger?.state)}
+          </Badge>
         </div>
         {stranger ? (
           <div className="animate-fade-in mt-3 flex items-center gap-2">
@@ -208,18 +411,13 @@ const HomePage = () => {
     </div>
   )
 
-  // Mobile: bottom sheet
   if (isCompactViewport) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1">
-          <ChatPanel
-            onOpenSidebar={() => setMobileSheetOpen(true)}
-            showSidebarToggle
-          />
+          <ChatPanel onOpenSidebar={() => setMobileSheetOpen(true)} showSidebarToggle />
         </div>
 
-        {/* Backdrop */}
         <div
           className={cn(
             'fixed inset-0 z-40 bg-black/50 transition-opacity duration-300',
@@ -228,7 +426,6 @@ const HomePage = () => {
           onClick={() => setMobileSheetOpen(false)}
         />
 
-        {/* Bottom sheet */}
         <div
           className={cn(
             'fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
@@ -236,7 +433,6 @@ const HomePage = () => {
           )}
         >
           <div className="mx-2 mb-2 max-h-[75vh] overflow-y-auto scroll-touch rounded-2xl bg-card/95 glass ring-1 ring-border/30 safe-area-bottom">
-            {/* Drag indicator */}
             <div className="sticky top-0 z-10 flex justify-center bg-card/80 glass pb-1 pt-3">
               <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
             </div>
@@ -247,19 +443,15 @@ const HomePage = () => {
     )
   }
 
-  // Desktop layout
   return (
     <div className="flex h-full min-h-0 gap-0">
       {!isSidebarCollapsed && (
-        <div className="animate-fade-in w-[300px] shrink-0 border-r border-border/40 overflow-y-auto">
+        <div className="animate-fade-in w-[300px] shrink-0 overflow-y-auto border-r border-border/40">
           {sidebarContent}
         </div>
       )}
       <div className="min-h-0 min-w-0 flex-1">
-        <ChatPanel
-          onOpenSidebar={() => setSidebarCollapsed(false)}
-          showSidebarToggle={isSidebarCollapsed}
-        />
+        <ChatPanel onOpenSidebar={() => setSidebarCollapsed(false)} showSidebarToggle={isSidebarCollapsed} />
       </div>
     </div>
   )

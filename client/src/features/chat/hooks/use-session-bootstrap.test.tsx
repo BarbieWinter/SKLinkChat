@@ -19,6 +19,7 @@ describe('useSessionBootstrap', () => {
 
     const { result } = renderHook(() =>
       useSessionBootstrap({
+        enabled: true,
         onError: vi.fn()
       })
     )
@@ -45,6 +46,7 @@ describe('useSessionBootstrap', () => {
 
     const { result } = renderHook(() =>
       useSessionBootstrap({
+        enabled: true,
         onError
       })
     )

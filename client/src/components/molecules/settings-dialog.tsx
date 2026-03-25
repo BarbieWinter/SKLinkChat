@@ -1,8 +1,7 @@
 /**
- * 个人设置弹窗：用于编辑昵称、聊天关键词和界面语言，并同步到本地 store 与聊天上下文。
+ * 个人设置弹窗：用于编辑昵称和聊天关键词，并同步到本地 store 与聊天上下文。
  */
 import { useI18n } from '@/hooks/useI18n'
-import { AppLanguage } from '@/lib/i18n'
 import { useStore } from '@/lib/store'
 import { useChat } from '@/providers/chat-provider'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -25,13 +24,12 @@ import { Input } from '../ui/input'
 
 const formSchema = z.object({
   name: z.string().min(1),
-  keywords: z.string().optional(),
-  language: z.enum(['en', 'zh-CN'])
+  keywords: z.string().optional()
 })
 
 const SettingsDialog = () => {
   const { t } = useI18n()
-  const { displayName, keywords, saveSettings, me, setName, language, setLanguage, setDisplayName } = useStore()
+  const { displayName, keywords, saveSettings, me, setName, setDisplayName } = useStore()
   const [open, setOpen] = useState(!displayName)
   const { setName: setChatName } = useChat()
 
@@ -39,8 +37,7 @@ const SettingsDialog = () => {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: displayName || me?.name || generateUsername(),
-      keywords: keywords?.join(', ') || '',
-      language
+      keywords: keywords?.join(', ') || ''
     }
   })
 
@@ -55,7 +52,6 @@ const SettingsDialog = () => {
     )
     setDisplayName(data.name)
     setName(data.name)
-    setLanguage(data.language as AppLanguage)
     setChatName?.(data.name)
   }
 
@@ -100,33 +96,6 @@ const SettingsDialog = () => {
                     <Input placeholder={t('settings.keywordsPlaceholder')} {...field} />
                   </FormControl>
                   <FormDescription>{t('settings.keywordsHint')}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="language"
-              render={({ field }) => (
-                // 这里直接用按钮切换语言，而不是原生 select，保证交互风格与项目 UI 一致。
-                <FormItem className="flex-grow">
-                  <FormDescription className="mb-2 text-foreground">{t('settings.language')}</FormDescription>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={field.value === 'en' ? 'default' : 'outline'}
-                      onClick={() => field.onChange('en')}
-                    >
-                      {t('settings.english')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={field.value === 'zh-CN' ? 'default' : 'outline'}
-                      onClick={() => field.onChange('zh-CN')}
-                    >
-                      {t('settings.chinese')}
-                    </Button>
-                  </div>
                   <FormMessage />
                 </FormItem>
               )}

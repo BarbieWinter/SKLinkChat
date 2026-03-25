@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.application.account.service import AccountService
+from app.application.auth.service import AuthService
+from app.application.chat.access_service import ChatAccessService
 from app.application.chat.runtime_service import ChatRuntimeService
 from app.application.chat.use_cases import (
     BootstrapConnectionUseCase,
@@ -18,20 +22,37 @@ from app.application.chat.use_cases import (
     UpdateProfileUseCase,
 )
 from app.application.platform.use_cases import (
-    CreateAnonymousSessionUseCase,
+    AuthorizeChatSessionUseCase,
+    CreateChatSessionUseCase,
+    GetAccountProfileUseCase,
     OnlineUserCountUseCase,
     ReadinessCheckUseCase,
+    ResolveAuthSessionUseCase,
+    UpdateAccountProfileUseCase,
 )
+from app.application.retention.service import RetentionService
+from app.infrastructure.email_sender import build_email_sender
 from app.infrastructure.feature_flags import NoOpFeatureFlagEvaluator
 from app.infrastructure.jobs.inline_job_dispatcher import InlineJobDispatcher
 from app.infrastructure.moderation_gateway import NoOpModerationGateway
-from app.infrastructure.observability.noop_audit_sink import NoOpAuditSink
-from app.infrastructure.permission_gate import NoOpPermissionGate
+from app.infrastructure.observability.database_audit_sink import DatabaseAuditSink
+from app.infrastructure.permission_gate import VerifiedChatPermissionGate
+from app.infrastructure.postgres.readiness_probe import DatabaseReadinessProbe
+from app.infrastructure.postgres.repositories import (
+    AccountRepository,
+    AuditEventRepository,
+    AuthSessionRepository,
+    DurableChatRepositoryImpl,
+    EmailVerificationTokenRepository,
+    RiskEventRepository,
+)
+from app.infrastructure.readiness_probe import CompositeReadinessProbe
 from app.infrastructure.realtime.in_memory_connection_hub import InMemoryConnectionHub
 from app.infrastructure.redis.presence_repository import RedisPresenceRepository
 from app.infrastructure.redis.readiness_probe import RedisReadinessProbe
 from app.infrastructure.redis.redis_event_bus import RedisEventBus
 from app.infrastructure.redis.session_repository import RedisSessionRepository
+from app.infrastructure.turnstile_verifier import build_turnstile_verifier
 from app.shared.config import Settings
 
 
@@ -39,10 +60,20 @@ from app.shared.config import Settings
 class ApplicationContainer:
     settings: Settings
     redis: Redis
+    session_factory: async_sessionmaker[AsyncSession]
     presence_repository: RedisPresenceRepository
     session_repository: RedisSessionRepository
+    account_repository: AccountRepository
+    auth_service: AuthService
+    account_service: AccountService
+    chat_access_service: ChatAccessService
+    retention_service: RetentionService
     chat_runtime_service: ChatRuntimeService
-    create_anonymous_session: CreateAnonymousSessionUseCase
+    create_chat_session: CreateChatSessionUseCase
+    resolve_auth_session: ResolveAuthSessionUseCase
+    authorize_chat_session: AuthorizeChatSessionUseCase
+    get_account_profile: GetAccountProfileUseCase
+    update_account_profile: UpdateAccountProfileUseCase
     readiness_check: ReadinessCheckUseCase
     online_user_count: OnlineUserCountUseCase
     bootstrap_connection: BootstrapConnectionUseCase
@@ -58,14 +89,55 @@ class ApplicationContainer:
     connection_hub: InMemoryConnectionHub
 
 
-def build_container(*, settings: Settings, redis: Redis) -> ApplicationContainer:
+def build_container(
+    *,
+    settings: Settings,
+    redis: Redis,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> ApplicationContainer:
     connection_hub = InMemoryConnectionHub()
     presence_repository = RedisPresenceRepository(redis)
     session_repository = RedisSessionRepository(redis, history_limit=20, default_name_prefix="Anonymous")
-    permission_gate = NoOpPermissionGate()
+
+    account_repository = AccountRepository(session_factory)
+    auth_session_repository = AuthSessionRepository(session_factory)
+    verification_token_repository = EmailVerificationTokenRepository(session_factory)
+    risk_event_repository = RiskEventRepository(
+        session_factory,
+        retention_seconds=settings.registration_risk_retention_seconds,
+    )
+    durable_chat_repository = DurableChatRepositoryImpl(
+        session_factory,
+        chat_message_ttl_seconds=settings.chat_message_ttl_seconds,
+    )
+    audit_event_repository = AuditEventRepository(
+        session_factory,
+        retention_seconds=settings.audit_event_retention_seconds,
+    )
+
+    auth_service = AuthService(
+        account_repository=account_repository,
+        auth_session_repository=auth_session_repository,
+        verification_token_repository=verification_token_repository,
+        risk_event_recorder=risk_event_repository,
+        email_sender=build_email_sender(settings),
+        turnstile_verifier=build_turnstile_verifier(settings),
+        verification_token_ttl_seconds=settings.verification_token_ttl_seconds,
+        auth_session_ttl_seconds=settings.auth_session_ttl_seconds,
+        verification_resend_cooldown_seconds=settings.verification_resend_cooldown_seconds,
+        verification_resend_hourly_limit=settings.verification_resend_hourly_limit,
+        frontend_base_url=settings.frontend_base_url,
+    )
+    account_service = AccountService(account_repository)
+    chat_access_service = ChatAccessService(
+        account_repository=account_repository,
+        durable_chat_repository=durable_chat_repository,
+    )
+
+    permission_gate = VerifiedChatPermissionGate(durable_chat_repository)
     feature_flags = NoOpFeatureFlagEvaluator()
     moderation_gateway = NoOpModerationGateway()
-    audit_sink = NoOpAuditSink()
+    audit_sink = DatabaseAuditSink(audit_event_repository)
     event_bus = RedisEventBus()
     job_dispatcher = InlineJobDispatcher()
     chat_runtime_service = ChatRuntimeService(
@@ -78,17 +150,37 @@ def build_container(*, settings: Settings, redis: Redis) -> ApplicationContainer
         audit_sink,
         event_bus,
         job_dispatcher,
+        durable_chat_repository,
         reconnect_window_seconds=settings.reconnect_window_seconds,
+    )
+    retention_service = RetentionService(
+        auth_session_repository=auth_session_repository,
+        verification_token_repository=verification_token_repository,
+        durable_chat_repository=durable_chat_repository,
+        risk_event_repository=risk_event_repository,
+        audit_event_repository=audit_event_repository,
     )
 
     return ApplicationContainer(
         settings=settings,
         redis=redis,
+        session_factory=session_factory,
         presence_repository=presence_repository,
         session_repository=session_repository,
+        account_repository=account_repository,
+        auth_service=auth_service,
+        account_service=account_service,
+        chat_access_service=chat_access_service,
+        retention_service=retention_service,
         chat_runtime_service=chat_runtime_service,
-        create_anonymous_session=CreateAnonymousSessionUseCase(),
-        readiness_check=ReadinessCheckUseCase(RedisReadinessProbe(redis)),
+        create_chat_session=CreateChatSessionUseCase(chat_access_service),
+        resolve_auth_session=ResolveAuthSessionUseCase(auth_service),
+        authorize_chat_session=AuthorizeChatSessionUseCase(chat_access_service),
+        get_account_profile=GetAccountProfileUseCase(account_service),
+        update_account_profile=UpdateAccountProfileUseCase(account_service),
+        readiness_check=ReadinessCheckUseCase(
+            CompositeReadinessProbe(RedisReadinessProbe(redis), DatabaseReadinessProbe(session_factory))
+        ),
         online_user_count=OnlineUserCountUseCase(presence_repository),
         bootstrap_connection=BootstrapConnectionUseCase(chat_runtime_service),
         update_profile=UpdateProfileUseCase(chat_runtime_service),

@@ -8,6 +8,7 @@ import { generateUsername } from 'unique-username-generator'
 import { z } from 'zod'
 
 import { useAppStore } from '@/app/store'
+import { useAuth } from '@/features/auth/auth-provider'
 import { useChat } from '@/features/chat/chat-provider'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { Button } from '@/shared/ui/button'
@@ -32,25 +33,28 @@ const formSchema = z.object({
 
 const SettingsDialog = () => {
   const { t } = useI18n()
-  const { displayName, keywords, saveSettings, me, setName, setDisplayName } = useAppStore()
+  const { displayName, keywords, me, setName } = useAppStore()
   const [open, setOpen] = useState(false)
   const { setName: setChatName } = useChat()
+  const { syncProfile } = useAuth()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: getSettingsDialogInitialState({ displayName, keywords, meName: me?.name, generateUsername })
   })
 
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
-    // 设置保存后会同时更新本地状态和服务端昵称，保证展示与通信一致。
-    setOpen(false)
-    saveSettings(
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    const interests =
       data.keywords
         ?.split(',')
         .map((keyword) => keyword.trim())
         .filter(Boolean) ?? []
-    )
-    setDisplayName(data.name)
+
+    await syncProfile({
+      displayName: data.name,
+      interests
+    })
+    setOpen(false)
     setName(data.name)
     setChatName?.(data.name)
   }

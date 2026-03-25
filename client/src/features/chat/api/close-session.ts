@@ -11,6 +11,7 @@ export const sendCloseSessionSignal = (sessionId: string) => {
   void fetch(`${API_BASE_URL}/api/session/close`, {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId }),
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json'
     },

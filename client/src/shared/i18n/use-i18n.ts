@@ -1,13 +1,12 @@
 /**
  * I18n hook backed by the app store.
  */
-import { useAppStore } from '@/app/store'
 import { UserState } from '@/shared/types'
 
-import { getUserStateLabel, translate } from '@/shared/i18n'
+import { getDefaultLanguage, getUserStateLabel, translate } from '@/shared/i18n'
 
 export const useI18n = () => {
-  const language = useAppStore((state) => state.language)
+  const language = getDefaultLanguage()
 
   return {
     language,

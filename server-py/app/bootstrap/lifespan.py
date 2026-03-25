@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.bootstrap.container import build_container
+from app.infrastructure.postgres.database import close_database, init_database
 from app.infrastructure.redis.client import close_redis_client, init_redis_client
 from app.shared.config import get_settings
 from app.shared.logging import configure_logging
@@ -18,7 +19,8 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     logger = logging.getLogger("app")
     redis = init_redis_client()
-    container = build_container(settings=settings, redis=redis)
+    session_factory = init_database(settings.normalized_database_url)
+    container = build_container(settings=settings, redis=redis, session_factory=session_factory)
     app.state.container = container
     app.state.partner_disconnect_tasks = {}
     app.state.presence_broadcast_task = None
@@ -34,7 +36,13 @@ async def lifespan(app: FastAPI):
                     await partner_ws.send_json({"type": "disconnect", "payload": None})
             await asyncio.sleep(1)
 
+    async def run_retention_jobs() -> None:
+        while True:
+            await container.retention_service.run_once()
+            await asyncio.sleep(settings.cleanup_interval_seconds)
+
     app.state.expiration_task = asyncio.create_task(expire_disconnected_sessions())
+    app.state.retention_task = asyncio.create_task(run_retention_jobs())
     logger.info("application startup")
     yield
     for task in app.state.partner_disconnect_tasks.values():
@@ -42,14 +50,17 @@ async def lifespan(app: FastAPI):
     if app.state.presence_broadcast_task is not None:
         app.state.presence_broadcast_task.cancel()
     app.state.expiration_task.cancel()
-    try:
-        await app.state.expiration_task
-    except asyncio.CancelledError:
-        pass
+    app.state.retention_task.cancel()
+    for task in (app.state.expiration_task, app.state.retention_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     if app.state.presence_broadcast_task is not None:
         try:
             await app.state.presence_broadcast_task
         except asyncio.CancelledError:
             pass
     await close_redis_client()
+    await close_database()
     logger.info("application shutdown")
