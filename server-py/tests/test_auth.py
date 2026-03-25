@@ -1,6 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
+
+from sqlalchemy import update
+
+from app.application.auth.security import utc_now
+from app.infrastructure.postgres.models import EmailVerificationToken
+
+
+def _run(coro):
+    return asyncio.run(coro)
 
 
 def _register(client, **overrides):
@@ -61,6 +72,27 @@ def test_verify_email_rejects_reused_token(client):
     assert second_response.json()["code"] == "INVALID_VERIFICATION_TOKEN"
 
 
+def test_verify_email_rejects_expired_token(client):
+    _register(client)
+    verification_token = _extract_verification_token(client)
+
+    async def expire_token() -> None:
+        async with client.app.state.container.session_factory() as session:
+            await session.execute(
+                update(EmailVerificationToken)
+                .where(EmailVerificationToken.token_hash.is_not(None))
+                .values(expires_at=utc_now() - timedelta(minutes=1))
+            )
+            await session.commit()
+
+    _run(expire_token())
+
+    response = client.post("/api/auth/verify-email", json={"token": verification_token})
+
+    assert response.status_code == 410
+    assert response.json()["code"] == "VERIFICATION_LINK_EXPIRED"
+
+
 def test_duplicate_email_is_rejected(client):
     first_response = _register(client)
     second_response = _register(client, email="USER@example.com")
@@ -104,3 +136,52 @@ def test_resend_verification_requires_authenticated_unverified_account(client):
 
     assert response.status_code == 429
     assert response.json()["code"] == "VERIFICATION_EMAIL_COOLDOWN"
+
+
+def test_resend_verification_revokes_previous_link(client):
+    register_response = _register(client)
+    assert register_response.status_code == 201
+    first_verification_token = _extract_verification_token(client)
+
+    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
+    resend_response = client.post("/api/auth/resend-verification")
+    assert resend_response.status_code == 200
+
+    second_verification_token = _extract_verification_token(client)
+    assert second_verification_token != first_verification_token
+
+    first_verify_response = client.post("/api/auth/verify-email", json={"token": first_verification_token})
+    second_verify_response = client.post("/api/auth/verify-email", json={"token": second_verification_token})
+
+    assert first_verify_response.status_code == 400
+    assert first_verify_response.json()["code"] == "INVALID_VERIFICATION_TOKEN"
+    assert second_verify_response.status_code == 200
+    assert second_verify_response.json()["email_verified"] is True
+
+
+def test_resend_verification_enforces_hourly_limit(client):
+    register_response = _register(client)
+    assert register_response.status_code == 201
+
+    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
+    client.app.state.container.auth_service._verification_resend_hourly_limit = 2
+
+    first_resend = client.post("/api/auth/resend-verification")
+    second_resend = client.post("/api/auth/resend-verification")
+
+    assert first_resend.status_code == 200
+    assert second_resend.status_code == 429
+    assert second_resend.json()["code"] == "VERIFICATION_EMAIL_RATE_LIMITED"
+
+
+def test_resend_verification_returns_idempotent_success_for_verified_account(client):
+    register_response = _register(client)
+    assert register_response.status_code == 201
+    verification_token = _extract_verification_token(client)
+    verify_response = client.post("/api/auth/verify-email", json={"token": verification_token})
+    assert verify_response.status_code == 200
+
+    response = client.post("/api/auth/resend-verification")
+
+    assert response.status_code == 200
+    assert response.json()["email_verified"] is True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import timedelta
 
 from app.application.platform.ports import (
@@ -17,6 +18,18 @@ from app.application.platform.ports import (
 from app.application.platform.services import DurableChatRepository
 from app.domain.chat.models import ChatHistoryEntry, ChatSession, MatchResult, utc_now
 from app.shared.protocol import PayloadType, UserState
+
+
+@dataclass(slots=True, frozen=True)
+class MessageDispatchResult:
+    sender: ChatSession
+    partner: ChatSession
+    normalized_message: str
+
+
+@dataclass(slots=True, frozen=True)
+class MessageDispatchBlocked:
+    reason: str
 
 
 class ChatRuntimeService:
@@ -157,7 +170,13 @@ class ChatRuntimeService:
                 return None
             return await self._session_repository.load_session(session.partner_id)
 
-    async def record_message(self, sender_session_id: str, message: str) -> tuple[ChatSession, ChatSession, str] | None:
+    async def record_message(
+        self,
+        sender_session_id: str,
+        message: str,
+        *,
+        client_message_id: str | None = None,
+    ) -> MessageDispatchResult | MessageDispatchBlocked | None:
         normalized_message = (
             await self._moderation_gateway.normalize_message(message, session_id=sender_session_id)
         ).strip()
@@ -173,6 +192,21 @@ class ChatRuntimeService:
             if partner is None:
                 return None
 
+            if not self._connection_hub.has(partner.session_id):
+                if partner.is_reconnect_pending:
+                    return MessageDispatchBlocked(reason="partner_temporarily_unavailable")
+                return None
+
+            was_persisted = await self._durable_chat_repository.append_message(
+                sender_chat_session_id=sender.session_id,
+                recipient_chat_session_id=partner.session_id,
+                sender_display_name_snapshot=sender.name,
+                body=normalized_message,
+                client_message_id=client_message_id,
+            )
+            if not was_persisted and client_message_id is not None:
+                return MessageDispatchBlocked(reason="duplicate")
+
             entry = ChatHistoryEntry(
                 payload_type=PayloadType.MESSAGE,
                 from_session_id=sender_session_id,
@@ -180,13 +214,12 @@ class ChatRuntimeService:
             )
             await self._session_repository.append_history(sender.session_id, entry)
             await self._session_repository.append_history(partner.session_id, entry)
-            await self._durable_chat_repository.append_message(
-                sender_chat_session_id=sender.session_id,
-                recipient_chat_session_id=partner.session_id,
-                content=normalized_message,
-            )
             await self._audit_sink.record("chat.message.sent", {"session_id": sender_session_id})
-            return sender, partner, normalized_message
+            return MessageDispatchResult(
+                sender=sender,
+                partner=partner,
+                normalized_message=normalized_message,
+            )
 
     async def set_typing(self, session_id: str, *, is_typing: bool) -> str | None:
         async with self._lock:
@@ -205,7 +238,7 @@ class ChatRuntimeService:
                 return None
             return partner.session_id
 
-    async def disconnect_partner(self, session_id: str) -> str | None:
+    async def disconnect_partner(self, session_id: str, *, end_reason: str = "disconnect") -> str | None:
         async with self._lock:
             session = await self._session_repository.load_session(session_id)
             if session is None:
@@ -216,7 +249,10 @@ class ChatRuntimeService:
             session.state = UserState.IDLE
             session.is_typing = False
             await self._session_repository.save_session(session)
-            await self._durable_chat_repository.end_active_match_for_session(session_id)
+            await self._durable_chat_repository.end_active_match_for_session(
+                chat_session_id=session_id,
+                end_reason=end_reason,
+            )
 
             if partner_id is None:
                 return None
@@ -323,7 +359,11 @@ class ChatRuntimeService:
 
         session = await self._session_repository.load_session(session_id)
         await self._session_repository.delete_session(session_id)
-        await self._durable_chat_repository.end_active_match_for_session(session_id)
+        await self._durable_chat_repository.end_active_match_for_session(
+            chat_session_id=session_id,
+            end_reason="expired",
+        )
+        await self._durable_chat_repository.expire_chat_session(chat_session_id=session_id)
         if session is None or session.partner_id is None:
             return None
 

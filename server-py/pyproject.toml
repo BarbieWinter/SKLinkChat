@@ -19,7 +19,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "aiosqlite>=0.21.0,<1.0.0",
     "pytest>=8.4.0,<9.0.0",
     "pytest-asyncio>=1.1.0,<2.0.0",
     "ruff>=0.12.0,<1.0.0",
@@ -41,6 +40,10 @@ include = ["app*"]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:Setting per-request cookies:DeprecationWarning:starlette",
+    "ignore:No path_separator found:DeprecationWarning:alembic",
+]
 
 [tool.ruff]
 line-length = 120

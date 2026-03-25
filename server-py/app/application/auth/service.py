@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from email.utils import parseaddr
 
 from app.application.auth.security import (
@@ -183,6 +184,8 @@ class AuthService:
             raise AppError(message="Verification link is invalid", code="INVALID_VERIFICATION_TOKEN", status_code=400)
         if verification_token.consumed_at is not None:
             raise AppError(message="Verification link is invalid", code="INVALID_VERIFICATION_TOKEN", status_code=400)
+        if verification_token.revoked_at is not None:
+            raise AppError(message="Verification link is invalid", code="INVALID_VERIFICATION_TOKEN", status_code=400)
         if ensure_utc(verification_token.expires_at) <= utc_now():
             raise AppError(
                 message="Verification link has expired",
@@ -216,7 +219,7 @@ class AuthService:
 
         sent_last_hour = await self._verification_token_repository.sent_count_since(
             account.id,
-            now.replace(minute=0, second=0, microsecond=0),
+            now - timedelta(hours=1),
         )
         if sent_last_hour >= self._verification_resend_hourly_limit:
             raise AppError(
@@ -251,6 +254,10 @@ class AuthService:
 
     async def _issue_verification_email(self, account: Account) -> None:
         raw_token = issue_token()
+        await self._verification_token_repository.revoke_active_for_account(
+            account_id=account.id,
+            revoked_at=utc_now(),
+        )
         await self._verification_token_repository.create(
             account_id=account.id,
             token_hash=hash_secret(raw_token),

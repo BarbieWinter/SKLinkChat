@@ -35,7 +35,12 @@ async def _send_error(websocket: WebSocket, message: str) -> None:
     await _send_envelope(websocket, PayloadType.ERROR, message)
 
 
-async def _broadcast_to_session(container: ApplicationContainer, session_id: str, payload_type: PayloadType, payload: Any) -> None:
+async def _broadcast_to_session(
+    container: ApplicationContainer,
+    session_id: str,
+    payload_type: PayloadType,
+    payload: Any,
+) -> None:
     """Send a message to ALL WebSocket connections for a given session (all tabs)."""
     envelope = _make_envelope(payload_type, payload)
     for ws in container.connection_hub.get_all(session_id):
@@ -85,7 +90,7 @@ async def _disconnect_current_chat(container: ApplicationContainer, session_id: 
 
 
 async def _handle_queue(container: ApplicationContainer, websocket: WebSocket, *, session_id: str) -> None:
-    partner_disconnected = await container.disconnect_session.execute(session_id)
+    partner_disconnected = await container.disconnect_session.execute(session_id, end_reason="next")
     await _notify_partner_disconnect(container, partner_disconnected)
 
     session = await container.enter_queue.execute(session_id)
@@ -112,22 +117,32 @@ async def _handle_message(
         await _send_error(websocket, "Malformed payload")
         return
 
-    message_result = await container.send_message.execute(session_id, raw_message)
+    client_message_id = payload.get("client_message_id")
+    if client_message_id is not None and not isinstance(client_message_id, str):
+        await _send_error(websocket, "Malformed payload")
+        return
+
+    message_result = await container.send_message.execute(
+        session_id,
+        raw_message,
+        client_message_id=client_message_id,
+    )
     if message_result is None:
         await _disconnect_current_chat(container, session_id=session_id)
         return
 
-    sender, partner, normalized_message = message_result
-    message_payload = {"id": sender.session_id, "name": sender.name, "message": normalized_message}
-
-    partner_has_connection = container.connection_hub.has(partner.session_id)
-    if not partner_has_connection:
-        if partner.is_reconnect_pending:
+    if hasattr(message_result, "reason"):
+        if message_result.reason == "partner_temporarily_unavailable":
             await _send_error(websocket, "Partner temporarily unavailable")
             return
-
+        if message_result.reason == "duplicate":
+            return
         await _disconnect_current_chat(container, session_id=session_id)
         return
+
+    sender = message_result.sender
+    partner = message_result.partner
+    message_payload = {"id": sender.session_id, "name": sender.name, "message": message_result.normalized_message}
 
     # Deliver to all partner tabs
     await _broadcast_to_session(container, partner.session_id, PayloadType.MESSAGE, message_payload)

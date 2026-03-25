@@ -22,7 +22,7 @@ def schedule_partner_disconnect_notice(app: FastAPI, container: ApplicationConta
             if container.connection_hub.has(session_id):
                 return
 
-            partner_session_id = await container.disconnect_session.execute(session_id)
+            partner_session_id = await container.disconnect_session.execute(session_id, end_reason="close_endpoint")
             if partner_session_id is None:
                 return
 

@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 import time
 from urllib.parse import parse_qs, urlparse
-from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 from starlette.websockets import WebSocketDisconnect
 
-from app.shared.protocol import UserState
+from app.infrastructure.postgres.models import ChatMatch
 
 COOKIE_NAME = "sklinkchat_session"
 
@@ -51,16 +51,10 @@ def _resolve_account_id(client, *, session_cookie: str) -> str:
     return account_id
 
 
-def _create_duplicate_chat_session(client, *, session_cookie: str) -> str:
-    duplicate_session_id = str(uuid4())
-    account_id = _resolve_account_id(client, session_cookie=session_cookie)
-    _run(
-        client.app.state.container.chat_access_service._durable_chat_repository.touch_chat_session(
-            account_id=account_id,
-            chat_session_id=duplicate_session_id,
-        )
-    )
-    return duplicate_session_id
+async def _list_matches(client) -> list[ChatMatch]:
+    async with client.app.state.container.session_factory() as session:
+        result = await session.execute(select(ChatMatch).order_by(ChatMatch.started_at.asc()))
+        return list(result.scalars())
 
 
 def _receive_json_ignoring_presence(ws):
@@ -194,36 +188,35 @@ def test_websocket_reconnect_preserves_existing_match(client):
                 }
 
 
-def test_try_match_skips_duplicate_sessions_from_same_account(client):
-    primary_cookie = _register_and_verify(client, email="primary@example.com", display_name="Primary")
-    other_cookie = _register_and_verify(client, email="other@example.com", display_name="Other")
+def test_create_match_closes_overlapping_active_match_for_shared_session(client):
+    left_cookie = _register_and_verify(client, email="left@example.com", display_name="Left")
+    middle_cookie = _register_and_verify(client, email="middle@example.com", display_name="Middle")
+    right_cookie = _register_and_verify(client, email="right@example.com", display_name="Right")
 
-    primary_id = _create_chat_session(client, session_cookie=primary_cookie)
-    duplicate_id = _create_duplicate_chat_session(client, session_cookie=primary_cookie)
-    other_id = _create_chat_session(client, session_cookie=other_cookie)
-
-    runtime = client.app.state.container.chat_runtime_service
-    _run(runtime.register_connection(primary_id, object()))
-    _run(runtime.register_connection(duplicate_id, object()))
-    _run(runtime.register_connection(other_id, object()))
-
-    primary_session = _run(runtime.enter_queue(primary_id))
-    duplicate_session = _run(runtime.enter_queue(duplicate_id))
-    assert primary_session.state is UserState.SEARCHING
-    assert duplicate_session.state is UserState.SEARCHING
-    assert _run(runtime.try_match()) is None
-
-    _run(runtime.enter_queue(other_id))
-    match = _run(runtime.try_match())
-
-    assert match is not None
-    matched_ids = {match.left.session_id, match.right.session_id}
-    assert other_id in matched_ids
-    assert len(matched_ids & {primary_id, duplicate_id}) == 1
+    left_id = _create_chat_session(client, session_cookie=left_cookie)
+    middle_id = _create_chat_session(client, session_cookie=middle_cookie)
+    right_id = _create_chat_session(client, session_cookie=right_cookie)
 
     durable_chat_repository = client.app.state.container.chat_access_service._durable_chat_repository
-    left_account_id = _run(durable_chat_repository.get_account_id_for_chat_session(match.left.session_id))
-    right_account_id = _run(durable_chat_repository.get_account_id_for_chat_session(match.right.session_id))
-    assert left_account_id is not None
-    assert right_account_id is not None
-    assert left_account_id != right_account_id
+    first_match = _run(
+        durable_chat_repository.create_match(
+            left_chat_session_id=left_id,
+            right_chat_session_id=middle_id,
+        )
+    )
+    second_match = _run(
+        durable_chat_repository.create_match(
+            left_chat_session_id=middle_id,
+            right_chat_session_id=right_id,
+        )
+    )
+
+    matches = _run(_list_matches(client))
+    assert len(matches) == 2
+    match_by_id = {match.id: match for match in matches}
+
+    assert match_by_id[first_match.id].ended_at is not None
+    assert match_by_id[first_match.id].end_reason == "superseded"
+    assert match_by_id[second_match.id].ended_at is None
+    assert match_by_id[second_match.id].left_chat_session_id == middle_id
+    assert match_by_id[second_match.id].right_chat_session_id == right_id

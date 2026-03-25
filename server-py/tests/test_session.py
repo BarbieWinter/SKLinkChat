@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+
+from app.infrastructure.postgres.models import ChatSessionRecord
 
 
 def _run(coro):
@@ -27,6 +34,19 @@ def _verify(client) -> None:
     verification_token = parse_qs(urlparse(verification_link).query)["verify_token"][0]
     response = client.post("/api/auth/verify-email", json={"token": verification_token})
     assert response.status_code == 200
+
+
+async def _list_active_chat_session_ids(client, *, account_id: str) -> list[str]:
+    async with client.app.state.container.session_factory() as session:
+        result = await session.execute(
+            select(ChatSessionRecord.id)
+            .where(
+                ChatSessionRecord.account_id == account_id,
+                ChatSessionRecord.status == "active",
+            )
+            .order_by(ChatSessionRecord.created_at.asc())
+        )
+        return list(result.scalars())
 
 
 def test_create_session_requires_authenticated_user(client):
@@ -76,9 +96,59 @@ def test_create_session_reuses_existing_chat_session_for_same_account(client):
     assert account_id is not None
     assert auth_session.authenticated is True
 
-    stored_session_id = _run(
-        client.app.state.container.chat_access_service._durable_chat_repository.get_latest_chat_session_id_for_account(
-            account_id
-        )
+    active_session_ids = _run(_list_active_chat_session_ids(client, account_id=account_id))
+    assert active_session_ids == [first_response.json()["session_id"]]
+
+
+def test_concurrent_create_session_collapses_to_single_active_row(client):
+    register_response = _register(client)
+    assert register_response.status_code == 201
+    _verify(client)
+
+    account_id, auth_session = _run(
+        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
     )
-    assert stored_session_id == first_response.json()["session_id"]
+    assert account_id is not None
+    assert auth_session.authenticated is True
+
+    async def create_many() -> list[str]:
+        return await asyncio.gather(
+            client.app.state.container.chat_access_service.create_chat_session(account_id),
+            client.app.state.container.chat_access_service.create_chat_session(account_id),
+            client.app.state.container.chat_access_service.create_chat_session(account_id),
+            client.app.state.container.chat_access_service.create_chat_session(account_id),
+        )
+
+    session_ids = _run(create_many())
+    assert len(set(session_ids)) == 1
+    assert _run(_list_active_chat_session_ids(client, account_id=account_id)) == [session_ids[0]]
+
+
+def test_database_constraint_rejects_second_active_chat_session_row(client):
+    register_response = _register(client)
+    assert register_response.status_code == 201
+    _verify(client)
+
+    created_session_id = client.post("/api/session").json()["session_id"]
+    account_id, auth_session = _run(
+        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
+    )
+    assert account_id is not None
+    assert auth_session.authenticated is True
+
+    async def insert_duplicate_row() -> None:
+        async with client.app.state.container.session_factory() as session:
+            session.add(
+                ChatSessionRecord(
+                    id=str(uuid4()),
+                    account_id=account_id,
+                    display_name_snapshot="Traveler",
+                    status="active",
+                )
+            )
+            await session.commit()
+
+    with pytest.raises(IntegrityError):
+        _run(insert_duplicate_row())
+
+    assert _run(_list_active_chat_session_ids(client, account_id=account_id)) == [created_session_id]

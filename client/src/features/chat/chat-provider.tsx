@@ -24,6 +24,7 @@ type ChatProviderState = {
   setName?: (name: string) => void
   stranger?: User
   me?: User
+  sessionId: string
   emitTyping?: (typing: boolean) => void
   isBootstrapping: boolean
   isAvailable: boolean
@@ -36,6 +37,7 @@ const initialState: ChatProviderState = {
   setName: undefined,
   stranger: undefined,
   me: undefined,
+  sessionId: '',
   emitTyping: undefined,
   isBootstrapping: true,
   isAvailable: true,
@@ -150,11 +152,12 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
       setName: socketActions.setName,
       stranger,
       me,
+      sessionId,
       isBootstrapping,
       isAvailable,
       retryBootstrap: retry
     }),
-    [addMessage, clear, clearChatConnection, isAvailable, isBootstrapping, me, retry, socketActions, stranger, t, toast]
+    [addMessage, clear, clearChatConnection, isAvailable, isBootstrapping, me, retry, sessionId, socketActions, stranger, t, toast]
   )
 
   return <ChatProviderContext.Provider value={value}>{children}</ChatProviderContext.Provider>

@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal, TypedDict
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,8 +16,6 @@ def _normalize_database_url(value: str) -> str:
 
 
 def to_sync_database_url(database_url: str) -> str:
-    if database_url.startswith("sqlite+aiosqlite://"):
-        return database_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
     return database_url
 
 
@@ -63,9 +61,17 @@ class Settings(BaseSettings):
 
     secure_cookies: bool = False
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def validate_database_url(cls, value: str) -> str:
+        normalized = _normalize_database_url(str(value))
+        if not normalized.startswith("postgresql+psycopg://"):
+            raise ValueError("SERVER_PY_DATABASE_URL must use PostgreSQL via postgresql+psycopg; SQLite is not supported")
+        return normalized
+
     @property
     def normalized_database_url(self) -> str:
-        return _normalize_database_url(self.database_url)
+        return self.database_url
 
     @property
     def sync_database_url(self) -> str:

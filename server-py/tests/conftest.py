@@ -1,14 +1,15 @@
 import asyncio
 import os
 from collections.abc import Generator
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from tests.postgres_utils import ensure_database_exists, get_test_database_url
+
 os.environ.setdefault("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("SERVER_PY_DATABASE_URL", "sqlite+aiosqlite:///./tests/test_app.sqlite3")
+os.environ.setdefault("SERVER_PY_DATABASE_URL", get_test_database_url())
 os.environ.setdefault("SERVER_PY_EMAIL_PROVIDER", "fake")
 os.environ.setdefault("SERVER_PY_TURNSTILE_PROVIDER", "fake")
 os.environ.setdefault("SERVER_PY_FRONTEND_BASE_URL", "http://localhost:4173")
@@ -29,10 +30,11 @@ async def _prepare_database(database_url: str) -> None:
 
 
 @pytest.fixture(autouse=True)
-def base_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Generator[None, None, None]:
-    database_path = tmp_path / "test_app.sqlite3"
+def base_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    database_url = get_test_database_url()
+    ensure_database_exists(database_url)
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
-    monkeypatch.setenv("SERVER_PY_DATABASE_URL", f"sqlite+aiosqlite:///{database_path}")
+    monkeypatch.setenv("SERVER_PY_DATABASE_URL", database_url)
     monkeypatch.setenv("SERVER_PY_RECONNECT_WINDOW_SECONDS", "1")
     monkeypatch.setenv("SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS", "1")
     monkeypatch.setenv("SERVER_PY_EMAIL_PROVIDER", "fake")
@@ -40,7 +42,7 @@ def base_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Generator[None,
     monkeypatch.setenv("SERVER_PY_FRONTEND_BASE_URL", "http://localhost:4173")
     monkeypatch.setenv("SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS", "true")
     get_settings.cache_clear()
-    asyncio.run(_prepare_database(f"sqlite+aiosqlite:///{database_path}"))
+    asyncio.run(_prepare_database(database_url))
     yield
     asyncio.run(close_database())
     get_settings.cache_clear()

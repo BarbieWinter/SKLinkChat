@@ -6,6 +6,7 @@ import { useAppStore } from '@/app/store'
 import { useAuth } from '@/features/auth/auth-provider'
 import { TurnstileField } from '@/features/auth/turnstile-field'
 import { useChat } from '@/features/chat/chat-provider'
+import ChatReportDialog from '@/features/chat/ui/chat-report-dialog'
 import ChatPanel from '@/features/chat/ui/chat-panel'
 import SettingsDialog from '@/features/settings/ui/settings-dialog'
 import { useI18n } from '@/shared/i18n/use-i18n'
@@ -30,7 +31,7 @@ const HomePage = () => {
   const { keywords } = useAppStore()
   const { authSession, status, verifyMessage, verifyStatus, login, logout, register, resendVerificationEmail } =
     useAuth()
-  const { stranger, me } = useChat()
+  const { stranger, me, sessionId } = useChat()
 
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isCompactViewport, setCompactViewport] = useState(false)
@@ -390,9 +391,19 @@ const HomePage = () => {
             </div>
             <h3 className="text-sm font-semibold">{t('home.currentPartner')}</h3>
           </div>
-          <Badge variant="outline" className="rounded-full text-[10px]">
-            {formatUserState(stranger?.state)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {me?.state === UserState.Connected && stranger?.id && (
+              <ChatReportDialog
+                sessionId={sessionId}
+                reportedSessionId={stranger.id}
+                partnerName={stranger.name}
+                triggerClassName="h-7 rounded-full border border-destructive/20 bg-destructive/5 px-2.5 py-0 text-[11px] hover:bg-destructive/10"
+              />
+            )}
+            <Badge variant="outline" className="rounded-full text-[10px]">
+              {formatUserState(stranger?.state)}
+            </Badge>
+          </div>
         </div>
         {stranger ? (
           <div className="animate-fade-in mt-3 flex items-center gap-2">
@@ -428,7 +439,7 @@ const HomePage = () => {
 
         <div
           className={cn(
-            'fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+            'fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]',
             mobileSheetOpen ? 'translate-y-0' : 'translate-y-full'
           )}
         >

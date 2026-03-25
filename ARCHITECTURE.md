@@ -38,6 +38,7 @@ flowchart LR
 - `chat_sessions`
 - `chat_matches`
 - `chat_messages`
+- `chat_reports`
 - `audit_events`
 
 ### Redis owns
@@ -53,31 +54,42 @@ flowchart LR
 ### Registration flow
 
 1. Client submits email, password, display name, interests, Turnstile token
-2. Backend verifies Turnstile
+2. Backend verifies Turnstile using the configured provider
 3. Backend creates account and risk event
-4. Backend creates HttpOnly auth session cookie
-5. Backend sends single-use verification link
+4. Backend creates a 7-day `HttpOnly` auth session cookie
+5. Backend sends a single-use verification link
 
 ### Verification flow
 
 1. User opens email link containing verification token
 2. Frontend calls `POST /api/auth/verify-email`
-3. Backend validates token hash, expiry, and single-use status
-4. Backend sets `email_verified_at`
+3. Backend validates token hash, 15-minute expiry, revocation, and single-use status
+4. Backend sets `email_verified_at` and invalidates the link immediately
+5. Logged-in but unverified users may call `POST /api/auth/resend-verification` with cooldown and hourly limit protection
 
 ### Chat bootstrap flow
 
 1. Verified authenticated user calls `POST /api/session`
-2. Backend creates account-owned anonymous chat session row in PostgreSQL
+2. Backend creates or reuses the single active account-owned anonymous chat session row in PostgreSQL
 3. Frontend opens `/ws?sessionId=...`
 4. Backend authorizes both cookie session and `sessionId` ownership before accepting websocket
 5. Redis runtime handles queueing, matching, typing, disconnect, reconnect
+
+## Hardening Invariants
+
+- One account may own at most one active `chat_session`
+- One `chat_session` may participate in at most one active `chat_match`
+- Both invariants are enforced by PostgreSQL partial unique indexes plus application-level transactions/locking
+- `chat_messages` persist `message_type`, `sender_display_name_snapshot`, and optional `client_message_id`
+- `(chat_match_id, client_message_id)` is unique when `client_message_id` is present, which suppresses duplicate durable writes on retries/reconnects
+- Reports are intentionally minimal in V1: only the current active match partner can be reported
 
 ## Privacy Rules
 
 - Peer-visible websocket payloads only include `session_id`, `display_name`, `state`
 - `email` and `account_id` never appear in client session payloads or peer-facing transport events
 - Auth session token and verification token are stored hashed, never raw
+- 前后端都不暴露 `language` 字段，也不把 `interests` 作为当前匹配条件
 
 ## Retention
 
@@ -87,6 +99,14 @@ flowchart LR
 - `audit_events`: 365 days
 
 第一版 retention 使用应用内定时任务，不引入外部 worker。
+
+## Abuse Reporting
+
+- Endpoint: `POST /api/chat/reports`
+- Scope: only the current active match partner
+- Allowed reasons: `harassment`, `sexual_content`, `spam`, `hate_speech`, `other`
+- Storage: `reason` + optional `details`
+- Constraint: `other` requires non-empty `details`
 
 ## Local Deployment
 
@@ -102,3 +122,4 @@ cd client && npm run test -- --run
 - 未来论坛功能可以复用 `accounts` 和审计/风险基础设施
 - 论坛必须新增独立 `forum_*` 表
 - 当前 `chat_*` 表只服务 1:1 匿名聊天，不复用为论坛帖子模型
+- 当前版本不支持历史会话补举报，不支持基于 `interests` 的 hard match 过滤

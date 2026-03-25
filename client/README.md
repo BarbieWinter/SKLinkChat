@@ -1,27 +1,38 @@
-# React + TypeScript + Vite
+# client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite frontend for SKLinkChat.
 
-Currently, two official plugins are available:
+## Frontend Scope
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 注册、登录、账户资料页
+- 邮箱验证等待页与验证链接落地
+- 匹配与 1:1 匿名聊天
+- 当前 active chat partner 举报弹窗
+- 前端不暴露 `language` 选择
 
-## Expanding the ESLint configuration
+## Runtime Assumptions
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+- 使用服务端 `HttpOnly` cookie 认证
+- 未验证邮箱用户不可进入匹配和聊天
+- 聊天时前端只展示匿名 `display_name`
+- 发送消息会附带 `client_message_id`，用于服务端幂等持久化
 
-- Configure the top-level `parserOptions` property like this:
+## Local run
 
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
+```bash
+npm install
+npm run dev
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+默认依赖以下环境变量：
+
+- `VITE_ENDPOINT=http://localhost:8000`
+- `VITE_WS_ENDPOINT=ws://localhost:8000/ws`
+- `VITE_TURNSTILE_SITE_KEY=`
+
+## Verification
+
+```bash
+npm run test -- --run
+npm run build
+```

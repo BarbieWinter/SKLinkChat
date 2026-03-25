@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from starlette.websockets import WebSocket
 
+from app.application.chat.report_service import ChatReportReceipt, ChatReportService
 from app.application.chat.runtime_service import ChatRuntimeService
 from app.domain.chat.models import ChatSession, MatchResult
 
@@ -45,8 +46,8 @@ class TryMatchUseCase:
 class SendMessageUseCase:
     runtime: ChatRuntimeService
 
-    async def execute(self, session_id: str, message: str):
-        return await self.runtime.record_message(session_id, message)
+    async def execute(self, session_id: str, message: str, *, client_message_id: str | None = None):
+        return await self.runtime.record_message(session_id, message, client_message_id=client_message_id)
 
 
 @dataclass(slots=True)
@@ -61,8 +62,8 @@ class SetTypingUseCase:
 class DisconnectSessionUseCase:
     runtime: ChatRuntimeService
 
-    async def execute(self, session_id: str) -> str | None:
-        return await self.runtime.disconnect_partner(session_id)
+    async def execute(self, session_id: str, *, end_reason: str = "disconnect") -> str | None:
+        return await self.runtime.disconnect_partner(session_id, end_reason=end_reason)
 
 
 @dataclass(slots=True)
@@ -87,3 +88,25 @@ class ExpireStaleSessionsUseCase:
 
     async def execute(self) -> list[str]:
         return await self.runtime.expire_stale_sessions()
+
+
+@dataclass(slots=True)
+class SubmitChatReportUseCase:
+    service: ChatReportService
+
+    async def execute(
+        self,
+        *,
+        account_id: str,
+        session_id: str,
+        reported_session_id: str,
+        reason: str,
+        details: str | None,
+    ) -> ChatReportReceipt:
+        return await self.service.submit_report(
+            account_id=account_id,
+            session_id=session_id,
+            reported_session_id=reported_session_id,
+            reason=reason,
+            details=details,
+        )

@@ -6,6 +6,14 @@ import { getSocketUrl, toUser } from '@/features/chat/services/protocol'
 import { WS_ENDPOINT } from '@/shared/config/runtime'
 import { PayloadType, PresenceCountPayload, UserState } from '@/shared/types'
 
+const createClientMessageId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `message-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 type UseChatSocketOptions = {
   sessionId: string
   meId?: string
@@ -136,7 +144,8 @@ export const useChatSocket = ({
         type: PayloadType.Message,
         payload: {
           id: strangerId,
-          message
+          message,
+          client_message_id: createClientMessageId()
         }
       })
     },

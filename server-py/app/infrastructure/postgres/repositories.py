@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.application.auth.security import make_expiry
+from app.application.platform.services import ActiveChatMatch
 from app.infrastructure.postgres.models import (
     Account,
     AccountInterest,
@@ -14,6 +17,7 @@ from app.infrastructure.postgres.models import (
     AuthSession,
     ChatMatch,
     ChatMessage,
+    ChatReport,
     ChatSessionRecord,
     EmailVerificationToken,
     RegistrationRiskEvent,
@@ -194,6 +198,19 @@ class EmailVerificationTokenRepository:
             )
             await session.commit()
 
+    async def revoke_active_for_account(self, *, account_id: str, revoked_at: datetime) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                update(EmailVerificationToken)
+                .where(
+                    EmailVerificationToken.account_id == account_id,
+                    EmailVerificationToken.consumed_at.is_(None),
+                    EmailVerificationToken.revoked_at.is_(None),
+                )
+                .values(revoked_at=revoked_at)
+            )
+            await session.commit()
+
 
 class RiskEventRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], *, retention_seconds: int) -> None:
@@ -240,16 +257,39 @@ class DurableChatRepositoryImpl:
         self._session_factory = session_factory
         self._chat_message_ttl_seconds = chat_message_ttl_seconds
 
-    async def get_latest_chat_session_id_for_account(self, account_id: str) -> str | None:
-        async with self._session_factory() as session:
-            result = await session.execute(
-                select(ChatSessionRecord.id)
-                .where(ChatSessionRecord.account_id == account_id)
-                .order_by(ChatSessionRecord.last_seen_at.desc(), ChatSessionRecord.created_at.desc())
-                .limit(1)
+    async def create_or_reuse_active_chat_session(self, *, account_id: str, display_name_snapshot: str) -> str:
+        try:
+            return await self._create_or_reuse_active_chat_session_once(
+                account_id=account_id,
+                display_name_snapshot=display_name_snapshot,
             )
-            row = result.first()
-            return row[0] if row else None
+        except IntegrityError:
+            return await self._create_or_reuse_active_chat_session_once(
+                account_id=account_id,
+                display_name_snapshot=display_name_snapshot,
+            )
+
+    async def _create_or_reuse_active_chat_session_once(self, *, account_id: str, display_name_snapshot: str) -> str:
+        async with self._session_factory() as session:
+            record = await self._get_active_chat_session_for_account(session, account_id=account_id, lock=True)
+            if record is not None:
+                record.display_name_snapshot = display_name_snapshot
+                record.last_seen_at = utc_now()
+                await session.commit()
+                return record.id
+
+            session_id = str(uuid4())
+            session.add(
+                ChatSessionRecord(
+                    id=session_id,
+                    account_id=account_id,
+                    display_name_snapshot=display_name_snapshot,
+                    status="active",
+                    last_seen_at=utc_now(),
+                )
+            )
+            await session.commit()
+            return session_id
 
     async def get_account_id_for_chat_session(self, chat_session_id: str) -> str | None:
         async with self._session_factory() as session:
@@ -259,16 +299,21 @@ class DurableChatRepositoryImpl:
             row = result.first()
             return row[0] if row else None
 
-    async def touch_chat_session(self, *, account_id: str, chat_session_id: str) -> None:
+    async def touch_chat_session(
+        self,
+        *,
+        account_id: str,
+        chat_session_id: str,
+        display_name_snapshot: str,
+    ) -> bool:
         async with self._session_factory() as session:
             record = await session.get(ChatSessionRecord, chat_session_id)
-            if record is None:
-                session.add(ChatSessionRecord(id=chat_session_id, account_id=account_id, last_seen_at=utc_now()))
-            else:
-                record.account_id = account_id
-                record.last_seen_at = utc_now()
-                record.closed_at = None
+            if record is None or record.account_id != account_id or record.status != "active":
+                return False
+            record.display_name_snapshot = display_name_snapshot
+            record.last_seen_at = utc_now()
             await session.commit()
+            return True
 
     async def owns_chat_session(self, *, account_id: str, chat_session_id: str) -> bool:
         async with self._session_factory() as session:
@@ -276,6 +321,7 @@ class DurableChatRepositoryImpl:
                 select(ChatSessionRecord.id).where(
                     ChatSessionRecord.id == chat_session_id,
                     ChatSessionRecord.account_id == account_id,
+                    ChatSessionRecord.status == "active",
                 )
             )
             return result.first() is not None
@@ -285,92 +331,181 @@ class DurableChatRepositoryImpl:
             result = await session.execute(
                 select(Account.email_verified_at)
                 .join(ChatSessionRecord, ChatSessionRecord.account_id == Account.id)
-                .where(ChatSessionRecord.id == chat_session_id)
+                .where(ChatSessionRecord.id == chat_session_id, ChatSessionRecord.status == "active")
             )
             row = result.first()
             return bool(row and row[0] is not None)
 
-    async def create_match(self, *, left_chat_session_id: str, right_chat_session_id: str) -> None:
+    async def close_chat_session(self, *, chat_session_id: str, close_reason: str) -> None:
         async with self._session_factory() as session:
-            await self._end_active_matches_for_pair(session, left_chat_session_id, right_chat_session_id)
-            session.add(
-                ChatMatch(
-                    left_chat_session_id=left_chat_session_id,
-                    right_chat_session_id=right_chat_session_id,
+            await session.execute(
+                update(ChatSessionRecord)
+                .where(ChatSessionRecord.id == chat_session_id, ChatSessionRecord.status == "active")
+                .values(
+                    status="closed",
+                    closed_at=utc_now(),
+                    close_reason=close_reason,
+                    last_seen_at=utc_now(),
                 )
             )
             await session.commit()
 
-    async def end_active_match_for_session(self, chat_session_id: str) -> None:
+    async def expire_chat_session(self, *, chat_session_id: str) -> None:
         async with self._session_factory() as session:
             await session.execute(
-                update(ChatMatch)
-                .where(
-                    ChatMatch.ended_at.is_(None),
-                    or_(
-                        ChatMatch.left_chat_session_id == chat_session_id,
-                        ChatMatch.right_chat_session_id == chat_session_id,
-                    ),
+                update(ChatSessionRecord)
+                .where(ChatSessionRecord.id == chat_session_id, ChatSessionRecord.status == "active")
+                .values(
+                    status="expired",
+                    closed_at=utc_now(),
+                    close_reason="expired",
+                    last_seen_at=utc_now(),
                 )
-                .values(ended_at=utc_now())
-            )
-            await session.execute(
-                update(ChatSessionRecord).where(ChatSessionRecord.id == chat_session_id).values(closed_at=utc_now())
             )
             await session.commit()
+
+    async def create_match(self, *, left_chat_session_id: str, right_chat_session_id: str) -> ActiveChatMatch:
+        async with self._session_factory() as session:
+            ordered_session_ids = sorted({left_chat_session_id, right_chat_session_id})
+            await session.execute(
+                select(ChatSessionRecord.id)
+                .where(ChatSessionRecord.id.in_(ordered_session_ids))
+                .order_by(ChatSessionRecord.id.asc())
+                .with_for_update()
+            )
+            await self._end_active_matches_for_sessions(
+                session,
+                session_ids=(left_chat_session_id, right_chat_session_id),
+                end_reason="superseded",
+            )
+
+            match = ChatMatch(
+                left_chat_session_id=left_chat_session_id,
+                right_chat_session_id=right_chat_session_id,
+            )
+            session.add(match)
+            await session.commit()
+            return ActiveChatMatch(
+                id=match.id,
+                left_chat_session_id=match.left_chat_session_id,
+                right_chat_session_id=match.right_chat_session_id,
+            )
+
+    async def end_active_match_for_session(self, *, chat_session_id: str, end_reason: str) -> None:
+        async with self._session_factory() as session:
+            await self._end_active_matches_for_sessions(session, session_ids=(chat_session_id,), end_reason=end_reason)
+            await session.commit()
+
+    async def get_active_match(self, *, chat_session_id: str, partner_session_id: str) -> ActiveChatMatch | None:
+        async with self._session_factory() as session:
+            match = await self._find_active_match(
+                session,
+                left_chat_session_id=chat_session_id,
+                right_chat_session_id=partner_session_id,
+            )
+            if match is None:
+                return None
+            return ActiveChatMatch(
+                id=match.id,
+                left_chat_session_id=match.left_chat_session_id,
+                right_chat_session_id=match.right_chat_session_id,
+            )
 
     async def append_message(
         self,
         *,
         sender_chat_session_id: str,
         recipient_chat_session_id: str,
-        content: str,
-    ) -> None:
+        sender_display_name_snapshot: str,
+        body: str,
+        client_message_id: str | None = None,
+        message_type: str = "text",
+    ) -> bool:
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(ChatMatch)
-                .where(
-                    ChatMatch.ended_at.is_(None),
-                    or_(
-                        and_(
-                            ChatMatch.left_chat_session_id == sender_chat_session_id,
-                            ChatMatch.right_chat_session_id == recipient_chat_session_id,
-                        ),
-                        and_(
-                            ChatMatch.left_chat_session_id == recipient_chat_session_id,
-                            ChatMatch.right_chat_session_id == sender_chat_session_id,
-                        ),
-                    ),
-                )
-                .order_by(ChatMatch.started_at.desc())
-                .limit(1)
+            match = await self._find_active_match(
+                session,
+                left_chat_session_id=sender_chat_session_id,
+                right_chat_session_id=recipient_chat_session_id,
             )
-            match = result.scalar_one_or_none()
             if match is None:
-                return
+                return False
             session.add(
                 ChatMessage(
-                    match_id=match.id,
+                    chat_match_id=match.id,
                     sender_chat_session_id=sender_chat_session_id,
-                    content=content,
+                    client_message_id=client_message_id,
+                    message_type=message_type,
+                    sender_display_name_snapshot=sender_display_name_snapshot,
+                    body=body,
                     expires_at=make_expiry(self._chat_message_ttl_seconds),
                 )
             )
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                if client_message_id is not None:
+                    return False
+                raise
+            return True
+
+    async def create_report(
+        self,
+        *,
+        reporter_account_id: str,
+        chat_match_id: str,
+        reported_chat_session_id: str,
+        reason: str,
+        details: str | None,
+    ) -> int:
+        async with self._session_factory() as session:
+            report = ChatReport(
+                reporter_account_id=reporter_account_id,
+                chat_match_id=chat_match_id,
+                reported_chat_session_id=reported_chat_session_id,
+                reason=reason,
+                details=details,
+            )
+            session.add(report)
             await session.commit()
+            await session.refresh(report)
+            return report.id
 
     async def purge_expired_messages(self, now: datetime) -> None:
         async with self._session_factory() as session:
             await session.execute(delete(ChatMessage).where(ChatMessage.expires_at <= now))
             await session.commit()
 
-    async def _end_active_matches_for_pair(
+    async def _get_active_chat_session_for_account(
         self,
         session: AsyncSession,
+        *,
+        account_id: str,
+        lock: bool,
+    ) -> ChatSessionRecord | None:
+        statement = (
+            select(ChatSessionRecord)
+            .where(
+                ChatSessionRecord.account_id == account_id,
+                ChatSessionRecord.status == "active",
+            )
+            .order_by(ChatSessionRecord.last_seen_at.desc(), ChatSessionRecord.created_at.desc())
+            .limit(1)
+        )
+        if lock:
+            statement = statement.with_for_update()
+        result = await session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def _find_active_match(
+        self,
+        session: AsyncSession,
+        *,
         left_chat_session_id: str,
         right_chat_session_id: str,
-    ) -> None:
-        await session.execute(
-            update(ChatMatch)
+    ) -> ChatMatch | None:
+        result = await session.execute(
+            select(ChatMatch)
             .where(
                 ChatMatch.ended_at.is_(None),
                 or_(
@@ -384,7 +519,34 @@ class DurableChatRepositoryImpl:
                     ),
                 ),
             )
-            .values(ended_at=utc_now())
+            .order_by(ChatMatch.started_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _end_active_matches_for_sessions(
+        self,
+        session: AsyncSession,
+        *,
+        session_ids: Sequence[str],
+        end_reason: str,
+    ) -> None:
+        unique_session_ids = tuple(dict.fromkeys(session_ids))
+        if not unique_session_ids:
+            return
+        await session.execute(
+            update(ChatMatch)
+            .where(
+                ChatMatch.ended_at.is_(None),
+                or_(
+                    ChatMatch.left_chat_session_id.in_(unique_session_ids),
+                    ChatMatch.right_chat_session_id.in_(unique_session_ids),
+                ),
+            )
+            .values(
+                ended_at=utc_now(),
+                end_reason=end_reason,
+            )
         )
 
 

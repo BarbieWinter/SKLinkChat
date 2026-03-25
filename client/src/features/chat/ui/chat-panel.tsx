@@ -32,7 +32,16 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   const { t, formatUserState } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
   const { messages } = useAppStore()
-  const { sendMessage, stranger, me, connect, emitTyping: setTyping, isAvailable, isBootstrapping, retryBootstrap } =
+  const {
+    sendMessage,
+    stranger,
+    me,
+    connect,
+    emitTyping: setTyping,
+    isAvailable,
+    isBootstrapping,
+    retryBootstrap
+  } =
     useChat()
   const { toast } = useToast()
   const [meTyping, setMeTyping] = useState(false)

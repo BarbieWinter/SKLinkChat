@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.application.account.service import AccountService
 from app.application.auth.service import AuthService
 from app.application.chat.access_service import ChatAccessService
+from app.application.chat.report_service import ChatReportService
 from app.application.chat.runtime_service import ChatRuntimeService
 from app.application.chat.use_cases import (
     BootstrapConnectionUseCase,
@@ -18,6 +19,7 @@ from app.application.chat.use_cases import (
     MarkDisconnectedUseCase,
     SendMessageUseCase,
     SetTypingUseCase,
+    SubmitChatReportUseCase,
     TryMatchUseCase,
     UpdateProfileUseCase,
 )
@@ -86,6 +88,7 @@ class ApplicationContainer:
     lookup_partner: LookupPartnerUseCase
     mark_disconnected: MarkDisconnectedUseCase
     expire_stale_sessions: ExpireStaleSessionsUseCase
+    submit_chat_report: SubmitChatReportUseCase
     connection_hub: InMemoryConnectionHub
 
 
@@ -131,6 +134,10 @@ def build_container(
     account_service = AccountService(account_repository)
     chat_access_service = ChatAccessService(
         account_repository=account_repository,
+        durable_chat_repository=durable_chat_repository,
+    )
+    chat_report_service = ChatReportService(
+        chat_access_service=chat_access_service,
         durable_chat_repository=durable_chat_repository,
     )
 
@@ -192,5 +199,6 @@ def build_container(
         lookup_partner=LookupPartnerUseCase(chat_runtime_service),
         mark_disconnected=MarkDisconnectedUseCase(chat_runtime_service),
         expire_stale_sessions=ExpireStaleSessionsUseCase(chat_runtime_service),
+        submit_chat_report=SubmitChatReportUseCase(chat_report_service),
         connection_hub=connection_hub,
     )
