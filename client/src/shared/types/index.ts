@@ -13,6 +13,10 @@ export interface User {
   isTyping?: boolean
 }
 
+export interface PresenceCountPayload {
+  online_count: number
+}
+
 export enum UserState {
   Idle = 'idle',
   Searching = 'searching',
@@ -26,5 +30,6 @@ export enum PayloadType {
   Queue = 'queue',
   Match = 'match',
   Disconnect = 'disconnect',
-  Typing = 'typing'
+  Typing = 'typing',
+  PresenceCount = 'presence-count'
 }

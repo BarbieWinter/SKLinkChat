@@ -6,7 +6,7 @@ import NotFoundPage from '@/pages/not-found-page'
 
 const App = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />

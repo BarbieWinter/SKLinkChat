@@ -3,7 +3,7 @@
  */
 import { UserState } from '@/shared/types'
 
-export type AppLanguage = 'en' | 'zh-CN'
+export type AppLanguage = 'zh-CN'
 
 type TranslationKey =
   | 'app.title'
@@ -31,17 +31,18 @@ type TranslationKey =
   | 'chat.send'
   | 'chat.notConnected'
   | 'chat.connectionHint'
+  | 'chat.serviceStarting'
+  | 'chat.serviceUnavailable'
+  | 'chat.retryConnection'
   | 'settings.trigger'
   | 'settings.title'
   | 'settings.description'
   | 'settings.namePlaceholder'
   | 'settings.keywordsPlaceholder'
   | 'settings.keywordsHint'
-  | 'settings.language'
-  | 'settings.english'
-  | 'settings.chinese'
   | 'settings.save'
   | 'users.online'
+  | 'users.unavailable'
   | 'theme.toggle'
   | 'theme.light'
   | 'theme.dark'
@@ -60,60 +61,6 @@ type TranslationKey =
   | 'system.strangerDisconnected'
 
 const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
-  en: {
-    'app.title': 'SKLink Chat',
-    'common.error': 'Error',
-    'common.cancel': 'Cancel',
-    'home.title': 'Text-only random chat',
-    'home.description': 'Match with a stranger instantly and keep the conversation focused on text.',
-    'home.startChat': 'Start chatting',
-    'home.searching': 'Matching...',
-    'home.reroll': 'Rematch',
-    'home.profile': 'Your profile',
-    'home.currentPartner': 'Current partner',
-    'home.noPartner': 'No active chat',
-    'home.noPartnerDescription': 'Start matching to connect with a new stranger.',
-    'home.interests': 'Topics',
-    'home.interestsEmpty': 'No preferred topics',
-    'chat.log': 'Chat log',
-    'chat.system': 'System',
-    'chat.you': 'You',
-    'chat.strangerTyping': 'Stranger is typing...',
-    'chat.emptyTitle': 'No messages yet',
-    'chat.emptyDescription': 'Start matching and send the first message.',
-    'chat.placeholder': 'Type your message here',
-    'chat.connectedAs': 'You are chatting as {name}.',
-    'chat.send': 'Send message',
-    'chat.notConnected': 'You are not connected to a chat.',
-    'chat.connectionHint': 'Open settings to update your name, topics, or language.',
-    'settings.trigger': 'Edit profile',
-    'settings.title': 'Profile settings',
-    'settings.description': 'Choose the name shown to strangers, add topics, and set your language.',
-    'settings.namePlaceholder': 'What do you want to be called?',
-    'settings.keywordsPlaceholder': 'Topics you want to talk about (comma separated)',
-    'settings.keywordsHint': 'Leave this blank if you are open to any topic.',
-    'settings.language': 'Language',
-    'settings.english': 'English',
-    'settings.chinese': 'Chinese',
-    'settings.save': 'Save changes',
-    'users.online': 'Online users',
-    'theme.toggle': 'Toggle theme',
-    'theme.light': 'Light',
-    'theme.dark': 'Dark',
-    'theme.system': 'System',
-    'state.idle': 'Idle',
-    'state.searching': 'Searching',
-    'state.connected': 'Connected',
-    'notFound.title': 'Page not found',
-    'notFound.description': 'Sorry, an unexpected error has occurred.',
-    'system.strangerDisconnected': 'Stranger disconnected',
-    'welcome.title': 'Welcome to SKLink Chat',
-    'welcome.subtitle': 'Set your nickname to get started. You can change it anytime.',
-    'welcome.namePlaceholder': 'Pick a nickname',
-    'welcome.topicsPlaceholder': 'Topics you want to talk about (comma separated)',
-    'welcome.topicsHint': 'Optional — leave blank if you are open to any topic.',
-    'welcome.start': 'Get started'
-  },
   'zh-CN': {
     'app.title': 'SKLink 聊天',
     'common.error': '错误',
@@ -139,18 +86,19 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'chat.connectedAs': '你当前使用 {name} 进行聊天。',
     'chat.send': '发送消息',
     'chat.notConnected': '你当前还没有连接到聊天对象。',
-    'chat.connectionHint': '可在设置中修改昵称、话题偏好和语言。',
+    'chat.connectionHint': '可在设置中修改昵称和话题偏好。',
+    'chat.serviceStarting': '聊天服务正在连接，请稍后再试。',
+    'chat.serviceUnavailable': '聊天服务暂时不可用，请确认后端服务已启动。',
+    'chat.retryConnection': '重新连接',
     'settings.trigger': '编辑资料',
     'settings.title': '个人设置',
-    'settings.description': '设置展示给陌生人的昵称、话题偏好，以及界面语言。',
+    'settings.description': '设置展示给陌生人的昵称和话题偏好。',
     'settings.namePlaceholder': '你希望别人怎么称呼你？',
     'settings.keywordsPlaceholder': '想聊的话题（用逗号分隔）',
     'settings.keywordsHint': '如果什么都愿意聊，可以留空。',
-    'settings.language': '语言',
-    'settings.english': '英文',
-    'settings.chinese': '中文',
     'settings.save': '保存更改',
     'users.online': '在线用户',
+    'users.unavailable': '在线人数暂不可用',
     'theme.toggle': '切换主题',
     'theme.light': '浅色',
     'theme.dark': '深色',
@@ -170,13 +118,10 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
   }
 }
 
-export const getDefaultLanguage = (): AppLanguage => {
-  if (typeof navigator === 'undefined') return 'en'
-  return navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en'
-}
+export const getDefaultLanguage = (): AppLanguage => 'zh-CN'
 
 export const translate = (language: AppLanguage, key: TranslationKey, values?: Record<string, string | number>) => {
-  const template = translations[language][key] ?? translations.en[key]
+  const template = translations[language][key]
 
   if (!values) return template
 

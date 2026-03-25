@@ -11,6 +11,7 @@ from app.presentation.ws.disconnect_notices import (
     cancel_pending_partner_disconnect_notice,
     schedule_partner_disconnect_notice,
 )
+from app.presentation.ws.presence_updates import schedule_presence_count_broadcast
 
 router = APIRouter()
 ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
@@ -49,6 +50,7 @@ async def close_session(request: Request, container: ContainerDep) -> dict[str, 
 
     active_websocket = container.connection_hub.get(session_id)
     await container.mark_disconnected.execute(session_id)
+    schedule_presence_count_broadcast(request.app, container)
     cancel_pending_partner_disconnect_notice(request.app, session_id)
     schedule_partner_disconnect_notice(request.app, container, session_id)
 

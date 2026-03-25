@@ -16,6 +16,7 @@ class PayloadType(StrEnum):
     MATCH = "match"
     DISCONNECT = "disconnect"
     TYPING = "typing"
+    PRESENCE_COUNT = "presence-count"
 
 
 class ProtocolEnvelope(TypedDict):

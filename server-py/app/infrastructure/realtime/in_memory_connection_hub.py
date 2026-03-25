@@ -21,3 +21,6 @@ class InMemoryConnectionHub:
 
     def active_count(self) -> int:
         return len(self._connections)
+
+    def snapshot(self) -> tuple[tuple[str, WebSocket], ...]:
+        return tuple(self._connections.items())

@@ -8,6 +8,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.bootstrap.container import ApplicationContainer
 from app.domain.chat.models import ChatSession
 from app.presentation.ws.disconnect_notices import cancel_pending_partner_disconnect_notice
+from app.presentation.ws.presence_updates import schedule_presence_count_broadcast
 from app.shared.protocol import PayloadType
 
 router = APIRouter()
@@ -174,6 +175,7 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
     container: ApplicationContainer = websocket.app.state.container
     cancel_pending_partner_disconnect_notice(websocket.app, sessionId)
     session = await container.bootstrap_connection.execute(sessionId, websocket)
+    schedule_presence_count_broadcast(websocket.app, container)
     await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))
     if session.partner_id is not None:
         partner = await container.lookup_partner.execute(sessionId)
@@ -198,3 +200,4 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
                 await _send_error(websocket, "Unsupported payload type")
     except WebSocketDisconnect:
         await container.mark_disconnected.execute(sessionId)
+        schedule_presence_count_broadcast(websocket.app, container)

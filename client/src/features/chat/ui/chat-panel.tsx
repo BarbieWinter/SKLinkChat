@@ -1,73 +1,27 @@
 /**
- * Main chat panel UI.
+ * Main chat panel UI — Telegram-inspired compact layout.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CircleEllipsis, MessageSquare, PanelLeftOpen, Send, Settings2, ShieldAlert, Sparkles, UserCircle2 } from 'lucide-react'
+import { Menu, RefreshCw, Send, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
+import { ModeToggle } from '@/app/mode-toggle'
 import { useAppStore } from '@/app/store'
 import { useChat } from '@/features/chat/chat-provider'
-import SettingsDialog from '@/features/settings/ui/settings-dialog'
+import OnlineUserCount from '@/features/presence/ui/online-user-count'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { cn } from '@/shared/lib/utils'
 import { UserState } from '@/shared/types'
 import { Button } from '@/shared/ui/button'
-import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/shared/ui/form'
+import { Form, FormControl, FormField, FormItem } from '@/shared/ui/form'
 import { Textarea } from '@/shared/ui/textarea'
 import { useToast } from '@/shared/ui/use-toast'
 
 const formSchema = z.object({
   message: z.string().trim().min(1)
 })
-
-type MessageTone = {
-  alignClassName: string
-  rowClassName: string
-  bubbleClassName: string
-  metaClassName: string
-  iconClassName: string
-  icon: JSX.Element
-  label?: string
-  labelKey?: 'chat.you' | 'chat.system'
-}
-
-const getMessageTone = (sender: string, strangerName?: string, strangerId?: string): MessageTone => {
-  if (sender === 'me') {
-    return {
-      alignClassName: 'items-end',
-      rowClassName: 'flex-row-reverse',
-      bubbleClassName: 'border-primary/70 bg-primary text-primary-foreground',
-      metaClassName: 'text-primary-foreground/80',
-      iconClassName: 'border-primary/70 bg-primary text-primary-foreground',
-      icon: <UserCircle2 className="h-4 w-4" />,
-      labelKey: 'chat.you' as const
-    }
-  }
-
-  if (sender === 'system') {
-    return {
-      alignClassName: 'items-center',
-      rowClassName: '',
-      bubbleClassName: 'border-border border-dashed bg-muted/70 text-muted-foreground',
-      metaClassName: 'text-muted-foreground',
-      iconClassName: 'border-border bg-muted text-muted-foreground',
-      icon: <ShieldAlert className="h-4 w-4" />,
-      labelKey: 'chat.system' as const
-    }
-  }
-
-  return {
-    alignClassName: 'items-start',
-    rowClassName: '',
-    bubbleClassName: 'border-border bg-card text-card-foreground',
-    metaClassName: 'text-muted-foreground',
-    iconClassName: 'border-border bg-accent text-accent-foreground',
-    icon: <MessageSquare className="h-4 w-4" />,
-    label: sender === strangerId || sender === strangerName ? strangerName ?? sender : sender
-  }
-}
 
 type ChatPanelProps = {
   onOpenSidebar?: () => void
@@ -78,7 +32,8 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   const { t, formatUserState } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
   const { messages } = useAppStore()
-  const { sendMessage, stranger, me, connect, emitTyping: setTyping } = useChat()
+  const { sendMessage, stranger, me, connect, emitTyping: setTyping, isAvailable, isBootstrapping, retryBootstrap } =
+    useChat()
   const { toast } = useToast()
   const [meTyping, setMeTyping] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
@@ -108,6 +63,24 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   }, [messages])
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
+    if (!isAvailable) {
+      toast({
+        title: t('common.error'),
+        description: t('chat.serviceUnavailable'),
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (isBootstrapping) {
+      toast({
+        title: t('common.error'),
+        description: t('chat.serviceStarting'),
+        variant: 'destructive'
+      })
+      return
+    }
+
     if (!stranger?.id) {
       toast({
         title: t('common.error'),
@@ -124,130 +97,174 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   }
 
   const isNotConnected = !stranger && me?.state !== UserState.Searching
+  const isSearching = me?.state === UserState.Searching
+  const isServiceUnavailable = !isAvailable && !isBootstrapping
+
+  const statusText = stranger?.isTyping
+    ? t('chat.strangerTyping')
+    : stranger
+      ? formatUserState(stranger.state)
+      : formatUserState(me?.state)
 
   return (
-    <div className="flex h-full w-full flex-grow flex-col rounded-[28px] border border-border/80 bg-card/70 p-3 shadow-sm backdrop-blur md:p-4">
-      <div className="flex min-h-0 flex-grow flex-col overflow-hidden rounded-[24px] border border-border/70 bg-background/70">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            {showSidebarToggle && (
-              <button
-                type="button"
-                onClick={onOpenSidebar}
-                className="mr-1 flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                aria-label="Open sidebar"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
-            )}
-            <div className="rounded-full bg-accent p-2 text-accent-foreground">
-              <UserCircle2 className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{stranger?.name ?? t('home.noPartner')}</p>
-              <p className="text-xs text-muted-foreground">{formatUserState(stranger?.state)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground transition-opacity',
-                {
-                  'opacity-100': stranger?.isTyping,
-                  'opacity-0': !stranger?.isTyping
-                }
-              )}
+    <div className="flex h-full w-full flex-col bg-background">
+      {/* ── Toolbar ── */}
+      <div className="glass flex h-14 shrink-0 items-center gap-2 border-b border-border/40 px-3 sm:px-4">
+        {/* Left: sidebar toggle + online count */}
+        <div className="flex items-center gap-2.5">
+          {showSidebarToggle && (
+            <button
+              type="button"
+              onClick={onOpenSidebar}
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-accent-foreground hover:scale-105 active:scale-95"
+              aria-label="打开侧栏"
             >
-            <CircleEllipsis className="h-3.5 w-3.5" />
-            {t('chat.strangerTyping')}
-            </span>
-            {me?.state === UserState.Connected && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => connect?.()}
-                className="rounded-full px-4 text-xs"
-              >
-                {t('home.reroll')}
-              </Button>
-            )}
-          </div>
+              <Menu className="h-[18px] w-[18px]" />
+            </button>
+          )}
+          <OnlineUserCount />
         </div>
 
-        <div className="flex flex-grow flex-col gap-3 overflow-y-auto px-4 py-4" ref={ref}>
-          {messages.length === 0 && (
-            <div className="mx-auto my-auto max-w-sm rounded-3xl border border-dashed border-border/80 bg-muted/30 px-5 py-8 text-center text-sm text-muted-foreground">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <p className="text-base font-medium text-foreground">{t('chat.emptyTitle')}</p>
-              <p className="mt-2 leading-6">{t('chat.emptyDescription')}</p>
-              {isNotConnected && (
-                <Button
-                  onClick={() => connect?.()}
-                  className="mt-5 h-11 rounded-2xl px-8 text-sm"
-                >
-                  {t('home.startChat')}
-                </Button>
-              )}
-              {me?.state === UserState.Searching && (
-                <p className="mt-4 text-sm text-muted-foreground">{t('home.searching')}</p>
-              )}
+        {/* Center: partner name + status */}
+        <div className="mx-3 flex min-w-0 flex-1 items-center justify-center">
+          {stranger ? (
+            <div className="animate-fade-in flex min-w-0 flex-col items-center leading-tight">
+              <span className="truncate text-sm font-semibold">{stranger.name}</span>
+              <span className={cn(
+                'text-[11px] transition-colors duration-300',
+                stranger.isTyping ? 'text-primary' : 'text-muted-foreground'
+              )}>
+                {statusText}
+              </span>
             </div>
+          ) : (
+            <span className={cn(
+              'text-xs transition-colors duration-300',
+              isSearching ? 'text-primary' : 'text-muted-foreground'
+            )}>
+              {statusText}
+            </span>
           )}
+        </div>
 
-          {messages.map((message, i) => {
-            const tone = getMessageTone(message.sender, stranger?.name, stranger?.id)
-            const label = tone.labelKey ? t(tone.labelKey) : tone.label
-            const isSystem = message.sender === 'system'
-
-            return (
-              <div key={i} className={cn('flex flex-col gap-2', tone.alignClassName)}>
-                <div
-                  className={cn('flex max-w-[85%] items-end gap-3', tone.rowClassName, {
-                    'max-w-full items-center justify-center': isSystem
-                  })}
-                >
-                  <div
-                    className={cn(
-                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border',
-                      tone.iconClassName
-                    )}
-                  >
-                    {tone.icon}
-                  </div>
-                  <div
-                    className={cn(
-                      'rounded-[22px] border px-4 py-2.5 shadow-sm',
-                      tone.bubbleClassName,
-                      isSystem ? 'max-w-2xl text-center' : 'min-w-[180px]'
-                    )}
-                  >
-                    <p className={cn('mb-1 text-xs font-semibold uppercase tracking-[0.18em]', tone.metaClassName)}>
-                      {label}
-                    </p>
-                    <p className="whitespace-pre-wrap break-words text-[15px] leading-6">{message.message}</p>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        {/* Right: controls */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {me?.state === UserState.Connected && (
+            <button
+              type="button"
+              onClick={() => connect?.()}
+              className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium text-primary transition-all duration-200 hover:bg-primary/10 hover:scale-105 active:scale-95"
+            >
+              <RefreshCw className="h-3 w-3" />
+              {t('home.reroll')}
+            </button>
+          )}
+          <ModeToggle />
         </div>
       </div>
 
-      <div className="mt-3 flex w-full rounded-[24px] border border-border/70 bg-background/80 p-3">
+      {/* ── Messages ── */}
+      <div className="scroll-touch flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-3 sm:px-4" ref={ref}>
+        {messages.length === 0 && (
+          <div className="animate-slide-up m-auto max-w-xs px-4 py-8 text-center">
+            <div className="animate-float mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-blue-400/20 text-primary">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <p className="text-base font-semibold text-foreground">{t('chat.emptyTitle')}</p>
+            <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+              {isServiceUnavailable
+                ? t('chat.serviceUnavailable')
+                : isBootstrapping
+                  ? t('chat.serviceStarting')
+                  : t('chat.emptyDescription')}
+            </p>
+            {isServiceUnavailable && (
+              <Button
+                onClick={() => retryBootstrap?.()}
+                variant="outline"
+                className="mt-5 h-10 rounded-xl px-8 text-sm font-medium"
+              >
+                {t('chat.retryConnection')}
+              </Button>
+            )}
+            {isBootstrapping && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                <p className="text-sm text-primary">{t('chat.serviceStarting')}</p>
+              </div>
+            )}
+            {isNotConnected && !isServiceUnavailable && !isBootstrapping && (
+              <Button
+                onClick={() => connect?.()}
+                className="mt-5 h-10 rounded-xl bg-gradient-to-r from-primary to-blue-500 px-8 text-sm font-medium shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-95"
+              >
+                {t('home.startChat')}
+              </Button>
+            )}
+            {isSearching && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                <p className="text-sm text-primary">{t('home.searching')}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {messages.map((message, i) => {
+          const isMe = message.sender === 'me'
+          const isSystem = message.sender === 'system'
+          const isStranger = !isMe && !isSystem
+
+          const strangerLabel = isStranger
+            ? (message.sender === stranger?.id || message.sender === stranger?.name
+              ? stranger?.name ?? message.sender
+              : message.sender)
+            : null
+
+          if (isSystem) {
+            return (
+              <div key={i} className="animate-message-in flex justify-center py-1.5">
+                <span className="rounded-full bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground">
+                  {message.message}
+                </span>
+              </div>
+            )
+          }
+
+          return (
+            <div key={i} className={cn('animate-message-in flex flex-col', isMe ? 'items-end' : 'items-start')}>
+              {strangerLabel && (
+                <span className="mb-0.5 px-1 text-[11px] font-medium text-primary/80">{strangerLabel}</span>
+              )}
+              <div
+                className={cn(
+                  'max-w-[85%] px-3.5 py-2 shadow-sm sm:max-w-[70%]',
+                  isMe
+                    ? 'rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-blue-500 text-primary-foreground'
+                    : 'rounded-2xl rounded-bl-md bg-card text-foreground ring-1 ring-border/50'
+                )}
+              >
+                <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.45]">{message.message}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Input bar ── */}
+      <div className="glass shrink-0 border-t border-border/40 px-3 py-2 sm:px-4 safe-area-bottom">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full flex-col items-start gap-3 md:flex-row">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-end gap-2">
             <FormField
               control={form.control}
               name="message"
               render={({ field }) => (
-                <FormItem className="flex w-full flex-grow flex-col justify-center md:justify-normal">
+                <FormItem className="min-w-0 flex-1">
                   <FormControl>
                     <Textarea
-                      rows={3}
+                      rows={1}
                       placeholder={t('chat.placeholder')}
-                      className="rounded-[20px] border-border/70 bg-muted/30 px-4 py-3 text-[15px] leading-6"
+                      className="max-h-32 min-h-[40px] resize-none rounded-xl border-border/50 bg-muted/30 px-3.5 py-2.5 text-sm leading-5 transition-all duration-200 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 focus:bg-background"
                       {...field}
                       onCompositionStart={() => setIsComposing(true)}
                       onCompositionEnd={() => setIsComposing(false)}
@@ -267,21 +284,16 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                       }}
                     />
                   </FormControl>
-                  <FormDescription className="flex flex-wrap items-center gap-3 text-xs leading-5">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-muted-foreground">
-                      <Settings2 className="h-3.5 w-3.5" />
-                      {t('chat.connectionHint')}
-                    </span>
-                    <SettingsDialog />
-                  </FormDescription>
-                  <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" size="lg" className="h-auto w-full rounded-[20px] px-6 py-4 text-sm md:max-w-[220px]">
-              <Send className="mr-2 h-4 w-4" />
-              {t('chat.send')}
-            </Button>
+            <button
+              type="submit"
+              disabled={!isAvailable || isBootstrapping}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-primary to-blue-500 text-primary-foreground shadow-md shadow-primary/20 transition-all duration-200 hover:shadow-lg hover:shadow-primary/30 hover:scale-105 active:scale-95"
+            >
+              <Send className="h-4 w-4" />
+            </button>
           </form>
         </Form>
       </div>

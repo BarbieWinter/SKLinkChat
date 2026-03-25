@@ -21,6 +21,7 @@ async def lifespan(app: FastAPI):
     container = build_container(settings=settings, redis=redis)
     app.state.container = container
     app.state.partner_disconnect_tasks = {}
+    app.state.presence_broadcast_task = None
     await container.presence_repository.reset_online()
     await container.chat_runtime_service.prepare_for_startup()
 
@@ -38,10 +39,17 @@ async def lifespan(app: FastAPI):
     yield
     for task in app.state.partner_disconnect_tasks.values():
         task.cancel()
+    if app.state.presence_broadcast_task is not None:
+        app.state.presence_broadcast_task.cancel()
     app.state.expiration_task.cancel()
     try:
         await app.state.expiration_task
     except asyncio.CancelledError:
         pass
+    if app.state.presence_broadcast_task is not None:
+        try:
+            await app.state.presence_broadcast_task
+        except asyncio.CancelledError:
+            pass
     await close_redis_client()
     logger.info("application shutdown")

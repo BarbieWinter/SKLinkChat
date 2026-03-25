@@ -14,8 +14,12 @@ type UseSessionBootstrapOptions = {
   onError: (error: unknown) => void
 }
 
+export type SessionBootstrapStatus = 'bootstrapping' | 'ready' | 'error'
+
 export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => {
   const [sessionId, setSessionId] = useState('')
+  const [status, setStatus] = useState<SessionBootstrapStatus>('bootstrapping')
+  const [attempt, setAttempt] = useState(0)
   const instanceId = useMemo(() => createInstanceId(), [])
   const channel = useMemo(() => createOwnershipChannel(), [])
   const pendingClaimsRef = useRef(new Map<string, (owned: boolean) => void>())
@@ -79,6 +83,8 @@ export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => 
     let cancelled = false
 
     const bootstrap = async () => {
+      setStatus('bootstrapping')
+
       try {
         const storedSessionId = getStoredSessionId()
         if (storedSessionId) {
@@ -95,6 +101,7 @@ export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => 
 
           if (!ownedByAnotherTab) {
             setSessionId(storedSessionId)
+            setStatus('ready')
             return
           }
 
@@ -108,8 +115,10 @@ export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => 
 
         setStoredSessionId(session.session_id)
         setSessionId(session.session_id)
+        setStatus('ready')
       } catch (error) {
         if (!cancelled) {
+          setStatus('error')
           onError(error)
         }
       }
@@ -121,7 +130,15 @@ export const useSessionBootstrap = ({ onError }: UseSessionBootstrapOptions) => 
       cancelled = true
       pendingClaimsRef.current.clear()
     }
-  }, [channel, instanceId, onError, sessionId])
+  }, [attempt, channel, instanceId, onError, sessionId])
 
-  return sessionId
+  return {
+    retry: () => {
+      pendingClaimsRef.current.clear()
+      setStatus('bootstrapping')
+      setAttempt((currentAttempt) => currentAttempt + 1)
+    },
+    sessionId,
+    status
+  }
 }

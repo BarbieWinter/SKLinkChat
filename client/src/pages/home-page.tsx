@@ -71,15 +71,15 @@ const HomePage = () => {
   // Welcome onboarding screen
   if (!displayName) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="w-full max-w-md space-y-6 rounded-[28px] border border-border/70 bg-card/80 p-8 shadow-sm">
+      <div className="flex h-full items-center justify-center px-4">
+        <div className="animate-slide-up w-full max-w-md space-y-5 rounded-2xl border border-border/50 bg-card/90 p-6 shadow-xl shadow-black/5 dark:shadow-black/20">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-              <MessageCircle className="h-6 w-6" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-blue-400/20 text-primary">
+              <MessageCircle className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">{t('welcome.title')}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{t('welcome.subtitle')}</p>
+              <h1 className="text-xl font-bold sm:text-2xl">{t('welcome.title')}</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">{t('welcome.subtitle')}</p>
             </div>
           </div>
 
@@ -88,6 +88,7 @@ const HomePage = () => {
               value={welcomeName}
               onChange={(e) => setWelcomeName(e.target.value)}
               placeholder={t('welcome.namePlaceholder')}
+              className="h-11 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-primary/20"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
@@ -100,6 +101,7 @@ const HomePage = () => {
                 value={welcomeTopics}
                 onChange={(e) => setWelcomeTopics(e.target.value)}
                 placeholder={t('welcome.topicsPlaceholder')}
+                className="h-11 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
@@ -111,7 +113,10 @@ const HomePage = () => {
             </div>
           </div>
 
-          <Button onClick={handleWelcomeSubmit} className="h-12 w-full rounded-2xl text-sm">
+          <Button
+            onClick={handleWelcomeSubmit}
+            className="h-11 w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 text-sm font-medium shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-xl hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]"
+          >
             {t('welcome.start')}
           </Button>
         </div>
@@ -120,14 +125,14 @@ const HomePage = () => {
   }
 
   const sidebarContent = (
-    <div className="space-y-4 rounded-[28px] border border-border/70 bg-card/80 p-5 shadow-sm">
+    <div className="space-y-4 p-3">
       {/* Close button */}
       <div className="flex justify-end">
         {!isCompactViewport && (
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-2xl border border-border/70"
+            className="h-8 w-8 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
             onClick={() => setSidebarCollapsed(true)}
             aria-label="Collapse sidebar"
           >
@@ -138,7 +143,7 @@ const HomePage = () => {
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-2xl border border-border/70"
+            className="h-8 w-8 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
             onClick={() => setMobileSheetOpen(false)}
             aria-label="Close panel"
           >
@@ -148,26 +153,26 @@ const HomePage = () => {
       </div>
 
       {/* Profile section */}
-      <div>
+      <div className="rounded-xl bg-muted/30 p-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-muted p-2 text-muted-foreground">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Contact className="h-4 w-4" />
             </div>
-            <h3 className="font-semibold">{t('home.profile')}</h3>
+            <h3 className="text-sm font-semibold">{t('home.profile')}</h3>
           </div>
-          <Badge>{formatUserState(me?.state)}</Badge>
+          <Badge className="rounded-full text-[10px]">{formatUserState(me?.state)}</Badge>
         </div>
         <p className="mt-3 text-base font-semibold">{me?.name ?? '-'}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {keywords.length > 0 ? (
             keywords.map((keyword) => (
-              <Badge key={keyword} variant="outline" className="rounded-full">
+              <Badge key={keyword} variant="outline" className="rounded-full text-[11px]">
                 {keyword}
               </Badge>
             ))
           ) : (
-            <span className="text-sm text-muted-foreground">{t('home.interestsEmpty')}</span>
+            <span className="text-xs text-muted-foreground">{t('home.interestsEmpty')}</span>
           )}
         </div>
         <div className="mt-3 text-sm text-muted-foreground">
@@ -175,26 +180,28 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="border-t border-border/40" />
-
-      {/* Partner section — flat, no nested card */}
-      <div>
+      {/* Partner section */}
+      <div className="rounded-xl bg-muted/30 p-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-muted p-2 text-muted-foreground">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Users className="h-4 w-4" />
             </div>
-            <h3 className="font-semibold">{t('home.currentPartner')}</h3>
+            <h3 className="text-sm font-semibold">{t('home.currentPartner')}</h3>
           </div>
-          <Badge variant="outline">{formatUserState(stranger?.state)}</Badge>
+          <Badge variant="outline" className="rounded-full text-[10px]">{formatUserState(stranger?.state)}</Badge>
         </div>
         {stranger ? (
-          <p className="mt-3 text-base font-semibold">{stranger.name}</p>
+          <div className="animate-fade-in mt-3 flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-blue-500 text-xs font-bold text-white">
+              {stranger.name.charAt(0).toUpperCase()}
+            </div>
+            <p className="text-base font-semibold">{stranger.name}</p>
+          </div>
         ) : (
           <div className="mt-3 space-y-1">
             <p className="text-sm font-medium">{t('home.noPartner')}</p>
-            <p className="text-sm leading-6 text-muted-foreground">{t('home.noPartnerDescription')}</p>
+            <p className="text-xs leading-5 text-muted-foreground">{t('home.noPartnerDescription')}</p>
           </div>
         )}
       </div>
@@ -213,24 +220,25 @@ const HomePage = () => {
         </div>
 
         {/* Backdrop */}
-        {mobileSheetOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/40 transition-opacity"
-            onClick={() => setMobileSheetOpen(false)}
-          />
-        )}
+        <div
+          className={cn(
+            'fixed inset-0 z-40 bg-black/50 transition-opacity duration-300',
+            mobileSheetOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+          )}
+          onClick={() => setMobileSheetOpen(false)}
+        />
 
         {/* Bottom sheet */}
         <div
           className={cn(
-            'fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 ease-in-out',
+            'fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
             mobileSheetOpen ? 'translate-y-0' : 'translate-y-full'
           )}
         >
-          <div className="mx-2 mb-2 max-h-[75vh] overflow-y-auto">
+          <div className="mx-2 mb-2 max-h-[75vh] overflow-y-auto scroll-touch rounded-2xl bg-card/95 glass ring-1 ring-border/30 safe-area-bottom">
             {/* Drag indicator */}
-            <div className="flex justify-center pb-2 pt-3">
-              <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+            <div className="sticky top-0 z-10 flex justify-center bg-card/80 glass pb-1 pt-3">
+              <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
             </div>
             {sidebarContent}
           </div>
@@ -241,9 +249,9 @@ const HomePage = () => {
 
   // Desktop layout
   return (
-    <div className="flex h-full min-h-0 gap-4">
+    <div className="flex h-full min-h-0 gap-0">
       {!isSidebarCollapsed && (
-        <div className="w-[326px] shrink-0">
+        <div className="animate-fade-in w-[300px] shrink-0 border-r border-border/40 overflow-y-auto">
           {sidebarContent}
         </div>
       )}

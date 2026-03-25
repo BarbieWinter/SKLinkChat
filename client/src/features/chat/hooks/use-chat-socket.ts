@@ -4,7 +4,7 @@ import useWebSocket from 'react-use-websocket'
 
 import { getSocketUrl, toUser } from '@/features/chat/services/protocol'
 import { WS_ENDPOINT } from '@/shared/config/runtime'
-import { PayloadType, UserState } from '@/shared/types'
+import { PayloadType, PresenceCountPayload, UserState } from '@/shared/types'
 
 type UseChatSocketOptions = {
   sessionId: string
@@ -20,6 +20,7 @@ type UseChatSocketOptions = {
   onMatch: (payload: unknown) => void
   onErrorMessage: (message: string) => void
   onTyping: (typing: boolean) => void
+  onPresenceCount: (onlineCount: number) => void
   syncDisplayName: (name: string) => void
 }
 
@@ -37,6 +38,7 @@ export const useChatSocket = ({
   onMatch,
   onErrorMessage,
   onTyping,
+  onPresenceCount,
   syncDisplayName
 }: UseChatSocketOptions) => {
   const socket = useWebSocket(
@@ -64,7 +66,8 @@ export const useChatSocket = ({
             }
 
             onUserInfo(user)
-            if (user.state !== UserState.Connected) {
+            // Only trigger disconnect when returning to idle (not when searching)
+            if (user.state === UserState.Idle) {
               onDisconnect()
             }
             break
@@ -87,6 +90,9 @@ export const useChatSocket = ({
             break
           case PayloadType.Typing:
             onTyping(Boolean(data.payload.typing))
+            break
+          case PayloadType.PresenceCount:
+            onPresenceCount((data.payload as PresenceCountPayload).online_count)
             break
         }
       }

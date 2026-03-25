@@ -37,7 +37,7 @@ def websocket_client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, N
 
 def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
     ws_left.send_json({"type": "queue", "payload": None})
-    assert ws_left.receive_json() == {
+    assert _receive_json_ignoring_presence(ws_left) == {
         "type": "user-info",
         "payload": {
             "id": left_id,
@@ -47,7 +47,7 @@ def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
     }
 
     ws_right.send_json({"type": "queue", "payload": None})
-    assert ws_right.receive_json() == {
+    assert _receive_json_ignoring_presence(ws_right) == {
         "type": "user-info",
         "payload": {
             "id": right_id,
@@ -55,7 +55,7 @@ def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
             "state": "searching",
         },
     }
-    assert ws_right.receive_json() == {
+    assert _receive_json_ignoring_presence(ws_right) == {
         "type": "user-info",
         "payload": {
             "id": right_id,
@@ -63,7 +63,7 @@ def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
             "state": "connected",
         },
     }
-    assert ws_right.receive_json() == {
+    assert _receive_json_ignoring_presence(ws_right) == {
         "type": "match",
         "payload": {
             "id": left_id,
@@ -72,7 +72,7 @@ def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
         },
     }
 
-    assert ws_left.receive_json() == {
+    assert _receive_json_ignoring_presence(ws_left) == {
         "type": "user-info",
         "payload": {
             "id": left_id,
@@ -80,7 +80,7 @@ def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
             "state": "connected",
         },
     }
-    assert ws_left.receive_json() == {
+    assert _receive_json_ignoring_presence(ws_left) == {
         "type": "match",
         "payload": {
             "id": right_id,
@@ -88,11 +88,18 @@ def _queue_and_match(ws_left, ws_right, left_id: str, right_id: str) -> None:
             "state": "connected",
         },
     }
+
+
+def _receive_json_ignoring_presence(ws):
+    while True:
+        message = ws.receive_json()
+        if message["type"] != "presence-count":
+            return message
 
 
 def test_websocket_connect_sends_initial_user_info(websocket_client: TestClient):
     with websocket_client.websocket_connect("/ws?sessionId=session-initial") as ws:
-        assert ws.receive_json() == {
+        assert _receive_json_ignoring_presence(ws) == {
             "type": "user-info",
             "payload": {
                 "id": "session-initial",
@@ -108,7 +115,7 @@ def test_websocket_queue_match_message_and_typing_flow(websocket_client: TestCli
 
     with websocket_client.websocket_connect(f"/ws?sessionId={left_id}") as ws_left:
         with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right:
-            assert ws_left.receive_json() == {
+            assert _receive_json_ignoring_presence(ws_left) == {
                 "type": "user-info",
                 "payload": {
                     "id": left_id,
@@ -116,7 +123,7 @@ def test_websocket_queue_match_message_and_typing_flow(websocket_client: TestCli
                     "state": "idle",
                 },
             }
-            assert ws_right.receive_json() == {
+            assert _receive_json_ignoring_presence(ws_right) == {
                 "type": "user-info",
                 "payload": {
                     "id": right_id,
@@ -128,7 +135,7 @@ def test_websocket_queue_match_message_and_typing_flow(websocket_client: TestCli
             _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
 
             ws_left.send_json({"type": "message", "payload": {"message": "  hello partner  "}})
-            assert ws_right.receive_json() == {
+            assert _receive_json_ignoring_presence(ws_right) == {
                 "type": "message",
                 "payload": {
                     "id": left_id,
@@ -138,7 +145,7 @@ def test_websocket_queue_match_message_and_typing_flow(websocket_client: TestCli
             }
 
             ws_right.send_json({"type": "typing", "payload": {"typing": True}})
-            assert ws_left.receive_json() == {
+            assert _receive_json_ignoring_presence(ws_left) == {
                 "type": "typing",
                 "payload": {
                     "id": right_id,
@@ -152,7 +159,7 @@ def test_websocket_partner_disconnect_emits_disconnect_event(websocket_client: T
     right_id = "session-disconnect-right"
 
     with websocket_client.websocket_connect(f"/ws?sessionId={left_id}") as ws_left:
-        assert ws_left.receive_json() == {
+        assert _receive_json_ignoring_presence(ws_left) == {
             "type": "user-info",
             "payload": {
                 "id": left_id,
@@ -162,7 +169,7 @@ def test_websocket_partner_disconnect_emits_disconnect_event(websocket_client: T
         }
 
         with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right:
-            assert ws_right.receive_json() == {
+            assert _receive_json_ignoring_presence(ws_right) == {
                 "type": "user-info",
                 "payload": {
                     "id": right_id,
@@ -176,7 +183,7 @@ def test_websocket_partner_disconnect_emits_disconnect_event(websocket_client: T
             assert response.json() == {"status": "accepted"}
 
         time.sleep(1.2)
-        assert ws_left.receive_json() == {"type": "disconnect", "payload": None}
+        assert _receive_json_ignoring_presence(ws_left) == {"type": "disconnect", "payload": None}
 
 
 def test_websocket_reconnect_within_window_restores_existing_match(websocket_client: TestClient):
@@ -185,15 +192,15 @@ def test_websocket_reconnect_within_window_restores_existing_match(websocket_cli
 
     with websocket_client.websocket_connect(f"/ws?sessionId={left_id}") as ws_left:
         with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right:
-            assert ws_left.receive_json()["type"] == "user-info"
-            assert ws_right.receive_json()["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_right)["type"] == "user-info"
             _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
 
             ws_right.close()
             time.sleep(0.2)
 
             with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right_reconnected:
-                assert ws_right_reconnected.receive_json() == {
+                assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "user-info",
                     "payload": {
                         "id": right_id,
@@ -201,7 +208,7 @@ def test_websocket_reconnect_within_window_restores_existing_match(websocket_cli
                         "state": "connected",
                     },
                 }
-                assert ws_right_reconnected.receive_json() == {
+                assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "match",
                     "payload": {
                         "id": left_id,
@@ -212,7 +219,7 @@ def test_websocket_reconnect_within_window_restores_existing_match(websocket_cli
 
                 time.sleep(1.2)
                 ws_left.send_json({"type": "message", "payload": {"message": "still there?"}})
-                assert ws_right_reconnected.receive_json() == {
+                assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "message",
                     "payload": {
                         "id": left_id,
@@ -228,8 +235,8 @@ def test_websocket_message_after_partner_disconnect_emits_disconnect(websocket_c
 
     with websocket_client.websocket_connect(f"/ws?sessionId={left_id}") as ws_left:
         with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right:
-            assert ws_left.receive_json()["type"] == "user-info"
-            assert ws_right.receive_json()["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_right)["type"] == "user-info"
             _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
 
             response = websocket_client.post("/api/session/close", json={"session_id": right_id})
@@ -238,7 +245,7 @@ def test_websocket_message_after_partner_disconnect_emits_disconnect(websocket_c
             time.sleep(1.2)
 
             ws_left.send_json({"type": "message", "payload": {"message": "are you there?"}})
-            assert ws_left.receive_json() == {"type": "disconnect", "payload": None}
+            assert _receive_json_ignoring_presence(ws_left) == {"type": "disconnect", "payload": None}
 
 
 def test_websocket_transport_disconnect_preserves_chat_until_reconnect(websocket_client: TestClient):
@@ -247,21 +254,21 @@ def test_websocket_transport_disconnect_preserves_chat_until_reconnect(websocket
 
     with websocket_client.websocket_connect(f"/ws?sessionId={left_id}") as ws_left:
         with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right:
-            assert ws_left.receive_json()["type"] == "user-info"
-            assert ws_right.receive_json()["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_right)["type"] == "user-info"
             _queue_and_match(ws_left, ws_right, left_id=left_id, right_id=right_id)
 
             ws_right.close()
             time.sleep(1.2)
 
             ws_left.send_json({"type": "message", "payload": {"message": "hold on"}})
-            assert ws_left.receive_json() == {
+            assert _receive_json_ignoring_presence(ws_left) == {
                 "type": "error",
                 "payload": "Partner temporarily unavailable",
             }
 
             with websocket_client.websocket_connect(f"/ws?sessionId={right_id}") as ws_right_reconnected:
-                assert ws_right_reconnected.receive_json() == {
+                assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "user-info",
                     "payload": {
                         "id": right_id,
@@ -269,7 +276,7 @@ def test_websocket_transport_disconnect_preserves_chat_until_reconnect(websocket
                         "state": "connected",
                     },
                 }
-                assert ws_right_reconnected.receive_json() == {
+                assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "match",
                     "payload": {
                         "id": left_id,
@@ -279,7 +286,7 @@ def test_websocket_transport_disconnect_preserves_chat_until_reconnect(websocket
                 }
 
                 ws_left.send_json({"type": "message", "payload": {"message": "welcome back"}})
-                assert ws_right_reconnected.receive_json() == {
+                assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "message",
                     "payload": {
                         "id": left_id,
@@ -287,6 +294,32 @@ def test_websocket_transport_disconnect_preserves_chat_until_reconnect(websocket
                         "message": "welcome back",
                     },
                 }
+
+
+def test_websocket_presence_count_broadcasts_latest_online_total(websocket_client: TestClient):
+    with websocket_client.websocket_connect("/ws?sessionId=presence-left") as ws_left:
+        assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
+        time.sleep(0.2)
+
+        assert ws_left.receive_json() == {
+            "type": "presence-count",
+            "payload": {
+                "online_count": 1,
+            },
+        }
+
+        with websocket_client.websocket_connect("/ws?sessionId=presence-right") as ws_right:
+            assert _receive_json_ignoring_presence(ws_right)["type"] == "user-info"
+            time.sleep(0.2)
+
+            right_count_message = {
+                "type": "presence-count",
+                "payload": {
+                    "online_count": 2,
+                },
+            }
+            assert ws_left.receive_json() == right_count_message
+            assert ws_right.receive_json() == right_count_message
 
 
 def test_runtime_state_survives_service_restart():

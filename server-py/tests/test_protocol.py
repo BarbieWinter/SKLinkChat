@@ -18,4 +18,5 @@ def test_payload_type_values_cover_active_live_events():
         "match",
         "disconnect",
         "typing",
+        "presence-count",
     }
