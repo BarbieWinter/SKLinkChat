@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
-import useWebSocket from 'react-use-websocket'
+import useWebSocket, { ReadyState } from 'react-use-websocket'
 
 import { getSocketUrl, toUser } from '@/features/chat/services/protocol'
+import { ChatTransportStatus } from '@/features/chat/model/runtime'
 import { WS_ENDPOINT } from '@/shared/config/runtime'
 import { PayloadType, PresenceCountPayload, UserState } from '@/shared/types'
 
@@ -49,6 +50,7 @@ export const useChatSocket = ({
   onPresenceCount,
   syncDisplayName
 }: UseChatSocketOptions) => {
+  const hasConnectedRef = useRef(false)
   const socket = useWebSocket(
     sessionId ? getSocketUrl(WS_ENDPOINT, sessionId) : null,
     {
@@ -109,6 +111,36 @@ export const useChatSocket = ({
   )
 
   useEffect(() => {
+    if (!sessionId) {
+      hasConnectedRef.current = false
+      return
+    }
+
+    if (socket.readyState === ReadyState.OPEN) {
+      hasConnectedRef.current = true
+    }
+  }, [sessionId, socket.readyState])
+
+  const transportStatus = useMemo<ChatTransportStatus>(() => {
+    if (!sessionId) {
+      return 'idle'
+    }
+
+    switch (socket.readyState) {
+      case ReadyState.OPEN:
+        return 'connected'
+      case ReadyState.CONNECTING:
+        return hasConnectedRef.current ? 'reconnecting' : 'connecting'
+      case ReadyState.CLOSING:
+      case ReadyState.CLOSED:
+        return hasConnectedRef.current ? 'reconnecting' : 'connecting'
+      case ReadyState.UNINSTANTIATED:
+      default:
+        return 'connecting'
+    }
+  }, [sessionId, socket.readyState])
+
+  useEffect(() => {
     if (!meId || !displayName || meName === displayName) {
       return
     }
@@ -122,6 +154,7 @@ export const useChatSocket = ({
   }, [displayName, meId, meName, socket, syncDisplayName])
 
   return {
+    transportStatus,
     emitTyping: (typing: boolean) => {
       if (!strangerId) {
         return

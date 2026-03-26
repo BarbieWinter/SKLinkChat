@@ -31,6 +31,7 @@ describe('ChatReportDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '提交举报' }))
 
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByText('选择“其他”时必须填写详细说明。')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('请填写详细说明（必填）'), {
       target: { value: '补充上下文' }
@@ -54,5 +55,33 @@ describe('ChatReportDialog', () => {
         })
       })
     )
+  })
+
+  it('shows submit failure inline and resets dialog state after closing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: '举报服务暂不可用' })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<ChatReportDialog sessionId="session-1" reportedSessionId="session-2" partnerName="Alex" />)
+
+    fireEvent.click(screen.getByRole('button', { name: '举报' }))
+    fireEvent.click(screen.getByRole('button', { name: '其他' }))
+    fireEvent.change(screen.getByPlaceholderText('请填写详细说明（必填）'), {
+      target: { value: '补充上下文' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: '提交举报' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('举报服务暂不可用')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: '举报' }))
+
+    expect(screen.queryByText('举报服务暂不可用')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('补充说明（可选）')).toBeInTheDocument()
   })
 })

@@ -46,18 +46,21 @@ const ChatReportDialog = ({
   const [reason, setReason] = useState<CreateChatReportPayload['reason']>('harassment')
   const [details, setDetails] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) {
       setReason('harassment')
       setDetails('')
       setSubmitting(false)
+      setErrorMessage(null)
     }
   }, [open])
 
   const submitReport = async () => {
     const normalizedDetails = details.trim()
     if (reason === 'other' && !normalizedDetails) {
+      setErrorMessage('选择“其他”时必须填写详细说明。')
       toast({
         title: '请补充说明',
         description: '选择“其他”时必须填写详细说明。',
@@ -67,6 +70,7 @@ const ChatReportDialog = ({
     }
 
     setSubmitting(true)
+    setErrorMessage(null)
     try {
       await createChatReport({
         session_id: sessionId,
@@ -80,6 +84,7 @@ const ChatReportDialog = ({
       })
       setOpen(false)
     } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '举报提交失败。')
       toast({
         title: '提交失败',
         description: error instanceof Error ? error.message : '举报提交失败。',
@@ -119,7 +124,10 @@ const ChatReportDialog = ({
               <button
                 key={option.value}
                 type="button"
-                onClick={() => setReason(option.value)}
+                onClick={() => {
+                  setReason(option.value)
+                  setErrorMessage(null)
+                }}
                 className={`rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
                   reason === option.value
                     ? 'border-destructive bg-destructive/10 text-destructive'
@@ -133,10 +141,17 @@ const ChatReportDialog = ({
 
           <Textarea
             value={details}
-            onChange={(event) => setDetails(event.target.value)}
+            onChange={(event) => {
+              setDetails(event.target.value)
+              if (errorMessage) {
+                setErrorMessage(null)
+              }
+            }}
             rows={4}
             placeholder={reason === 'other' ? '请填写详细说明（必填）' : '补充说明（可选）'}
           />
+
+          {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
         </div>
 
         <DialogFooter>

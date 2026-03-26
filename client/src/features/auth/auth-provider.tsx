@@ -56,6 +56,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     saveSettings(nextSession.interests ?? [])
   }
 
+  const clearVerificationFeedback = () => {
+    setVerifyStatus('idle')
+    setVerifyMessage(null)
+  }
+
+  const setVerificationFeedback = (status: 'success' | 'error', message: string) => {
+    setVerifyStatus(status)
+    setVerifyMessage(message)
+  }
+
   const refreshSession = async () => {
     setStatus('loading')
     try {
@@ -79,13 +89,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const sessionAfterVerification = await verifyEmail(verifyToken)
           if (!cancelled) {
             applySession(sessionAfterVerification)
-            setVerifyStatus('success')
-            setVerifyMessage('邮箱验证成功。')
+            setVerificationFeedback('success', '邮箱验证成功。')
           }
         } catch (error) {
           if (!cancelled) {
-            setVerifyStatus('error')
-            setVerifyMessage(error instanceof Error ? error.message : '邮箱验证失败。')
+            setVerificationFeedback('error', error instanceof Error ? error.message : '邮箱验证失败。')
           }
         } finally {
           params.delete('verify_token')
@@ -121,6 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       verifyStatus,
       verifyMessage,
       register: async ({ email, password, displayName, interests, turnstileToken }) => {
+        clearVerificationFeedback()
         const nextSession = await registerAccount({
           email,
           password,
@@ -130,13 +139,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         })
         applySession(nextSession)
         setStatus('ready')
+        setVerificationFeedback('success', '验证邮件已发送，请先完成邮箱验证。')
       },
       login: async ({ email, password }) => {
+        clearVerificationFeedback()
         const nextSession = await loginAccount({ email, password })
         applySession(nextSession)
         setStatus('ready')
       },
       logout: async () => {
+        clearVerificationFeedback()
         await logoutAccount()
         clearStoredSessionId()
         clear()
@@ -146,6 +158,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       resendVerificationEmail: async () => {
         const nextSession = await resendVerification()
         applySession(nextSession)
+        setVerificationFeedback(
+          'success',
+          nextSession.email_verified ? '当前邮箱已验证，无需重新发送。' : '新的验证邮件已发送。'
+        )
       },
       syncProfile: async ({ displayName, interests }) => {
         const nextProfile = await updateAccountProfile({

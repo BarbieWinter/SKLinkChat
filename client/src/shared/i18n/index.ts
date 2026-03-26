@@ -33,6 +33,7 @@ type TranslationKey =
   | 'chat.connectionHint'
   | 'chat.serviceStarting'
   | 'chat.serviceUnavailable'
+  | 'chat.reconnecting'
   | 'chat.retryConnection'
   | 'settings.trigger'
   | 'settings.title'
@@ -89,6 +90,7 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'chat.connectionHint': '可在设置中修改昵称和话题偏好。',
     'chat.serviceStarting': '聊天服务正在连接，请稍后再试。',
     'chat.serviceUnavailable': '聊天服务暂时不可用，请确认后端服务已启动。',
+    'chat.reconnecting': '连接已中断，正在恢复聊天连接。',
     'chat.retryConnection': '重新连接',
     'settings.trigger': '编辑资料',
     'settings.title': '个人设置',

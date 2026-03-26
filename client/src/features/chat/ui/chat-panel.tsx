@@ -38,8 +38,9 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
     me,
     connect,
     emitTyping: setTyping,
-    isAvailable,
-    isBootstrapping,
+    bootstrapStatus,
+    transportStatus,
+    availability,
     retryBootstrap
   } =
     useChat()
@@ -72,7 +73,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   }, [messages])
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
-    if (!isAvailable) {
+    if (availability === 'error') {
       toast({
         title: t('common.error'),
         description: t('chat.serviceUnavailable'),
@@ -81,10 +82,19 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
       return
     }
 
-    if (isBootstrapping) {
+    if (bootstrapStatus === 'bootstrapping') {
       toast({
         title: t('common.error'),
         description: t('chat.serviceStarting'),
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (transportStatus === 'reconnecting' || transportStatus === 'connecting') {
+      toast({
+        title: t('common.error'),
+        description: t('chat.reconnecting'),
         variant: 'destructive'
       })
       return
@@ -107,13 +117,20 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
 
   const isNotConnected = !stranger && me?.state !== UserState.Searching
   const isSearching = me?.state === UserState.Searching
-  const isServiceUnavailable = !isAvailable && !isBootstrapping
+  const isBootstrapping = bootstrapStatus === 'bootstrapping'
+  const isServiceUnavailable = availability === 'error'
+  const isReconnecting = transportStatus === 'reconnecting'
+  const isTransportConnecting = transportStatus === 'connecting'
+  const isComposerDisabled =
+    availability !== 'ready' || transportStatus !== 'connected' || !stranger?.id || me?.state !== UserState.Connected
 
   const statusText = stranger?.isTyping
     ? t('chat.strangerTyping')
-    : stranger
-      ? formatUserState(stranger.state)
-      : formatUserState(me?.state)
+    : isReconnecting
+      ? t('chat.reconnecting')
+      : stranger
+        ? formatUserState(stranger.state)
+        : formatUserState(me?.state)
 
   return (
     <div className="flex h-full w-full flex-col bg-background">
@@ -183,6 +200,8 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
               {isServiceUnavailable
                 ? t('chat.serviceUnavailable')
+                : isReconnecting
+                  ? t('chat.reconnecting')
                 : isBootstrapping
                   ? t('chat.serviceStarting')
                   : t('chat.emptyDescription')}
@@ -202,7 +221,13 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                 <p className="text-sm text-primary">{t('chat.serviceStarting')}</p>
               </div>
             )}
-            {isNotConnected && !isServiceUnavailable && !isBootstrapping && (
+            {(isReconnecting || isTransportConnecting) && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                <p className="text-sm text-primary">{t('chat.reconnecting')}</p>
+              </div>
+            )}
+            {isNotConnected && !isServiceUnavailable && !isBootstrapping && !isReconnecting && !isTransportConnecting && (
               <Button
                 onClick={() => connect?.()}
                 className="mt-5 h-10 rounded-xl bg-gradient-to-r from-primary to-blue-500 px-8 text-sm font-medium shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-95"
@@ -260,6 +285,12 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
         })}
       </div>
 
+      {isReconnecting && messages.length > 0 && (
+        <div className="border-t border-border/40 bg-amber-500/5 px-4 py-2 text-center text-xs text-amber-700 dark:text-amber-300">
+          {t('chat.reconnecting')}
+        </div>
+      )}
+
       {/* ── Input bar ── */}
       <div className="glass shrink-0 border-t border-border/40 px-3 py-2 sm:px-4 safe-area-bottom">
         <Form {...form}>
@@ -298,7 +329,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             />
             <button
               type="submit"
-              disabled={!isAvailable || isBootstrapping}
+              disabled={isComposerDisabled}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-primary to-blue-500 text-primary-foreground shadow-md shadow-primary/20 transition-all duration-200 hover:shadow-lg hover:shadow-primary/30 hover:scale-105 active:scale-95"
             >
               <Send className="h-4 w-4" />
