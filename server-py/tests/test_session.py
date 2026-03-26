@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.application.auth.security import utc_now
 from app.infrastructure.postgres.models import ChatSessionRecord
 
 
@@ -63,6 +64,32 @@ def test_create_session_requires_verified_email(client):
     session_response = client.post("/api/session")
     assert session_response.status_code == 403
     assert session_response.json()["code"] == "EMAIL_NOT_VERIFIED"
+
+
+def test_create_session_rejects_restricted_account(client):
+    register_response = _register(client)
+    assert register_response.status_code == 201
+    _verify(client)
+
+    account_id, auth_session = _run(
+        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
+    )
+    assert account_id is not None
+    assert auth_session.authenticated is True
+
+    _run(
+        client.app.state.container.account_repository.set_chat_access_restriction(
+            account_id=account_id,
+            restricted_at=utc_now(),
+            restriction_reason="Repeated abuse",
+            restriction_report_id=1,
+        )
+    )
+
+    session_response = client.post("/api/session")
+
+    assert session_response.status_code == 403
+    assert session_response.json()["code"] == "CHAT_ACCESS_RESTRICTED"
 
 
 def test_create_session_returns_chat_session_for_verified_account(client):

@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.application.account.service import AccountService
+from app.application.admin.service import AdminGovernanceService
 from app.application.auth.service import AuthService
 from app.application.chat.access_service import ChatAccessService
 from app.application.chat.report_service import ChatReportService
@@ -17,6 +18,7 @@ from app.application.chat.use_cases import (
     ExpireStaleSessionsUseCase,
     LookupPartnerUseCase,
     MarkDisconnectedUseCase,
+    RevokeChatSessionUseCase,
     SendMessageUseCase,
     SetTypingUseCase,
     SubmitChatReportUseCase,
@@ -42,6 +44,7 @@ from app.infrastructure.permission_gate import VerifiedChatPermissionGate
 from app.infrastructure.postgres.readiness_probe import DatabaseReadinessProbe
 from app.infrastructure.postgres.repositories import (
     AccountRepository,
+    AdminGovernanceRepository,
     AuditEventRepository,
     AuthSessionRepository,
     DurableChatRepositoryImpl,
@@ -69,6 +72,7 @@ class ApplicationContainer:
     account_repository: AccountRepository
     auth_service: AuthService
     account_service: AccountService
+    admin_governance_service: AdminGovernanceService
     chat_access_service: ChatAccessService
     retention_service: RetentionService
     chat_runtime_service: ChatRuntimeService
@@ -89,6 +93,7 @@ class ApplicationContainer:
     lookup_partner: LookupPartnerUseCase
     mark_disconnected: MarkDisconnectedUseCase
     expire_stale_sessions: ExpireStaleSessionsUseCase
+    revoke_chat_session: RevokeChatSessionUseCase
     submit_chat_report: SubmitChatReportUseCase
     connection_hub: InMemoryConnectionHub
 
@@ -119,6 +124,7 @@ def build_container(
         session_factory,
         retention_seconds=settings.audit_event_retention_seconds,
     )
+    admin_governance_repository = AdminGovernanceRepository(session_factory)
 
     auth_service = AuthService(
         account_repository=account_repository,
@@ -138,6 +144,12 @@ def build_container(
         frontend_base_url=settings.frontend_base_url,
     )
     account_service = AccountService(account_repository)
+    admin_governance_service = AdminGovernanceService(
+        account_repository=account_repository,
+        admin_repository=admin_governance_repository,
+        audit_event_repository=audit_event_repository,
+        durable_chat_repository=durable_chat_repository,
+    )
     chat_access_service = ChatAccessService(
         account_repository=account_repository,
         durable_chat_repository=durable_chat_repository,
@@ -184,6 +196,7 @@ def build_container(
         account_repository=account_repository,
         auth_service=auth_service,
         account_service=account_service,
+        admin_governance_service=admin_governance_service,
         chat_access_service=chat_access_service,
         retention_service=retention_service,
         chat_runtime_service=chat_runtime_service,
@@ -206,6 +219,7 @@ def build_container(
         lookup_partner=LookupPartnerUseCase(chat_runtime_service),
         mark_disconnected=MarkDisconnectedUseCase(chat_runtime_service),
         expire_stale_sessions=ExpireStaleSessionsUseCase(chat_runtime_service),
+        revoke_chat_session=RevokeChatSessionUseCase(chat_runtime_service),
         submit_chat_report=SubmitChatReportUseCase(chat_report_service),
         connection_hub=connection_hub,
     )

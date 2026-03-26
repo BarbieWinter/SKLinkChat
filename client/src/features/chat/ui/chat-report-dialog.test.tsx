@@ -24,9 +24,17 @@ describe('ChatReportDialog', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<ChatReportDialog sessionId="session-1" reportedSessionId="session-2" partnerName="Alex" />)
+    render(
+      <ChatReportDialog
+        sessionId="session-1"
+        reportedSessionId="session-2"
+        partnerName="Alex"
+        partnerShortId="483921"
+      />
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '举报' }))
+    expect(screen.getByText(/#483921/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '其他' }))
     fireEvent.click(screen.getByRole('button', { name: '提交举报' }))
 
@@ -65,7 +73,14 @@ describe('ChatReportDialog', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<ChatReportDialog sessionId="session-1" reportedSessionId="session-2" partnerName="Alex" />)
+    render(
+      <ChatReportDialog
+        sessionId="session-1"
+        reportedSessionId="session-2"
+        partnerName="Alex"
+        partnerShortId="483921"
+      />
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '举报' }))
     fireEvent.click(screen.getByRole('button', { name: '其他' }))

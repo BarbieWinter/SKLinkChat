@@ -29,6 +29,17 @@ def test_alembic_upgrade_head_exposes_hardened_schema(monkeypatch):
         assert "language" not in {column["name"] for column in inspector.get_columns("accounts")}
         assert not any(table_name.startswith("forum_") for table_name in inspector.get_table_names())
 
+        account_columns = {column["name"] for column in inspector.get_columns("accounts")}
+        assert {
+            "is_admin",
+            "short_id",
+            "chat_access_restricted_at",
+            "chat_access_restriction_reason",
+            "chat_access_restriction_report_id",
+        } <= account_columns
+        account_index_names = {index["name"] for index in inspector.get_indexes("accounts")}
+        assert "ux_accounts_short_id" in account_index_names
+
         chat_session_columns = {column["name"] for column in inspector.get_columns("chat_sessions")}
         assert {"display_name_snapshot", "status", "close_reason"} <= chat_session_columns
 
@@ -54,6 +65,8 @@ def test_alembic_upgrade_head_exposes_hardened_schema(monkeypatch):
             "reason",
             "details",
             "status",
+            "reviewed_by_account_id",
+            "review_note",
         } <= chat_report_columns
 
         index_names = {index["name"] for index in inspector.get_indexes("chat_sessions")}

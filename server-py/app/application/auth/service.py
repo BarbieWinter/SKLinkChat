@@ -82,7 +82,10 @@ class AuthSessionView:
     authenticated: bool
     email_verified: bool = False
     display_name: str | None = None
+    short_id: str | None = None
     interests: list[str] | None = None
+    is_admin: bool = False
+    chat_access_restricted: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -290,7 +293,10 @@ class AuthService:
             authenticated=True,
             email_verified=account.email_verified_at is not None,
             display_name=account.display_name,
+            short_id=account.short_id,
             interests=interests,
+            is_admin=account.is_admin,
+            chat_access_restricted=getattr(account, "chat_access_restricted_at", None) is not None,
         )
 
     async def _issue_verification_email(self, account: Account) -> None:

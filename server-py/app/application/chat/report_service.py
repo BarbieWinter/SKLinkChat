@@ -55,11 +55,24 @@ class ChatReportService:
                 status_code=422,
             )
 
-        await self._chat_access_service.authorize_chat_session(account_id=account_id, session_id=session_id)
-        active_match = await self._durable_chat_repository.get_active_match(
-            chat_session_id=session_id,
-            partner_session_id=reported_session_id,
-        )
+        await self._chat_access_service.require_chat_enabled_account(account_id)
+        active_match = None
+        try:
+            await self._chat_access_service.authorize_chat_session(account_id=account_id, session_id=session_id)
+        except AppError as error:
+            if error.code != "CHAT_SESSION_FORBIDDEN":
+                raise
+        else:
+            active_match = await self._durable_chat_repository.get_active_match(
+                chat_session_id=session_id,
+                partner_session_id=reported_session_id,
+            )
+
+        if active_match is None:
+            active_match = await self._durable_chat_repository.get_active_match_for_account(
+                account_id=account_id,
+                partner_session_id=reported_session_id,
+            )
         if active_match is None:
             raise AppError(
                 message="You can only report the active chat partner",

@@ -4,7 +4,10 @@ export type AuthSessionPayload = {
   authenticated: boolean
   email_verified: boolean
   display_name: string | null
+  short_id: string | null
   interests: string[]
+  is_admin: boolean
+  chat_access_restricted: boolean
 }
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {

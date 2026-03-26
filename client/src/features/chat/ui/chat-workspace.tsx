@@ -1,5 +1,6 @@
 import { Contact, LogOut, MailCheck, PanelLeftClose, Users, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { useAppStore } from '@/app/store'
 import { useAuth } from '@/features/auth/auth-provider'
@@ -25,8 +26,13 @@ const ChatWorkspaceSidebar = ({
   const { t, formatUserState } = useI18n()
   const { keywords } = useAppStore()
   const { authSession } = useAuth()
-  const { stranger, me, sessionId } = useChat()
-
+  const { stranger, me, sessionId, availability, bootstrapStatus, transportStatus } = useChat()
+  const canReportCurrentPartner =
+    availability === 'ready' &&
+    bootstrapStatus === 'ready' &&
+    transportStatus === 'connected' &&
+    me?.state === UserState.Connected &&
+    Boolean(stranger?.id)
   return (
     <div className="space-y-4 p-3">
       <div className="flex justify-end">
@@ -52,6 +58,9 @@ const ChatWorkspaceSidebar = ({
           <Badge className="rounded-full text-[10px]">{formatUserState(me?.state)}</Badge>
         </div>
         <p className="mt-3 text-base font-semibold">{me?.name ?? authSession.display_name ?? '-'}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {authSession.short_id ? `ID: ${authSession.short_id}` : 'ID: -'}
+        </p>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {keywords.length > 0 ? (
             keywords.map((keyword) => (
@@ -64,7 +73,18 @@ const ChatWorkspaceSidebar = ({
           )}
         </div>
         <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-          <SettingsDialog />
+          <div className="flex items-center gap-3">
+            <SettingsDialog />
+            {authSession.is_admin ? (
+              <Link
+                to="/admin/reports"
+                data-testid="enter-admin-console"
+                className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-all duration-200 hover:bg-primary/15 active:scale-95"
+              >
+                进入管理后台
+              </Link>
+            ) : null}
+          </div>
           <button
             type="button"
             className="group flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive active:scale-95"
@@ -87,11 +107,12 @@ const ChatWorkspaceSidebar = ({
             <h3 className="text-sm font-semibold">{t('home.currentPartner')}</h3>
           </div>
           <div className="flex items-center gap-2">
-            {me?.state === UserState.Connected && stranger?.id && (
+            {canReportCurrentPartner && stranger?.id && (
               <ChatReportDialog
                 sessionId={sessionId}
                 reportedSessionId={stranger.id}
                 partnerName={stranger.name}
+                partnerShortId={stranger.shortId}
                 triggerClassName="h-7 rounded-full border border-destructive/20 bg-destructive/5 px-2.5 py-0 text-[11px] hover:bg-destructive/10"
               />
             )}
@@ -105,7 +126,12 @@ const ChatWorkspaceSidebar = ({
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-blue-500 text-xs font-bold text-white">
               {stranger.name.charAt(0).toUpperCase()}
             </div>
-            <p className="text-base font-semibold">{stranger.name}</p>
+            <div>
+              <p className="text-base font-semibold">{stranger.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {stranger.shortId ? `ID: ${stranger.shortId}` : 'ID: -'}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="mt-3 space-y-1">

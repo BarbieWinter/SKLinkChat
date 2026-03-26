@@ -69,7 +69,10 @@ class Settings(BaseSettings):
     def validate_database_url(cls, value: str) -> str:
         normalized = _normalize_database_url(str(value))
         if not normalized.startswith("postgresql+psycopg://"):
-            raise ValueError("SERVER_PY_DATABASE_URL must use PostgreSQL via postgresql+psycopg; SQLite is not supported")
+            raise ValueError(
+                "SERVER_PY_DATABASE_URL must use PostgreSQL via postgresql+psycopg; "
+                "SQLite is not supported"
+            )
         return normalized
 
     @property

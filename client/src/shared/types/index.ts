@@ -9,6 +9,7 @@ export interface Message {
 export interface User {
   id: string
   name: string
+  shortId?: string
   state: UserState
   isTyping?: boolean
 }

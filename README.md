@@ -81,12 +81,20 @@ docker compose up -d --build
 - `POST /api/auth/logout`
 - `POST /api/auth/verify-email`
 - `POST /api/auth/resend-verification`
+- `POST /api/auth/request-password-reset`
+- `POST /api/auth/reset-password`
 - `GET /api/auth/session`
 - `GET /api/account/profile`
 - `PATCH /api/account/profile`
 - `POST /api/session`
 - `POST /api/session/close`
 - `POST /api/chat/reports`
+- `GET /api/admin/reports`
+- `GET /api/admin/reports/{report_id}`
+- `POST /api/admin/reports/{report_id}/review`
+- `GET /api/admin/audit-events`
+- `POST /api/admin/accounts/{account_id}/restrict`
+- `POST /api/admin/accounts/{account_id}/restore`
 - `GET /healthz`
 - `GET /readyz`
 - `GET /api/users/count`
@@ -99,11 +107,15 @@ docker compose up -d --build
 - 邮箱验证使用单次 token 链接，有效期 15 分钟，成功使用后立即失效
 - 未验证邮箱的账号允许访问账户相关页面，但禁止创建 chat session、进入匹配和 websocket 聊天
 - `POST /api/auth/resend-verification` 仅允许已登录且未验证邮箱用户调用，包含 60 秒冷却和每小时 5 次上限
+- 已受限账号仍可登录，但禁止创建 chat session、建立 websocket；若管理员执行 restrict，当前 chat session 会立即失效
 - 单账号最多只有一个 active `chat_session`
 - 任一 `chat_session` 不能同时处于多个 active `chat_match`
 - 聊天消息支持 `client_message_id` 幂等去重，避免重复发送写入多条持久化消息
 - 举报仅支持当前 active match 的对方，原因固定为 `harassment`、`sexual_content`、`spam`、`hate_speech`、`other`
 - 当举报原因为 `other` 时，`details` 必填
+- 管理员身份由 PostgreSQL `accounts.is_admin` 持久化字段驱动，不依赖环境变量
+- 管理端入口仅包含 `/admin/reports` 与 `/admin/audit`
+- 举报状态仅允许 `open -> reviewed|dismissed|actioned` 单向流转，终态不可回退，所有治理操作会写入 `audit_events`
 
 ## Verification
 
@@ -140,6 +152,7 @@ curl -s http://localhost:8000/readyz
 
 - 浏览器认证使用服务端 `HttpOnly` Cookie
 - 注册成功后自动登录，但 `email_verified = false` 时禁止创建 chat session 或进入 websocket
+- 管理端列表页仅显示 `display_name` 与脱敏邮箱；详情页允许查看完整邮箱
 - 对端只能看到 `display_name` 和匿名 `session_id`
 - 不向前端或 peer payload 返回 `email`、`account_id`
 - PostgreSQL 通过约束和索引保证 chat session / active match 关键不变量，应用事务负责并发兜底

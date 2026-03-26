@@ -33,21 +33,30 @@ def _extract_verification_token(client) -> str:
     return query["verify_token"][0]
 
 
+def _assert_short_id(value: str | None) -> None:
+    assert value is not None
+    assert len(value) == 6
+    assert value.isdigit()
+
+
 def test_register_auto_logs_in_and_requires_email_verification(client):
     response = _register(client)
 
     assert response.status_code == 201
-    assert response.json() == {
-        "authenticated": True,
-        "email_verified": False,
-        "display_name": "Traveler",
-        "interests": ["music", "travel"],
-    }
+    payload = response.json()
+    assert payload["authenticated"] is True
+    assert payload["email_verified"] is False
+    assert payload["display_name"] == "Traveler"
+    assert payload["interests"] == ["music", "travel"]
+    assert payload["is_admin"] is False
+    assert payload["chat_access_restricted"] is False
+    _assert_short_id(payload["short_id"])
     assert "sklinkchat_session" in response.cookies
 
     session_response = client.get("/api/auth/session")
     assert session_response.status_code == 200
     assert session_response.json()["email_verified"] is False
+    assert session_response.json()["short_id"] == payload["short_id"]
 
 
 def test_verify_email_marks_account_verified(client):
@@ -102,6 +111,18 @@ def test_duplicate_email_is_rejected(client):
     assert second_response.json()["code"] == "EMAIL_ALREADY_EXISTS"
 
 
+def test_register_assigns_unique_six_digit_short_ids(client):
+    first_response = _register(client, email="first@testuser.dev")
+    second_response = _register(client, email="second@testuser.dev")
+
+    first_short_id = first_response.json()["short_id"]
+    second_short_id = second_response.json()["short_id"]
+
+    _assert_short_id(first_short_id)
+    _assert_short_id(second_short_id)
+    assert first_short_id != second_short_id
+
+
 def test_login_logout_and_session_flow(client):
     register_response = _register(client)
     assert register_response.status_code == 201
@@ -115,7 +136,10 @@ def test_login_logout_and_session_flow(client):
         "authenticated": False,
         "email_verified": False,
         "display_name": None,
+        "short_id": None,
         "interests": [],
+        "is_admin": False,
+        "chat_access_restricted": False,
     }
 
     login_response = client.post(
@@ -187,6 +211,30 @@ def test_resend_verification_returns_idempotent_success_for_verified_account(cli
     assert response.json()["email_verified"] is True
 
 
+def test_auth_session_exposes_admin_capability_and_restriction_flag(client):
+    response = _register(client, email="admin@testuser.dev")
+    account_id, _ = _run(
+        client.app.state.container.resolve_auth_session.execute(response.cookies["sklinkchat_session"])
+    )
+    assert account_id is not None
+    _run(client.app.state.container.account_repository.set_admin_status(account_id=account_id, is_admin=True))
+
+    session_response = client.get(
+        "/api/auth/session",
+        cookies={"sklinkchat_session": response.cookies["sklinkchat_session"]},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["is_admin"] is False
+    assert response.json()["chat_access_restricted"] is False
+    _assert_short_id(response.json()["short_id"])
+
+    assert session_response.status_code == 200
+    assert session_response.json()["is_admin"] is True
+    assert session_response.json()["chat_access_restricted"] is False
+    assert session_response.json()["short_id"] == response.json()["short_id"]
+
+
 def test_register_rejects_blocked_email_domain(client):
     for blocked_domain in ("example.com", "mailinator.com", "yopmail.com"):
         response = _register(client, email=f"user@{blocked_domain}")
@@ -223,10 +271,16 @@ def test_reset_password_flow(client):
     client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
     reset_token = _extract_reset_token(client)
 
-    response = client.post("/api/auth/reset-password", json={"token": reset_token, "new_password": "NewSecurePassword!99"})
+    response = client.post(
+        "/api/auth/reset-password",
+        json={"token": reset_token, "new_password": "NewSecurePassword!99"},
+    )
     assert response.status_code == 200
 
-    login_response = client.post("/api/auth/login", json={"email": "user@testuser.dev", "password": "NewSecurePassword!99"})
+    login_response = client.post(
+        "/api/auth/login",
+        json={"email": "user@testuser.dev", "password": "NewSecurePassword!99"},
+    )
     assert login_response.status_code == 200
     assert login_response.json()["authenticated"] is True
 

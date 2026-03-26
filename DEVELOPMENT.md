@@ -98,6 +98,16 @@ SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS=true
 SERVER_PY_SECURE_COOKIES=false
 ```
 
+管理员身份现在由 PostgreSQL `accounts.is_admin` 字段驱动。测试或本地切换管理员时，可直接更新数据库：
+
+```sql
+UPDATE accounts
+SET is_admin = true
+WHERE email_normalized = 'admin@example.com';
+```
+
+修改后无需改 `.env`，重新请求 `/api/auth/session` 即会返回最新 `is_admin` 状态。
+
 ### 4.3 数据库迁移
 
 ```bash
@@ -131,7 +141,7 @@ uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8000
 
 ```bash
 cd server-py
-.venv/bin/pytest tests/ -q          # 全量
+.venv/bin/pytest tests/ -q          # 全量（仓库正式测试）
 .venv/bin/pytest tests/ -q -x       # 遇到失败立即停止
 .venv/bin/pytest tests/ -q -k websocket  # 只跑包含 websocket 的用例
 ```
@@ -163,6 +173,11 @@ npm run dev
 ```
 
 前端运行在 http://localhost:5173 ，自动代理 API 到后端 8000 端口。
+
+管理端路由：
+
+- http://localhost:5173/admin/reports
+- http://localhost:5173/admin/audit
 
 ### 5.3 构建 & 测试
 

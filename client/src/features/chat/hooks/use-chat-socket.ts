@@ -31,6 +31,7 @@ type UseChatSocketOptions = {
   onTyping: (typing: boolean) => void
   onPresenceCount: (onlineCount: number) => void
   syncDisplayName: (name: string) => void
+  onSocketClosed: () => void
 }
 
 export const useChatSocket = ({
@@ -48,13 +49,18 @@ export const useChatSocket = ({
   onErrorMessage,
   onTyping,
   onPresenceCount,
-  syncDisplayName
+  syncDisplayName,
+  onSocketClosed
 }: UseChatSocketOptions) => {
   const hasConnectedRef = useRef(false)
   const socket = useWebSocket(
     sessionId ? getSocketUrl(WS_ENDPOINT, sessionId) : null,
     {
-      shouldReconnect: () => true,
+      shouldReconnect: (closeEvent) =>
+        !(closeEvent.code === 1008 && closeEvent.reason === 'CHAT_ACCESS_RESTRICTED'),
+      onClose: () => {
+        onSocketClosed()
+      },
       onMessage: (event) => {
         const data = JSON.parse(event.data) as { type: PayloadType; payload: any }
 

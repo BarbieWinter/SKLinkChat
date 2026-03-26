@@ -38,7 +38,10 @@ const EMPTY_AUTH_SESSION: AuthSessionPayload = {
   authenticated: false,
   email_verified: false,
   display_name: null,
-  interests: []
+  short_id: null,
+  interests: [],
+  is_admin: false,
+  chat_access_restricted: false
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)

@@ -80,11 +80,19 @@ class ChatRuntimeService:
                     session.state = UserState.IDLE
             await self._session_repository.save_session(session)
 
-    async def get_or_create_session(self, session_id: str, name: str | None = None) -> ChatSession:
+    async def get_or_create_session(
+        self,
+        session_id: str,
+        name: str | None = None,
+        short_id: str | None = None,
+    ) -> ChatSession:
         async with self._lock:
             session = await self._session_repository.load_or_create_session(session_id)
             if name is not None:
                 session.name = await self._normalize_name(name, session_id=session_id, fallback=session.name)
+            if short_id is not None:
+                session.short_id = short_id
+            if name is not None or short_id is not None:
                 await self._session_repository.save_session(session)
             return session
 
@@ -307,11 +315,23 @@ class ChatRuntimeService:
         async with self._lock:
             partner_ids_to_notify: list[str] = []
             for session_id in await self._session_repository.list_expired_session_ids(utc_now()):
-                partner_id = await self._remove_session_unlocked(session_id)
+                partner_id = await self._remove_session_unlocked(
+                    session_id,
+                    durable_close_reason="expired",
+                    audit_event_type="chat.session.expired",
+                )
                 await self._job_dispatcher.dispatch("chat.session.expired", {"session_id": session_id})
                 if partner_id is not None:
                     partner_ids_to_notify.append(partner_id)
             return partner_ids_to_notify
+
+    async def revoke_session(self, session_id: str, *, close_reason: str) -> str | None:
+        async with self._lock:
+            return await self._remove_session_unlocked(
+                session_id,
+                durable_close_reason=close_reason,
+                audit_event_type="chat.session.revoked",
+            )
 
     async def queue_size(self) -> int:
         async with self._lock:
@@ -353,18 +373,32 @@ class ChatRuntimeService:
         for session_id in reversed(session_ids):
             await self._session_repository.enqueue_waiting_front(session_id)
 
-    async def _remove_session_unlocked(self, session_id: str) -> str | None:
+    async def _remove_session_unlocked(
+        self,
+        session_id: str,
+        *,
+        durable_close_reason: str,
+        audit_event_type: str,
+    ) -> str | None:
         self._connection_hub.unregister(session_id)
         await self._presence_repository.mark_offline(session_id)
+        await self._session_repository.remove_from_waiting_queue(session_id)
 
         session = await self._session_repository.load_session(session_id)
         await self._session_repository.delete_session(session_id)
         await self._durable_chat_repository.end_active_match_for_session(
             chat_session_id=session_id,
-            end_reason="expired",
+            end_reason=durable_close_reason,
         )
-        await self._durable_chat_repository.expire_chat_session(chat_session_id=session_id)
+        if durable_close_reason == "expired":
+            await self._durable_chat_repository.expire_chat_session(chat_session_id=session_id)
+        else:
+            await self._durable_chat_repository.close_chat_session(
+                chat_session_id=session_id,
+                close_reason=durable_close_reason,
+            )
         if session is None or session.partner_id is None:
+            await self._audit_sink.record(audit_event_type, {"session_id": session_id})
             return None
 
         partner = await self._session_repository.load_session(session.partner_id)
@@ -384,7 +418,7 @@ class ChatRuntimeService:
                 payload="Partner disconnected",
             ),
         )
-        await self._audit_sink.record("chat.session.expired", {"session_id": session_id})
+        await self._audit_sink.record(audit_event_type, {"session_id": session_id})
         return partner.session_id
 
     async def _normalize_name(self, name: str, *, session_id: str, fallback: str) -> str:

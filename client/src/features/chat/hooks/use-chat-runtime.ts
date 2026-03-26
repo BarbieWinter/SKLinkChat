@@ -3,6 +3,7 @@ import { useQueryClient } from 'react-query'
 
 import { useAppStore } from '@/app/store'
 import { useAuth } from '@/features/auth/auth-provider'
+import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 import { useSessionBootstrap } from '@/features/chat/hooks/use-session-bootstrap'
 import { usePageCloseSignal } from '@/features/chat/hooks/use-page-close-signal'
 import { useChatSocket } from '@/features/chat/hooks/use-chat-socket'
@@ -35,7 +36,7 @@ export const useChatRuntime = (): ChatProviderState => {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { t } = useI18n()
-  const { authSession } = useAuth()
+  const { authSession, refreshSession } = useAuth()
   const {
     addMessage,
     clear,
@@ -51,7 +52,8 @@ export const useChatRuntime = (): ChatProviderState => {
     resetSession
   } = useAppStore()
 
-  const enabled = authSession.authenticated && authSession.email_verified
+  const enabled =
+    authSession.authenticated && authSession.email_verified && !authSession.chat_access_restricted
   const {
     retry,
     sessionId,
@@ -69,6 +71,7 @@ export const useChatRuntime = (): ChatProviderState => {
     clear()
     clearChatConnection()
     resetSession()
+    clearStoredSessionId()
   }, [clear, clearChatConnection, enabled, resetSession])
 
   usePageCloseSignal({ sessionId })
@@ -115,7 +118,10 @@ export const useChatRuntime = (): ChatProviderState => {
     onPresenceCount: (onlineCount) => {
       queryClient.setQueryData(ONLINE_USER_COUNT_QUERY_KEY, onlineCount)
     },
-    syncDisplayName: (name) => setName(name)
+    syncDisplayName: (name) => setName(name),
+    onSocketClosed: () => {
+      void refreshSession()
+    }
   })
 
   const availability = getChatRuntimeAvailability({ enabled, bootstrapStatus })

@@ -13,9 +13,16 @@ from app.domain.chat.models import ChatSession, MatchResult
 class BootstrapConnectionUseCase:
     runtime: ChatRuntimeService
 
-    async def execute(self, session_id: str, websocket: WebSocket, *, display_name: str | None = None) -> ChatSession:
+    async def execute(
+        self,
+        session_id: str,
+        websocket: WebSocket,
+        *,
+        display_name: str | None = None,
+        short_id: str | None = None,
+    ) -> ChatSession:
         await self.runtime.register_connection(session_id, websocket)
-        return await self.runtime.get_or_create_session(session_id, name=display_name)
+        return await self.runtime.get_or_create_session(session_id, name=display_name, short_id=short_id)
 
 
 @dataclass(slots=True)
@@ -88,6 +95,14 @@ class ExpireStaleSessionsUseCase:
 
     async def execute(self) -> list[str]:
         return await self.runtime.expire_stale_sessions()
+
+
+@dataclass(slots=True)
+class RevokeChatSessionUseCase:
+    runtime: ChatRuntimeService
+
+    async def execute(self, session_id: str, *, close_reason: str) -> str | None:
+        return await self.runtime.revoke_session(session_id, close_reason=close_reason)
 
 
 @dataclass(slots=True)

@@ -31,3 +31,15 @@ async def require_authenticated_account(auth: CurrentAuthDep) -> str:
 
 
 CurrentAccountDep = Annotated[str, Depends(require_authenticated_account)]
+
+
+async def require_admin_account(auth: CurrentAuthDep) -> str:
+    account_id, auth_session = auth
+    if account_id is None or not getattr(auth_session, "authenticated", False):
+        raise AppError(message="Authentication required", code="UNAUTHENTICATED", status_code=401)
+    if not getattr(auth_session, "is_admin", False):
+        raise AppError(message="Admin access is required", code="ADMIN_FORBIDDEN", status_code=403)
+    return account_id
+
+
+CurrentAdminAccountDep = Annotated[str, Depends(require_admin_account)]

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -36,13 +37,30 @@ class TimestampMixin:
 
 class Account(Base, TimestampMixin):
     __tablename__ = "accounts"
+    __table_args__ = (
+        Index("ux_accounts_short_id", "short_id", unique=True),
+        CheckConstraint(
+            "((chat_access_restricted_at IS NULL "
+            "AND chat_access_restriction_reason IS NULL "
+            "AND chat_access_restriction_report_id IS NULL) "
+            "OR (chat_access_restricted_at IS NOT NULL "
+            "AND chat_access_restriction_reason IS NOT NULL "
+            "AND trim(chat_access_restriction_reason) <> ''))",
+            name="ck_accounts_chat_access_restriction_consistency",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     email_normalized: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     display_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    short_id: Mapped[str] = mapped_column(String(6), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    chat_access_restricted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    chat_access_restriction_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chat_access_restriction_report_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     interests: Mapped[list[AccountInterest]] = relationship(
         back_populates="account",
@@ -280,8 +298,12 @@ class ChatReport(Base):
         ),
         CheckConstraint("status IN ('open', 'reviewed', 'dismissed', 'actioned')", name="ck_chat_reports_status"),
         CheckConstraint(
-            "((status = 'open' AND reviewed_at IS NULL) "
-            "OR (status IN ('reviewed', 'dismissed', 'actioned') AND reviewed_at IS NOT NULL))",
+            "((status = 'open' AND reviewed_at IS NULL AND reviewed_by_account_id IS NULL AND review_note IS NULL) "
+            "OR (status IN ('reviewed', 'dismissed', 'actioned') "
+            "AND reviewed_at IS NOT NULL "
+            "AND reviewed_by_account_id IS NOT NULL "
+            "AND review_note IS NOT NULL "
+            "AND trim(review_note) <> ''))",
             name="ck_chat_reports_reviewed_at_consistency",
         ),
     )
@@ -307,6 +329,12 @@ class ChatReport(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class AuditEvent(Base):

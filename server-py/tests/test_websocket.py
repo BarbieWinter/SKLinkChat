@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 from starlette.websockets import WebSocketDisconnect
 
+from app.application.auth.security import utc_now
 from app.infrastructure.postgres.models import ChatMatch
 
 COOKIE_NAME = "sklinkchat_session"
@@ -51,6 +52,14 @@ def _resolve_account_id(client, *, session_cookie: str) -> str:
     return account_id
 
 
+def _resolve_short_id(client, *, session_cookie: str) -> str:
+    response = client.get("/api/auth/session", cookies={COOKIE_NAME: session_cookie})
+    assert response.status_code == 200
+    short_id = response.json()["short_id"]
+    assert isinstance(short_id, str)
+    return short_id
+
+
 async def _list_matches(client) -> list[ChatMatch]:
     async with client.app.state.container.session_factory() as session:
         result = await session.execute(select(ChatMatch).order_by(ChatMatch.started_at.asc()))
@@ -64,33 +73,43 @@ def _receive_json_ignoring_presence(ws):
             return message
 
 
-def _queue_and_match(ws_left, ws_right, *, left_id: str, right_id: str, left_name: str, right_name: str) -> None:
+def _queue_and_match(
+    ws_left,
+    ws_right,
+    *,
+    left_id: str,
+    right_id: str,
+    left_name: str,
+    right_name: str,
+    left_short_id: str,
+    right_short_id: str,
+) -> None:
     ws_left.send_json({"type": "queue", "payload": None})
     assert _receive_json_ignoring_presence(ws_left) == {
         "type": "user-info",
-        "payload": {"id": left_id, "name": left_name, "state": "searching"},
+        "payload": {"id": left_id, "name": left_name, "short_id": left_short_id, "state": "searching"},
     }
 
     ws_right.send_json({"type": "queue", "payload": None})
     assert _receive_json_ignoring_presence(ws_right) == {
         "type": "user-info",
-        "payload": {"id": right_id, "name": right_name, "state": "searching"},
+        "payload": {"id": right_id, "name": right_name, "short_id": right_short_id, "state": "searching"},
     }
     assert _receive_json_ignoring_presence(ws_right) == {
         "type": "user-info",
-        "payload": {"id": right_id, "name": right_name, "state": "connected"},
+        "payload": {"id": right_id, "name": right_name, "short_id": right_short_id, "state": "connected"},
     }
     assert _receive_json_ignoring_presence(ws_right) == {
         "type": "match",
-        "payload": {"id": left_id, "name": left_name, "state": "connected"},
+        "payload": {"id": left_id, "name": left_name, "short_id": left_short_id, "state": "connected"},
     }
     assert _receive_json_ignoring_presence(ws_left) == {
         "type": "user-info",
-        "payload": {"id": left_id, "name": left_name, "state": "connected"},
+        "payload": {"id": left_id, "name": left_name, "short_id": left_short_id, "state": "connected"},
     }
     assert _receive_json_ignoring_presence(ws_left) == {
         "type": "match",
-        "payload": {"id": right_id, "name": right_name, "state": "connected"},
+        "payload": {"id": right_id, "name": right_name, "short_id": right_short_id, "state": "connected"},
     }
 
 
@@ -107,21 +126,45 @@ def test_websocket_requires_owned_verified_chat_session(client):
             pass
 
 
+def test_websocket_rejects_restricted_account(client):
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    left_session_id = _create_chat_session(client, session_cookie=left_cookie)
+    account_id = _resolve_account_id(client, session_cookie=left_cookie)
+
+    _run(
+        client.app.state.container.account_repository.set_chat_access_restriction(
+            account_id=account_id,
+            restricted_at=utc_now(),
+            restriction_reason="Repeated abuse",
+            restriction_report_id=1,
+        )
+    )
+
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(
+            f"/ws?sessionId={left_session_id}",
+            cookies={COOKIE_NAME: left_cookie},
+        ):
+            pass
+
+
 def test_websocket_queue_match_message_and_typing_flow(client):
     left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
     right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
+    left_short_id = _resolve_short_id(client, session_cookie=left_cookie)
+    right_short_id = _resolve_short_id(client, session_cookie=right_cookie)
 
     with client.websocket_connect(f"/ws?sessionId={left_id}", cookies={COOKIE_NAME: left_cookie}) as ws_left:
         with client.websocket_connect(f"/ws?sessionId={right_id}", cookies={COOKIE_NAME: right_cookie}) as ws_right:
             assert _receive_json_ignoring_presence(ws_left) == {
                 "type": "user-info",
-                "payload": {"id": left_id, "name": "Left", "state": "idle"},
+                "payload": {"id": left_id, "name": "Left", "short_id": left_short_id, "state": "idle"},
             }
             assert _receive_json_ignoring_presence(ws_right) == {
                 "type": "user-info",
-                "payload": {"id": right_id, "name": "Right", "state": "idle"},
+                "payload": {"id": right_id, "name": "Right", "short_id": right_short_id, "state": "idle"},
             }
 
             _queue_and_match(
@@ -131,6 +174,8 @@ def test_websocket_queue_match_message_and_typing_flow(client):
                 right_id=right_id,
                 left_name="Left",
                 right_name="Right",
+                left_short_id=left_short_id,
+                right_short_id=right_short_id,
             )
 
             ws_left.send_json({"type": "message", "payload": {"message": "  hello partner  "}})
@@ -151,6 +196,8 @@ def test_websocket_reconnect_preserves_existing_match(client):
     right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
+    left_short_id = _resolve_short_id(client, session_cookie=left_cookie)
+    right_short_id = _resolve_short_id(client, session_cookie=right_cookie)
 
     with client.websocket_connect(f"/ws?sessionId={left_id}", cookies={COOKIE_NAME: left_cookie}) as ws_left:
         with client.websocket_connect(f"/ws?sessionId={right_id}", cookies={COOKIE_NAME: right_cookie}) as ws_right:
@@ -163,6 +210,8 @@ def test_websocket_reconnect_preserves_existing_match(client):
                 right_id=right_id,
                 left_name="Left",
                 right_name="Right",
+                left_short_id=left_short_id,
+                right_short_id=right_short_id,
             )
 
             ws_right.close()
@@ -174,11 +223,11 @@ def test_websocket_reconnect_preserves_existing_match(client):
             ) as ws_right_reconnected:
                 assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "user-info",
-                    "payload": {"id": right_id, "name": "Right", "state": "connected"},
+                    "payload": {"id": right_id, "name": "Right", "short_id": right_short_id, "state": "connected"},
                 }
                 assert _receive_json_ignoring_presence(ws_right_reconnected) == {
                     "type": "match",
-                    "payload": {"id": left_id, "name": "Left", "state": "connected"},
+                    "payload": {"id": left_id, "name": "Left", "short_id": left_short_id, "state": "connected"},
                 }
 
                 ws_left.send_json({"type": "message", "payload": {"message": "still there?"}})

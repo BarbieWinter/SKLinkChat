@@ -83,6 +83,8 @@ flowchart LR
 - `chat_messages` persist `message_type`, `sender_display_name_snapshot`, and optional `client_message_id`
 - `(chat_match_id, client_message_id)` is unique when `client_message_id` is present, which suppresses duplicate durable writes on retries/reconnects
 - Reports are intentionally minimal in V1: only the current active match partner can be reported
+- Restricted accounts may keep login sessions, but cannot create a new `chat_session` or authorize websocket access
+- Admin-triggered restriction forcibly revokes the target's active `chat_session`, closes their websocket with policy violation, and notifies the peer of disconnect
 
 ## Privacy Rules
 
@@ -107,6 +109,15 @@ flowchart LR
 - Allowed reasons: `harassment`, `sexual_content`, `spam`, `hate_speech`, `other`
 - Storage: `reason` + optional `details`
 - Constraint: `other` requires non-empty `details`
+
+## Admin Governance
+
+- Admin capability is derived from PostgreSQL `accounts.is_admin`; there is no separate RBAC system in this round
+- Admin frontend routes are limited to `/admin/reports` and `/admin/audit`
+- Reports list shows `display_name` plus masked email; detail view may show full email
+- Report workflow is one-way only: `open -> reviewed | dismissed | actioned`
+- Restrict/restore actions are only issued from report detail
+- Every review, restrict, restore, and forced chat-session revoke writes an `audit_events` record
 
 ## Local Deployment
 

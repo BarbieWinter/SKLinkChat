@@ -19,6 +19,10 @@ export const toUser = (user: Partial<User> | undefined): User | undefined => {
   return {
     id: user.id,
     name: user.name,
+    shortId:
+      typeof (user as Partial<User> & { short_id?: string }).short_id === 'string'
+        ? (user as Partial<User> & { short_id?: string }).short_id
+        : user.shortId,
     state: user.state as UserState,
     isTyping: user.isTyping ?? false
   }

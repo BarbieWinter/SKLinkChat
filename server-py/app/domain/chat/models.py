@@ -22,6 +22,7 @@ class ChatHistoryEntry:
 class ChatSession:
     session_id: str
     name: str
+    short_id: str | None = None
     state: UserState = UserState.IDLE
     partner_id: str | None = None
     is_typing: bool = False

@@ -41,6 +41,14 @@ def _create_chat_session(client, *, session_cookie: str) -> str:
     return response.json()["session_id"]
 
 
+def _resolve_short_id(client, *, session_cookie: str) -> str:
+    response = client.get("/api/auth/session", cookies={COOKIE_NAME: session_cookie})
+    assert response.status_code == 200
+    short_id = response.json()["short_id"]
+    assert isinstance(short_id, str)
+    return short_id
+
+
 def _receive_json_ignoring_presence(ws):
     while True:
         message = ws.receive_json()
@@ -48,24 +56,34 @@ def _receive_json_ignoring_presence(ws):
             return message
 
 
-def _queue_and_match(ws_left, ws_right, *, left_id: str, right_id: str, left_name: str, right_name: str) -> None:
+def _queue_and_match(
+    ws_left,
+    ws_right,
+    *,
+    left_id: str,
+    right_id: str,
+    left_name: str,
+    right_name: str,
+    left_short_id: str,
+    right_short_id: str,
+) -> None:
     ws_left.send_json({"type": "queue", "payload": None})
     assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
 
     ws_right.send_json({"type": "queue", "payload": None})
     assert _receive_json_ignoring_presence(ws_right) == {
         "type": "user-info",
-        "payload": {"id": right_id, "name": right_name, "state": "searching"},
+        "payload": {"id": right_id, "name": right_name, "short_id": right_short_id, "state": "searching"},
     }
     assert _receive_json_ignoring_presence(ws_right)["type"] == "user-info"
     assert _receive_json_ignoring_presence(ws_right) == {
         "type": "match",
-        "payload": {"id": left_id, "name": left_name, "state": "connected"},
+        "payload": {"id": left_id, "name": left_name, "short_id": left_short_id, "state": "connected"},
     }
     assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
     assert _receive_json_ignoring_presence(ws_left) == {
         "type": "match",
-        "payload": {"id": right_id, "name": right_name, "state": "connected"},
+        "payload": {"id": right_id, "name": right_name, "short_id": right_short_id, "state": "connected"},
     }
 
 
@@ -124,6 +142,8 @@ def test_malformed_websocket_message_does_not_persist_durable_row(client):
     right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
     left_id = _create_chat_session(client, session_cookie=left_cookie)
     right_id = _create_chat_session(client, session_cookie=right_cookie)
+    left_short_id = _resolve_short_id(client, session_cookie=left_cookie)
+    right_short_id = _resolve_short_id(client, session_cookie=right_cookie)
 
     with client.websocket_connect(f"/ws?sessionId={left_id}", cookies={COOKIE_NAME: left_cookie}) as ws_left:
         with client.websocket_connect(f"/ws?sessionId={right_id}", cookies={COOKIE_NAME: right_cookie}) as ws_right:
@@ -136,6 +156,8 @@ def test_malformed_websocket_message_does_not_persist_durable_row(client):
                 right_id=right_id,
                 left_name="Left",
                 right_name="Right",
+                left_short_id=left_short_id,
+                right_short_id=right_short_id,
             )
 
             ws_left.send_json({"type": "message", "payload": {"message": 123}})

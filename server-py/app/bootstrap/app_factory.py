@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.bootstrap.lifespan import lifespan
 from app.presentation.http.routes.account import router as account_router
+from app.presentation.http.routes.admin import router as admin_router
 from app.presentation.http.routes.auth import router as auth_router
 from app.presentation.http.routes.chat_reports import router as chat_reports_router
 from app.presentation.http.routes.health import router as health_router
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(account_router)
+    app.include_router(admin_router)
     app.include_router(chat_reports_router)
     app.include_router(session_router)
     app.include_router(chat_ws_router)

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from secrets import randbelow
 from uuid import uuid4
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 
 from app.application.auth.security import make_expiry
 from app.application.platform.services import ActiveChatMatch
@@ -47,20 +49,29 @@ class AccountRepository:
         display_name: str,
         interests: Sequence[str],
     ) -> Account:
-        async with self._session_factory() as session:
-            account = Account(
-                email=email,
-                email_normalized=email_normalized,
-                password_hash=password_hash,
-                display_name=display_name,
-            )
-            session.add(account)
-            await session.flush()
-            for interest in interests:
-                session.add(AccountInterest(account_id=account.id, interest=interest))
-            await session.commit()
-            await session.refresh(account)
-            return account
+        for _attempt in range(20):
+            async with self._session_factory() as session:
+                account = Account(
+                    email=email,
+                    email_normalized=email_normalized,
+                    password_hash=password_hash,
+                    display_name=display_name,
+                    short_id=_generate_short_id(),
+                )
+                session.add(account)
+                try:
+                    await session.flush()
+                except IntegrityError as error:
+                    await session.rollback()
+                    if _is_short_id_conflict(error):
+                        continue
+                    raise
+                for interest in interests:
+                    session.add(AccountInterest(account_id=account.id, interest=interest))
+                await session.commit()
+                await session.refresh(account)
+                return account
+        raise RuntimeError("unable to allocate unique account short_id")
 
     async def update_profile(self, *, account_id: str, display_name: str, interests: Sequence[str]) -> Account:
         async with self._session_factory() as session:
@@ -106,13 +117,56 @@ class AccountRepository:
             account.updated_at = utc_now()
             await session.commit()
 
+    async def set_chat_access_restriction(
+        self,
+        *,
+        account_id: str,
+        restricted_at: datetime | None,
+        restriction_reason: str | None,
+        restriction_report_id: int | None,
+    ) -> Account:
+        async with self._session_factory() as session:
+            account = await self._get_by_id(session, account_id, lock=True)
+            if account is None:
+                raise LookupError("account not found")
+            account.chat_access_restricted_at = restricted_at
+            account.chat_access_restriction_reason = restriction_reason
+            account.chat_access_restriction_report_id = restriction_report_id
+            account.updated_at = utc_now()
+            await session.commit()
+            await session.refresh(account)
+            return account
+
+    async def set_admin_status(self, *, account_id: str, is_admin: bool) -> Account:
+        async with self._session_factory() as session:
+            account = await self._get_by_id(session, account_id, lock=True)
+            if account is None:
+                raise LookupError("account not found")
+            account.is_admin = is_admin
+            account.updated_at = utc_now()
+            await session.commit()
+            await session.refresh(account)
+            return account
+
     async def _get_by_email_normalized(self, session: AsyncSession, email_normalized: str) -> Account | None:
         result = await session.execute(select(Account).where(Account.email_normalized == email_normalized))
         return result.scalar_one_or_none()
 
-    async def _get_by_id(self, session: AsyncSession, account_id: str) -> Account | None:
-        result = await session.execute(select(Account).where(Account.id == account_id))
+    async def _get_by_id(self, session: AsyncSession, account_id: str, *, lock: bool = False) -> Account | None:
+        statement = select(Account).where(Account.id == account_id)
+        if lock:
+            statement = statement.with_for_update()
+        result = await session.execute(statement)
         return result.scalar_one_or_none()
+
+
+def _generate_short_id() -> str:
+    return str(100000 + randbelow(900000))
+
+
+def _is_short_id_conflict(error: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(getattr(error, "orig", None), "diag", None), "constraint_name", None)
+    return constraint_name == "ux_accounts_short_id"
 
 
 class AuthSessionRepository:
@@ -409,10 +463,28 @@ class DurableChatRepositoryImpl:
             result = await session.execute(
                 select(Account.email_verified_at)
                 .join(ChatSessionRecord, ChatSessionRecord.account_id == Account.id)
-                .where(ChatSessionRecord.id == chat_session_id, ChatSessionRecord.status == "active")
+                .where(
+                    ChatSessionRecord.id == chat_session_id,
+                    ChatSessionRecord.status == "active",
+                    Account.chat_access_restricted_at.is_(None),
+                )
             )
             row = result.first()
             return bool(row and row[0] is not None)
+
+    async def get_active_chat_session_id_for_account(self, *, account_id: str) -> str | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(ChatSessionRecord.id)
+                .where(
+                    ChatSessionRecord.account_id == account_id,
+                    ChatSessionRecord.status == "active",
+                )
+                .order_by(ChatSessionRecord.last_seen_at.desc(), ChatSessionRecord.created_at.desc())
+                .limit(1)
+            )
+            row = result.first()
+            return row[0] if row else None
 
     async def close_chat_session(self, *, chat_session_id: str, close_reason: str) -> None:
         async with self._session_factory() as session:
@@ -481,6 +553,47 @@ class DurableChatRepositoryImpl:
                 left_chat_session_id=chat_session_id,
                 right_chat_session_id=partner_session_id,
             )
+            if match is None:
+                return None
+            return ActiveChatMatch(
+                id=match.id,
+                left_chat_session_id=match.left_chat_session_id,
+                right_chat_session_id=match.right_chat_session_id,
+            )
+
+    async def get_active_match_for_account(
+        self,
+        *,
+        account_id: str,
+        partner_session_id: str,
+    ) -> ActiveChatMatch | None:
+        async with self._session_factory() as session:
+            left_session = aliased(ChatSessionRecord)
+            right_session = aliased(ChatSessionRecord)
+            result = await session.execute(
+                select(ChatMatch)
+                .join(left_session, ChatMatch.left_chat_session_id == left_session.id)
+                .join(right_session, ChatMatch.right_chat_session_id == right_session.id)
+                .where(
+                    ChatMatch.ended_at.is_(None),
+                    or_(
+                        and_(
+                            left_session.account_id == account_id,
+                            left_session.status == "active",
+                            right_session.id == partner_session_id,
+                            right_session.status == "active",
+                        ),
+                        and_(
+                            right_session.account_id == account_id,
+                            right_session.status == "active",
+                            left_session.id == partner_session_id,
+                            left_session.status == "active",
+                        ),
+                    ),
+                )
+                .limit(1)
+            )
+            match = result.scalar_one_or_none()
             if match is None:
                 return None
             return ActiveChatMatch(
@@ -657,3 +770,195 @@ class AuditEventRepository:
         async with self._session_factory() as session:
             await session.execute(delete(AuditEvent).where(AuditEvent.expires_at <= now))
             await session.commit()
+
+
+class AdminGovernanceRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def list_reports(
+        self,
+        *,
+        status: str | None,
+        reason: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, object]]:
+        reporter_account = aliased(Account)
+        reported_account = aliased(Account)
+        reported_session = aliased(ChatSessionRecord)
+
+        async with self._session_factory() as session:
+            statement = (
+                select(
+                    ChatReport.id.label("id"),
+                    ChatReport.created_at.label("created_at"),
+                    ChatReport.reason.label("reason"),
+                    ChatReport.status.label("status"),
+                    reporter_account.display_name.label("reporter_display_name"),
+                    reporter_account.short_id.label("reporter_short_id"),
+                    reporter_account.email.label("reporter_email"),
+                    reported_account.display_name.label("reported_display_name"),
+                    reported_account.short_id.label("reported_short_id"),
+                    reported_account.email.label("reported_email"),
+                    reported_account.chat_access_restricted_at.label("reported_account_chat_access_restricted_at"),
+                    reported_account.chat_access_restriction_report_id.label(
+                        "reported_account_chat_access_restriction_report_id"
+                    ),
+                )
+                .join(reporter_account, reporter_account.id == ChatReport.reporter_account_id)
+                .join(reported_session, reported_session.id == ChatReport.reported_chat_session_id)
+                .join(reported_account, reported_account.id == reported_session.account_id)
+            )
+            if status:
+                statement = statement.where(ChatReport.status == status)
+            if reason:
+                statement = statement.where(ChatReport.reason == reason)
+            result = await session.execute(
+                statement.order_by(ChatReport.created_at.desc(), ChatReport.id.desc()).limit(limit).offset(offset)
+            )
+            return [dict(row._mapping) for row in result]
+
+    async def list_restricted_accounts(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, object]]:
+        source_report = aliased(ChatReport)
+
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(
+                    Account.id.label("account_id"),
+                    Account.display_name.label("display_name"),
+                    Account.short_id.label("short_id"),
+                    Account.email.label("email"),
+                    Account.chat_access_restricted_at.label("restricted_at"),
+                    Account.chat_access_restriction_reason.label("restriction_reason"),
+                    Account.chat_access_restriction_report_id.label("source_report_id"),
+                    source_report.status.label("source_report_status"),
+                    source_report.reason.label("source_report_reason"),
+                    source_report.created_at.label("source_report_created_at"),
+                )
+                .select_from(Account)
+                .outerjoin(source_report, source_report.id == Account.chat_access_restriction_report_id)
+                .where(Account.chat_access_restricted_at.is_not(None))
+                .order_by(Account.chat_access_restricted_at.desc(), Account.updated_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            return [dict(row._mapping) for row in result]
+
+    async def get_report_detail(self, *, report_id: int) -> dict[str, object] | None:
+        async with self._session_factory() as session:
+            return await self._load_report_detail(session, report_id=report_id)
+
+    async def review_report(
+        self,
+        *,
+        report_id: int,
+        reviewer_account_id: str,
+        status: str,
+        review_note: str,
+        reviewed_at: datetime,
+    ) -> dict[str, object] | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(ChatReport).where(ChatReport.id == report_id).with_for_update()
+            )
+            report = result.scalar_one_or_none()
+            if report is None:
+                return None
+
+            report.status = status
+            report.reviewed_at = reviewed_at
+            report.reviewed_by_account_id = reviewer_account_id
+            report.review_note = review_note
+            await session.commit()
+            return await self._load_report_detail(session, report_id=report_id)
+
+    async def list_audit_events(
+        self,
+        *,
+        event_type: str | None,
+        account_id: str | None,
+        chat_session_id: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, object]]:
+        account = aliased(Account)
+
+        async with self._session_factory() as session:
+            statement = (
+                select(
+                    AuditEvent.id.label("id"),
+                    AuditEvent.event_type.label("event_type"),
+                    AuditEvent.account_id.label("account_id"),
+                    AuditEvent.chat_session_id.label("chat_session_id"),
+                    AuditEvent.payload.label("payload"),
+                    AuditEvent.created_at.label("created_at"),
+                    account.display_name.label("account_display_name"),
+                    account.short_id.label("account_short_id"),
+                    account.email.label("account_email"),
+                )
+                .select_from(AuditEvent)
+                .outerjoin(account, account.id == AuditEvent.account_id)
+            )
+            if event_type:
+                statement = statement.where(AuditEvent.event_type == event_type)
+            if account_id:
+                statement = statement.where(AuditEvent.account_id == account_id)
+            if chat_session_id:
+                statement = statement.where(AuditEvent.chat_session_id == chat_session_id)
+            result = await session.execute(
+                statement.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(limit).offset(offset)
+            )
+            return [dict(row._mapping) for row in result]
+
+    async def _load_report_detail(self, session: AsyncSession, *, report_id: int) -> dict[str, object] | None:
+        reporter_account = aliased(Account)
+        reported_account = aliased(Account)
+        reported_session = aliased(ChatSessionRecord)
+        reviewer_account = aliased(Account)
+        source_report = aliased(ChatReport)
+
+        result = await session.execute(
+            select(
+                ChatReport.id.label("id"),
+                ChatReport.reason.label("reason"),
+                ChatReport.details.label("details"),
+                ChatReport.status.label("status"),
+                ChatReport.created_at.label("created_at"),
+                ChatReport.reviewed_at.label("reviewed_at"),
+                ChatReport.review_note.label("review_note"),
+                ChatReport.chat_match_id.label("chat_match_id"),
+                ChatReport.reported_chat_session_id.label("reported_chat_session_id"),
+                reporter_account.id.label("reporter_account_id"),
+                reporter_account.display_name.label("reporter_display_name"),
+                reporter_account.short_id.label("reporter_short_id"),
+                reporter_account.email.label("reporter_email"),
+                reported_account.id.label("reported_account_id"),
+                reported_account.display_name.label("reported_display_name"),
+                reported_account.short_id.label("reported_short_id"),
+                reported_account.email.label("reported_email"),
+                reported_account.chat_access_restricted_at.label("reported_account_chat_access_restricted_at"),
+                reported_account.chat_access_restriction_reason.label("reported_account_chat_access_restriction_reason"),
+                reported_account.chat_access_restriction_report_id.label(
+                    "reported_account_chat_access_restriction_report_id"
+                ),
+                source_report.status.label("reported_account_chat_access_restriction_report_status"),
+                reviewer_account.id.label("reviewer_account_id"),
+                reviewer_account.display_name.label("reviewer_display_name"),
+                reviewer_account.email.label("reviewer_email"),
+            )
+            .select_from(ChatReport)
+            .join(reporter_account, reporter_account.id == ChatReport.reporter_account_id)
+            .join(reported_session, reported_session.id == ChatReport.reported_chat_session_id)
+            .join(reported_account, reported_account.id == reported_session.account_id)
+            .outerjoin(source_report, source_report.id == reported_account.chat_access_restriction_report_id)
+            .outerjoin(reviewer_account, reviewer_account.id == ChatReport.reviewed_by_account_id)
+            .where(ChatReport.id == report_id)
+        )
+        row = result.first()
+        return dict(row._mapping) if row else None

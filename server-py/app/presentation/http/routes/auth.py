@@ -51,6 +51,18 @@ def _clear_auth_cookie(response: Response, container: ApplicationContainer) -> N
     )
 
 
+def _session_dict(session_view) -> dict[str, object]:
+    return {
+        "authenticated": session_view.authenticated,
+        "email_verified": session_view.email_verified,
+        "display_name": session_view.display_name,
+        "short_id": session_view.short_id,
+        "interests": session_view.interests or [],
+        "is_admin": session_view.is_admin,
+        "chat_access_restricted": session_view.chat_access_restricted,
+    }
+
+
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(
     payload: RegisterRequest,
@@ -68,24 +80,14 @@ async def register(
         user_agent=request.headers.get("user-agent"),
     )
     _set_auth_cookie(response, container, bundle.raw_session_token)
-    return {
-        "authenticated": bundle.auth_session.authenticated,
-        "email_verified": bundle.auth_session.email_verified,
-        "display_name": bundle.auth_session.display_name,
-        "interests": bundle.auth_session.interests or [],
-    }
+    return _session_dict(bundle.auth_session)
 
 
 @router.post("/api/auth/login")
 async def login(payload: LoginRequest, response: Response, container: ContainerOnlyDep) -> dict[str, object]:
     bundle = await container.auth_service.login(email=payload.email, password=payload.password)
     _set_auth_cookie(response, container, bundle.raw_session_token)
-    return {
-        "authenticated": bundle.auth_session.authenticated,
-        "email_verified": bundle.auth_session.email_verified,
-        "display_name": bundle.auth_session.display_name,
-        "interests": bundle.auth_session.interests or [],
-    }
+    return _session_dict(bundle.auth_session)
 
 
 @router.post("/api/auth/logout")
@@ -102,34 +104,19 @@ async def logout(
 @router.post("/api/auth/verify-email")
 async def verify_email(payload: VerifyEmailRequest, container: ContainerOnlyDep) -> dict[str, object]:
     session_view = await container.auth_service.verify_email(raw_token=payload.token)
-    return {
-        "authenticated": session_view.authenticated,
-        "email_verified": session_view.email_verified,
-        "display_name": session_view.display_name,
-        "interests": session_view.interests or [],
-    }
+    return _session_dict(session_view)
 
 
 @router.post("/api/auth/resend-verification")
 async def resend_verification(account_id: CurrentAccountDep, container: ContainerOnlyDep) -> dict[str, object]:
     session_view = await container.auth_service.resend_verification(account_id=account_id)
-    return {
-        "authenticated": session_view.authenticated,
-        "email_verified": session_view.email_verified,
-        "display_name": session_view.display_name,
-        "interests": session_view.interests or [],
-    }
+    return _session_dict(session_view)
 
 
 @router.get("/api/auth/session")
 async def get_auth_session(auth: CurrentAuthDep) -> dict[str, object]:
     _, session_view = auth
-    return {
-        "authenticated": session_view.authenticated,
-        "email_verified": session_view.email_verified,
-        "display_name": session_view.display_name,
-        "interests": session_view.interests or [],
-    }
+    return _session_dict(session_view)
 
 
 class RequestPasswordResetRequest(BaseModel):

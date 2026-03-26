@@ -19,6 +19,7 @@ def _serialize_user(session: ChatSession) -> dict[str, Any]:
     return {
         "id": session.session_id,
         "name": session.name,
+        "short_id": session.short_id,
         "state": session.state.value,
     }
 
@@ -198,6 +199,7 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
         sessionId,
         websocket,
         display_name=authorized_session.display_name,
+        short_id=authorized_session.short_id,
     )
     schedule_presence_count_broadcast(websocket.app, container)
     await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))

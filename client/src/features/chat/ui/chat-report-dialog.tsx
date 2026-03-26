@@ -30,6 +30,7 @@ type ChatReportDialogProps = {
   sessionId: string
   reportedSessionId: string
   partnerName: string
+  partnerShortId?: string | null
   triggerClassName?: string
   triggerLabel?: string
 }
@@ -38,6 +39,7 @@ const ChatReportDialog = ({
   sessionId,
   reportedSessionId,
   partnerName,
+  partnerShortId,
   triggerClassName,
   triggerLabel = '举报'
 }: ChatReportDialogProps) => {
@@ -116,7 +118,9 @@ const ChatReportDialog = ({
 
         <div className="space-y-3">
           <div className="text-sm text-muted-foreground">
-            当前对象：<span className="font-medium text-foreground">{partnerName}</span>
+            当前对象：
+            <span className="font-medium text-foreground"> {partnerName}</span>
+            {partnerShortId ? <span className="ml-2 font-medium text-foreground">· #{partnerShortId}</span> : null}
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

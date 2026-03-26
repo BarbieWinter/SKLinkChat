@@ -13,6 +13,15 @@ from app.shared.config import get_settings
 from app.shared.logging import configure_logging
 
 
+async def _await_cancelled_task(task: asyncio.Task[None], *, logger: logging.Logger, task_name: str) -> None:
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.exception("background task failed during shutdown", extra={"task_name": task_name})
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -51,16 +60,17 @@ async def lifespan(app: FastAPI):
         app.state.presence_broadcast_task.cancel()
     app.state.expiration_task.cancel()
     app.state.retention_task.cancel()
-    for task in (app.state.expiration_task, app.state.retention_task):
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    for task_name, task in (
+        ("expiration_task", app.state.expiration_task),
+        ("retention_task", app.state.retention_task),
+    ):
+        await _await_cancelled_task(task, logger=logger, task_name=task_name)
     if app.state.presence_broadcast_task is not None:
-        try:
-            await app.state.presence_broadcast_task
-        except asyncio.CancelledError:
-            pass
+        await _await_cancelled_task(
+            app.state.presence_broadcast_task,
+            logger=logger,
+            task_name="presence_broadcast_task",
+        )
     await close_redis_client()
     await close_database()
     logger.info("application shutdown")

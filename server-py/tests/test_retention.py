@@ -67,12 +67,14 @@ def test_retention_service_purges_expired_records():
                 email_normalized="left@test.dev",
                 password_hash="hashed-password",
                 display_name="Left",
+                short_id="100001",
             )
             right_account = Account(
                 email="right@test.dev",
                 email_normalized="right@test.dev",
                 password_hash="hashed-password",
                 display_name="Right",
+                short_id="100002",
             )
             session.add_all([left_account, right_account])
             await session.flush()
