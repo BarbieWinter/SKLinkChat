@@ -4,13 +4,13 @@
 
 - `client/`: React + Vite 前端
 - `server-py/`: FastAPI + PostgreSQL + Redis 后端
-- `docker-compose.yml`: `client + server-py + postgres + redis + mailpit` 本地编排入口
+- `docker-compose.yml`: `client + server-py + postgres + redis` 本地编排入口
 
 ## Runtime Model
 
 - PostgreSQL: 账号、认证会话、邮箱验证令牌、聊天持久化、风险/审计记录
 - Redis: 在线状态、匹配队列、断线恢复、实时会话状态
-- Mailpit: 本地 SMTP 调试收件箱
+- Resend: 邮件发送服务（注册验证、密码重置）
 - 聊天前必须先注册并完成邮箱验证
 - 当前不支持多语言，数据库和前后端都不包含 `language` 字段
 - `interests` 仅作为资料元数据保留，不参与当前版本匹配 hard filter
@@ -20,10 +20,8 @@
 ### 1. Start infrastructure with Docker
 
 ```bash
-docker compose up -d postgres redis mailpit
+docker compose up -d postgres redis
 ```
-
-Mailpit UI 默认地址：`http://localhost:8025`
 
 ### 2. Start infrastructure locally without Docker
 
@@ -32,9 +30,9 @@ Mailpit UI 默认地址：`http://localhost:8025`
 - PostgreSQL: `postgresql://sklinkchat:sklinkchat@localhost:5432/sklinkchat`
 - Redis: `redis://localhost:6379/0`
 - Mail provider:
-  - 开发环境优先 `mailpit`
+  - 开发/生产环境使用 `resend`（需配置 `SERVER_PY_RESEND_API_KEY`）
   - 测试环境使用 `fake`
-  - 生产环境使用 `resend`
+  - 可选本地 SMTP 调试：`mailpit`
 - Turnstile:
   - 开发/测试环境使用 `fake` 或 Cloudflare 官方测试 key
   - 生产环境必须使用真实 Cloudflare Turnstile 校验
@@ -72,7 +70,6 @@ docker compose up -d --build
 - FastAPI backend: `http://localhost:8000`
 - PostgreSQL: `postgresql://sklinkchat:sklinkchat@localhost:5432/sklinkchat`
 - Redis: `redis://localhost:6379/0`
-- Mailpit UI: `http://localhost:8025`
 
 ## Active Contracts
 
@@ -145,8 +142,10 @@ curl -s http://localhost:8000/readyz
 - `SERVER_PY_DATABASE_URL`
 - `SERVER_PY_REDIS_URL`
 - `SERVER_PY_EMAIL_PROVIDER`
+- `SERVER_PY_RESEND_API_KEY`
+- `SERVER_PY_EMAIL_FROM`
+- `SERVER_PY_APP_BASE_URL`
 - `SERVER_PY_TURNSTILE_PROVIDER`
-- `SERVER_PY_FRONTEND_BASE_URL`
 
 ## Security Notes
 

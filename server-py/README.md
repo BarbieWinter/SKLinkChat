@@ -17,9 +17,9 @@ FastAPI backend for the active SKLinkChat runtime.
 
 - PostgreSQL 是主持久化与主验证环境
 - Redis 仅负责在线状态、队列、断线恢复和实时协调
-- 开发环境邮件优先使用 `mailpit`
+- 开发/生产环境邮件使用 `resend`（需配置 `SERVER_PY_RESEND_API_KEY`）
 - 测试环境邮件使用 `fake`
-- 生产环境邮件使用 `resend`
+- 可选本地 SMTP 调试：`mailpit`
 - 开发/测试环境 Turnstile 不依赖真实校验，可使用 `fake` 或 Cloudflare 测试 key
 - 生产环境 Turnstile 必须使用真实 Cloudflare 校验
 - 管理员身份由 PostgreSQL `accounts.is_admin` 字段动态判定
@@ -50,8 +50,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `SERVER_PY_DATABASE_URL`
 - `SERVER_PY_REDIS_URL`
 - `SERVER_PY_EMAIL_PROVIDER`
+- `SERVER_PY_RESEND_API_KEY`
+- `SERVER_PY_EMAIL_FROM`
+- `SERVER_PY_APP_BASE_URL`
 - `SERVER_PY_TURNSTILE_PROVIDER`
-- `SERVER_PY_FRONTEND_BASE_URL`
 
 ## Verification
 

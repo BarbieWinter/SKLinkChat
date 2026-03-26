@@ -25,11 +25,13 @@ services:
       timeout: 3s
       retries: 10
 
-  mailpit:
-    image: axllent/mailpit:v1.21
-    ports:
-      - "1025:1025"
-      - "8025:8025"
+  # mailpit (optional, local SMTP debugging only)
+  # Uncomment to use Mailpit for local email testing:
+  # mailpit:
+  #   image: axllent/mailpit:v1.21
+  #   ports:
+  #     - "1025:1025"
+  #     - "8025:8025"
 
   server-py:
     build:
@@ -42,11 +44,10 @@ services:
       SERVER_PY_LOG_LEVEL: INFO
       SERVER_PY_RECONNECT_WINDOW_SECONDS: 180
       SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS: 1
-      SERVER_PY_EMAIL_PROVIDER: mailpit
-      SERVER_PY_EMAIL_FROM_ADDRESS: noreply@example.com
-      SERVER_PY_SMTP_HOST: mailpit
-      SERVER_PY_SMTP_PORT: 1025
-      SERVER_PY_FRONTEND_BASE_URL: http://localhost:4173
+      SERVER_PY_EMAIL_PROVIDER: resend
+      SERVER_PY_EMAIL_FROM: noreply@mail.sklinkchat.com
+      SERVER_PY_RESEND_API_KEY: ${SERVER_PY_RESEND_API_KEY:?set SERVER_PY_RESEND_API_KEY in .env}
+      SERVER_PY_APP_BASE_URL: http://localhost:4173
       SERVER_PY_TURNSTILE_PROVIDER: fake
       SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS: "true"
       SERVER_PY_SECURE_COOKIES: "false"
@@ -58,8 +59,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mailpit:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 10s

@@ -10,7 +10,6 @@
 | Node.js | 18 | 前端构建 |
 | PostgreSQL | 16 | 持久化存储 |
 | Redis | 7 | 会话/队列/在线状态 |
-| Mailpit | 任意 | 本地邮件测试 (UI http://localhost:8025) |
 
 ## 一、PostgreSQL
 
@@ -58,18 +57,25 @@ redis-server --daemonize yes
 
 默认地址 `redis://localhost:6379/0`，写入 `.env` 的 key 是 `SERVER_PY_REDIS_URL`。
 
-## 三、Mailpit（邮件测试）
+## 三、Resend（邮件服务）
 
-```bash
-# 如果已有 Homebrew
-brew install mailpit && mailpit
+当前项目使用 [Resend](https://resend.com) 作为主邮件服务，已验证发件域名 `mail.sklinkchat.com`。
 
-# 或者用 Docker 单独跑
-docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
+需要的环境变量：
+
+```
+SERVER_PY_EMAIL_PROVIDER=resend
+SERVER_PY_EMAIL_FROM=noreply@mail.sklinkchat.com
+SERVER_PY_RESEND_API_KEY=<your_resend_api_key>
+SERVER_PY_APP_BASE_URL=http://localhost:5173
 ```
 
-- SMTP：`127.0.0.1:1025`
-- Web UI：http://localhost:8025
+> **可选本地调试**：如需在本地使用 Mailpit 拦截邮件（不走真实发送），可将 `EMAIL_PROVIDER` 改为 `mailpit` 并启动 Mailpit：
+> ```bash
+> brew install mailpit && mailpit
+> # 或 docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
+> ```
+> SMTP: `127.0.0.1:1025` / Web UI: http://localhost:8025
 
 ## 四、后端 (server-py)
 
@@ -89,10 +95,10 @@ pip install -e ".[dev]"
 ```
 SERVER_PY_DATABASE_URL=postgresql+psycopg://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat
 SERVER_PY_REDIS_URL=redis://localhost:6379/0
-SERVER_PY_EMAIL_PROVIDER=mailpit
-SERVER_PY_SMTP_HOST=127.0.0.1
-SERVER_PY_SMTP_PORT=1025
-SERVER_PY_FRONTEND_BASE_URL=http://localhost:5173
+SERVER_PY_EMAIL_PROVIDER=resend
+SERVER_PY_EMAIL_FROM=noreply@mail.sklinkchat.com
+SERVER_PY_RESEND_API_KEY=<your_resend_api_key>
+SERVER_PY_APP_BASE_URL=http://localhost:5173
 SERVER_PY_TURNSTILE_PROVIDER=fake
 SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS=true
 SERVER_PY_SECURE_COOKIES=false
@@ -194,7 +200,6 @@ npm run lint            # ESLint 检查
 # 1. 基础设施
 ~/.local/postgresql-16/bin/pg_ctl -D ~/.local/postgresql-16/data start
 redis-server --daemonize yes
-mailpit &
 
 # 2. 后端（新终端）
 cd server-py && source .venv/bin/activate
@@ -205,7 +210,7 @@ uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8000
 cd client && npm run dev
 ```
 
-打开 http://localhost:5173 即可使用，邮件验证在 http://localhost:8025 查看。
+打开 http://localhost:5173 即可使用。
 
 ## 七、Docker Compose（可选）
 

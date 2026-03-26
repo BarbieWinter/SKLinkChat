@@ -112,7 +112,7 @@ class AuthService:
         password_reset_token_ttl_seconds: int,
         password_reset_resend_cooldown_seconds: int,
         password_reset_hourly_limit: int,
-        frontend_base_url: str,
+        app_base_url: str,
     ) -> None:
         self._account_repository = account_repository
         self._auth_session_repository = auth_session_repository
@@ -128,7 +128,7 @@ class AuthService:
         self._password_reset_token_ttl_seconds = password_reset_token_ttl_seconds
         self._password_reset_resend_cooldown_seconds = password_reset_resend_cooldown_seconds
         self._password_reset_hourly_limit = password_reset_hourly_limit
-        self._frontend_base_url = frontend_base_url.rstrip("/")
+        self._app_base_url = app_base_url.rstrip("/")
 
     async def register(
         self,
@@ -313,7 +313,7 @@ class AuthService:
         await self._email_sender.send_verification_email(
             recipient=account.email,
             display_name=account.display_name,
-            verification_link=f"{self._frontend_base_url}/?verify_token={raw_token}",
+            verification_link=f"{self._app_base_url}/?verify_token={raw_token}",
         )
 
     async def _require_account(self, account_id: str) -> Account:
@@ -360,7 +360,7 @@ class AuthService:
         await self._email_sender.send_password_reset_email(
             recipient=account.email,
             display_name=account.display_name,
-            reset_link=f"{self._frontend_base_url}/?reset_token={raw_token}",
+            reset_link=f"{self._app_base_url}/?reset_token={raw_token}",
         )
 
     async def reset_password(self, *, raw_token: str, new_password: str) -> None:

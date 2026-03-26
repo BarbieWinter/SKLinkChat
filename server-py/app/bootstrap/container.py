@@ -141,7 +141,7 @@ def build_container(
         password_reset_token_ttl_seconds=settings.password_reset_token_ttl_seconds,
         password_reset_resend_cooldown_seconds=settings.password_reset_resend_cooldown_seconds,
         password_reset_hourly_limit=settings.password_reset_hourly_limit,
-        frontend_base_url=settings.frontend_base_url,
+        app_base_url=settings.app_base_url,
     )
     account_service = AccountService(account_repository)
     admin_governance_service = AdminGovernanceService(

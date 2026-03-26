@@ -8,7 +8,7 @@
 - `server-py/`: FastAPI HTTP/WebSocket 后端
 - `postgres`: 账号、认证、验证令牌、聊天持久化、审计与风险记录
 - `redis`: 在线状态、等待队列、实时 chat session、断线恢复窗口
-- `mailpit`: 本地开发邮件收件箱
+- `resend`: 邮件发送服务（注册验证、密码重置）
 
 ## Runtime Topology
 
@@ -23,7 +23,7 @@ flowchart LR
     E --> F
     F <--> G[(PostgreSQL)]
     F <--> H[(Redis)]
-    F --> I[Mailpit / Resend]
+    F --> I[Resend]
 ```
 
 ## Ownership Boundaries
@@ -122,7 +122,7 @@ flowchart LR
 ## Local Deployment
 
 ```bash
-docker compose up -d postgres redis mailpit
+docker compose up -d postgres redis
 cd server-py && alembic upgrade head
 cd server-py && ./.venv/bin/python -m pytest -q
 cd client && npm run test -- --run

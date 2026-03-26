@@ -57,6 +57,9 @@ def test_register_auto_logs_in_and_requires_email_verification(client):
     assert session_response.status_code == 200
     assert session_response.json()["email_verified"] is False
     assert session_response.json()["short_id"] == payload["short_id"]
+    fake_sender = client.app.state.container.auth_service._email_sender
+    verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
+    assert len(verification_messages) == 1
 
 
 def test_verify_email_marks_account_verified(client):
@@ -173,6 +176,9 @@ def test_resend_verification_revokes_previous_link(client):
 
     second_verification_token = _extract_verification_token(client)
     assert second_verification_token != first_verification_token
+    fake_sender = client.app.state.container.auth_service._email_sender
+    verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
+    assert len(verification_messages) == 2
 
     first_verify_response = client.post("/api/auth/verify-email", json={"token": first_verification_token})
     second_verify_response = client.post("/api/auth/verify-email", json={"token": second_verification_token})
@@ -258,7 +264,8 @@ def test_request_password_reset_sends_email(client):
     _register(client)
     response = client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
     assert response.status_code == 200
-    _extract_reset_link(client)
+    reset_link = _extract_reset_link(client)
+    assert "reset_token=" in reset_link
 
 
 def test_request_password_reset_silent_for_unknown_email(client):

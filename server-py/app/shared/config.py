@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal, TypedDict
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,14 +47,16 @@ class Settings(BaseSettings):
     cleanup_interval_seconds: int = 60
 
     email_provider: Literal["fake", "mailpit", "resend"] = "fake"
-    email_from_address: str = "noreply@example.com"
+    email_from: str | None = None
+    email_from_address: str | None = None
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
     smtp_username: str | None = None
     smtp_password: str | None = None
     resend_api_key: str | None = None
     resend_base_url: str = "https://api.resend.com"
-    frontend_base_url: str = "http://localhost:4173"
+    app_base_url: str | None = None
+    frontend_base_url: str | None = None
 
     turnstile_provider: Literal["fake", "cloudflare"] = "fake"
     turnstile_secret_key: str | None = None
@@ -74,6 +76,27 @@ class Settings(BaseSettings):
                 "SQLite is not supported"
             )
         return normalized
+
+    @model_validator(mode="after")
+    def validate_email_settings(self) -> Settings:
+        if self.email_from is None and self.email_from_address is not None:
+            self.email_from = self.email_from_address
+        if self.app_base_url is None and self.frontend_base_url is not None:
+            self.app_base_url = self.frontend_base_url
+
+        self.email_from = (self.email_from or "noreply@mail.sklinkchat.com").strip()
+        self.app_base_url = (self.app_base_url or "http://localhost:4173").rstrip("/")
+        self.resend_api_key = self.resend_api_key.strip() if self.resend_api_key else None
+
+        if self.email_provider == "resend":
+            if not self.resend_api_key:
+                raise ValueError("SERVER_PY_RESEND_API_KEY is required when SERVER_PY_EMAIL_PROVIDER=resend")
+            if not self.email_from:
+                raise ValueError("SERVER_PY_EMAIL_FROM is required when SERVER_PY_EMAIL_PROVIDER=resend")
+            if not self.app_base_url:
+                raise ValueError("SERVER_PY_APP_BASE_URL is required when SERVER_PY_EMAIL_PROVIDER=resend")
+
+        return self
 
     @property
     def normalized_database_url(self) -> str:
