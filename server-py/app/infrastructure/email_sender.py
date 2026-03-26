@@ -17,13 +17,13 @@ class FakeEmailSender:
     def __init__(self) -> None:
         self.sent_messages: list[dict[str, str]] = []
 
-    async def send_verification_email(self, *, recipient: str, display_name: str, verification_link: str) -> None:
+    async def send_verification_code(self, *, recipient: str, display_name: str, code: str) -> None:
         self.sent_messages.append(
             {
                 "type": "verification",
                 "recipient": recipient,
                 "display_name": display_name,
-                "verification_link": verification_link,
+                "code": code,
             }
         )
 
@@ -42,13 +42,23 @@ class MailpitSmtpEmailSender:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    async def send_verification_email(self, *, recipient: str, display_name: str, verification_link: str) -> None:
-        await asyncio.to_thread(self._send_sync, "Verify your SKLinkChat account", recipient, display_name,
-                                f"Open the link below to verify your account:\n{verification_link}")
+    async def send_verification_code(self, *, recipient: str, display_name: str, code: str) -> None:
+        await asyncio.to_thread(
+            self._send_sync,
+            "Your SKLinkChat verification code",
+            recipient,
+            display_name,
+            f"Your verification code is {code}, valid for 15 minutes.",
+        )
 
     async def send_password_reset_email(self, *, recipient: str, display_name: str, reset_link: str) -> None:
-        await asyncio.to_thread(self._send_sync, "Reset your SKLinkChat password", recipient, display_name,
-                                f"Open the link below to reset your password:\n{reset_link}")
+        await asyncio.to_thread(
+            self._send_sync,
+            "Reset your SKLinkChat password",
+            recipient,
+            display_name,
+            f"Open the link below to reset your password:\n{reset_link}",
+        )
 
     def _send_sync(self, subject: str, recipient: str, display_name: str, body_text: str) -> None:
         message = EmailMessage()
@@ -66,13 +76,16 @@ class ResendEmailSender:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    async def send_verification_email(self, *, recipient: str, display_name: str, verification_link: str) -> None:
+    async def send_verification_code(self, *, recipient: str, display_name: str, code: str) -> None:
         await self._send(
-            "Verify your SKLinkChat account",
+            "Your SKLinkChat verification code",
             recipient,
             display_name,
-            html_body=f"<p><a href=\"{verification_link}\">Verify your account</a></p>",
-            text_body=f"Open the link below to verify your account:\n{verification_link}",
+            html_body=(
+                f"<p>Your verification code is <strong>{escape(code)}</strong>,"
+                " valid for 15 minutes.</p>"
+            ),
+            text_body=f"Your verification code is {code}, valid for 15 minutes.",
         )
 
     async def send_password_reset_email(self, *, recipient: str, display_name: str, reset_link: str) -> None:
@@ -80,7 +93,7 @@ class ResendEmailSender:
             "Reset your SKLinkChat password",
             recipient,
             display_name,
-            html_body=f"<p><a href=\"{reset_link}\">Reset your password</a></p>",
+            html_body=f'<p><a href="{reset_link}">Reset your password</a></p>',
             text_body=f"Open the link below to reset your password:\n{reset_link}",
         )
 

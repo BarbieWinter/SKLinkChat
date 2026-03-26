@@ -275,6 +275,27 @@ class EmailVerificationTokenRepository:
             )
             await session.commit()
 
+    async def get_active_for_account(self, account_id: str, now: datetime) -> EmailVerificationToken | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(EmailVerificationToken).where(
+                    EmailVerificationToken.account_id == account_id,
+                    EmailVerificationToken.consumed_at.is_(None),
+                    EmailVerificationToken.revoked_at.is_(None),
+                    EmailVerificationToken.expires_at > now,
+                )
+            )
+            return result.scalar_one_or_none()
+
+    async def increment_attempts(self, token_id: str) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                update(EmailVerificationToken)
+                .where(EmailVerificationToken.id == token_id)
+                .values(attempts=EmailVerificationToken.attempts + 1)
+            )
+            await session.commit()
+
 
 class PasswordResetTokenRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

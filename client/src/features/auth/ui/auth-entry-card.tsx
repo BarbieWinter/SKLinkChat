@@ -1,5 +1,5 @@
-import { KeyRound, LockKeyhole, MessageCircle } from 'lucide-react'
-import { useState } from 'react'
+import { KeyRound, LockKeyhole, MailCheck, MessageCircle } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { generateUsername } from 'unique-username-generator'
 
 import { requestPasswordReset, resetPassword } from '@/features/auth/api/auth-client'
@@ -32,7 +32,7 @@ const validatePassword = (value: string): string | null => {
   return null
 }
 
-const getInitialAuthMode = (): 'register' | 'login' | 'forgot' | 'reset' => {
+const getInitialAuthMode = (): 'register' | 'login' | 'forgot' | 'reset' | 'verify' => {
   if (typeof window === 'undefined') {
     return 'register'
   }
@@ -44,9 +44,11 @@ const getInitialAuthMode = (): 'register' | 'login' | 'forgot' | 'reset' => {
 export const AuthEntryCard = () => {
   const { t } = useI18n()
   const { toast } = useToast()
-  const { login, register, verifyMessage, verifyStatus } = useAuth()
+  const { login, register, verifyCode, resendCode, pendingVerificationEmail, setPendingVerificationEmail } = useAuth()
 
-  const [authMode, setAuthMode] = useState<'register' | 'login' | 'forgot' | 'reset'>(getInitialAuthMode)
+  const [authMode, setAuthMode] = useState<'register' | 'login' | 'forgot' | 'reset' | 'verify'>(
+    () => (pendingVerificationEmail ? 'verify' : getInitialAuthMode())
+  )
   const [turnstileToken, setTurnstileToken] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
@@ -61,6 +63,9 @@ export const AuthEntryCard = () => {
     email: '',
     password: ''
   })
+  const [verifyCode_, setVerifyCode_] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
 
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }))
@@ -68,6 +73,26 @@ export const AuthEntryCard = () => {
     setTouched({})
     setAuthMode(nextMode)
   }
+
+  const startResendCooldown = useCallback(() => {
+    setResendCooldown(60)
+    if (cooldownRef.current) clearInterval(cooldownRef.current)
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current)
+    }
+  }, [])
 
   const handleRegister = async () => {
     const emailError = validateEmail(registerForm.email)
@@ -95,9 +120,12 @@ export const AuthEntryCard = () => {
         interests: parseInterestInput(registerForm.interests),
         turnstileToken
       })
+      startResendCooldown()
+      setVerifyCode_('')
+      switchAuthMode('verify')
       toast({
-        title: '注册成功',
-        description: '验证邮件已发送，请先完成邮箱验证。'
+        title: '验证码已发送',
+        description: '请查收邮箱中的 6 位验证码。'
       })
     } catch (error) {
       const code = (error as Error & { code?: string }).code
@@ -132,15 +160,63 @@ export const AuthEntryCard = () => {
         email: loginForm.email.trim(),
         password: loginForm.password
       })
+      if (pendingVerificationEmail) {
+        startResendCooldown()
+        setVerifyCode_('')
+        switchAuthMode('verify')
+        toast({
+          title: '验证码已发送',
+          description: '该账号尚未验证邮箱，验证码已发送。'
+        })
+      }
     } catch (error) {
       const code = (error as Error & { code?: string }).code
       toast({
         title: t('common.error'),
-        description: code === 'INVALID_CREDENTIALS' ? '邮箱或密码错误' : error instanceof Error ? error.message : '登录失败。',
+        description:
+          code === 'INVALID_CREDENTIALS' ? '邮箱或密码错误' : error instanceof Error ? error.message : '登录失败。',
         variant: 'destructive'
       })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleVerifyCode = async () => {
+    if (!pendingVerificationEmail || verifyCode_.length !== 6) return
+
+    setSubmitting(true)
+    try {
+      await verifyCode(pendingVerificationEmail, verifyCode_)
+      toast({ title: '验证成功', description: '邮箱验证完成，欢迎使用。' })
+    } catch (error) {
+      const code = (error as Error & { code?: string }).code
+      let description = error instanceof Error ? error.message : '验证失败。'
+      if (code === 'VERIFICATION_MAX_ATTEMPTS') {
+        description = '错误次数过多，请重新获取验证码。'
+      } else if (code === 'NO_PENDING_VERIFICATION') {
+        description = '验证码已失效，请重新获取。'
+      }
+      toast({ title: t('common.error'), description, variant: 'destructive' })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleResendCode = async () => {
+    if (!pendingVerificationEmail || resendCooldown > 0) return
+
+    try {
+      await resendCode(pendingVerificationEmail)
+      startResendCooldown()
+      setVerifyCode_('')
+      toast({ title: '已发送', description: '新的验证码已发送。' })
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : '发送失败。',
+        variant: 'destructive'
+      })
     }
   }
 
@@ -212,37 +288,28 @@ export const AuthEntryCard = () => {
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-blue-400/20 text-primary">
             {authMode === 'register' && <MessageCircle className="h-5 w-5" />}
             {authMode === 'login' && <LockKeyhole className="h-5 w-5" />}
+            {authMode === 'verify' && <MailCheck className="h-5 w-5" />}
             {(authMode === 'forgot' || authMode === 'reset') && <KeyRound className="h-5 w-5" />}
           </div>
           <div>
             <h1 className="text-xl font-bold sm:text-2xl">
               {authMode === 'register' && '注册账号'}
               {authMode === 'login' && '登录账号'}
+              {authMode === 'verify' && '验证邮箱'}
               {authMode === 'forgot' && '找回密码'}
               {authMode === 'reset' && '设置新密码'}
             </h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {authMode === 'forgot'
-                ? '输入注册邮箱，我们将发送重置链接。'
-                : authMode === 'reset'
-                  ? '请输入你的新密码。'
-                  : '聊天前必须先完成注册和邮箱验证。'}
+              {authMode === 'verify'
+                ? `验证码已发送到 ${pendingVerificationEmail ?? ''}`
+                : authMode === 'forgot'
+                  ? '输入注册邮箱，我们将发送重置链接。'
+                  : authMode === 'reset'
+                    ? '请输入你的新密码。'
+                    : '聊天前必须先完成注册和邮箱验证。'}
             </p>
           </div>
         </div>
-
-        {verifyMessage && (
-          <div
-            className={cn(
-              'rounded-xl px-3 py-2 text-sm',
-              verifyStatus === 'success'
-                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                : 'bg-destructive/10 text-destructive'
-            )}
-          >
-            {verifyMessage}
-          </div>
-        )}
 
         {(authMode === 'register' || authMode === 'login') && (
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-1">
@@ -285,6 +352,19 @@ export const AuthEntryCard = () => {
             }}
           >
             &larr; 返回登录
+          </button>
+        )}
+
+        {authMode === 'verify' && (
+          <button
+            type="button"
+            className="text-sm text-primary hover:underline"
+            onClick={() => {
+              setPendingVerificationEmail(null)
+              switchAuthMode('register')
+            }}
+          >
+            &larr; 返回注册
           </button>
         )}
 
@@ -341,7 +421,7 @@ export const AuthEntryCard = () => {
               disabled={submitting}
               className="h-11 w-full rounded-xl bg-gradient-to-r from-primary to-blue-500"
             >
-              注册并登录
+              注册
             </Button>
           </div>
         )}
@@ -383,6 +463,48 @@ export const AuthEntryCard = () => {
                 }}
               >
                 忘记密码？
+              </button>
+            </div>
+          </div>
+        )}
+
+        {authMode === 'verify' && (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">
+              请输入邮箱中收到的 6 位数字验证码，验证码 15 分钟内有效。
+            </div>
+            <Input
+              value={verifyCode_}
+              onChange={(event) => {
+                const val = event.target.value.replace(/\D/g, '').slice(0, 6)
+                setVerifyCode_(val)
+              }}
+              placeholder="请输入 6 位验证码"
+              className="h-11 rounded-xl text-center text-lg tracking-[0.5em]"
+              maxLength={6}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+            <Button
+              onClick={handleVerifyCode}
+              disabled={submitting || verifyCode_.length !== 6}
+              className="h-11 w-full rounded-xl bg-gradient-to-r from-primary to-blue-500"
+            >
+              验证
+            </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                className={cn(
+                  'text-sm transition-colors',
+                  resendCooldown > 0
+                    ? 'cursor-not-allowed text-muted-foreground/50'
+                    : 'text-muted-foreground hover:text-primary hover:underline'
+                )}
+                onClick={handleResendCode}
+                disabled={resendCooldown > 0}
+              >
+                {resendCooldown > 0 ? `${resendCooldown}s 后可重新发送` : '重新发送验证码'}
               </button>
             </div>
           </div>

@@ -12,7 +12,8 @@ const authState: any = {
     is_admin: false,
     chat_access_restricted: false
   },
-  status: 'ready'
+  status: 'ready',
+  pendingVerificationEmail: null
 }
 
 vi.mock('@/features/auth/auth-provider', () => ({
@@ -21,10 +22,6 @@ vi.mock('@/features/auth/auth-provider', () => ({
 
 vi.mock('@/features/auth/ui/auth-entry-card', () => ({
   AuthEntryCard: () => <div data-testid="auth-entry-card">auth entry</div>
-}))
-
-vi.mock('@/features/auth/ui/email-verification-pending-card', () => ({
-  EmailVerificationPendingCard: () => <div data-testid="email-verification-card">email verification</div>
 }))
 
 vi.mock('@/features/auth/ui/restricted-chat-access-card', () => ({
@@ -47,26 +44,23 @@ describe('HomePage', () => {
       chat_access_restricted: false
     }
     authState.status = 'ready'
+    authState.pendingVerificationEmail = null
   })
 
-  it('switches between auth, verification, and chat containers as auth state changes', () => {
-    const { rerender } = render(<HomePage />)
-
+  it('shows auth entry when unauthenticated', () => {
+    render(<HomePage />)
     expect(screen.getByTestId('auth-entry-card')).toBeInTheDocument()
+  })
 
-    authState.authSession = {
-      authenticated: true,
-      email_verified: false,
-      display_name: 'Alice',
-      short_id: '123456',
-      interests: [],
-      is_admin: false,
-      chat_access_restricted: false
-    }
-    rerender(<HomePage />)
+  it('shows auth entry when pending verification', () => {
+    authState.authSession.authenticated = false
+    authState.pendingVerificationEmail = 'user@example.com'
 
-    expect(screen.getByTestId('email-verification-card')).toBeInTheDocument()
+    render(<HomePage />)
+    expect(screen.getByTestId('auth-entry-card')).toBeInTheDocument()
+  })
 
+  it('shows chat workspace when authenticated and verified', () => {
     authState.authSession = {
       authenticated: true,
       email_verified: true,
@@ -76,8 +70,8 @@ describe('HomePage', () => {
       is_admin: false,
       chat_access_restricted: false
     }
-    rerender(<HomePage />)
 
+    render(<HomePage />)
     expect(screen.getByTestId('chat-workspace')).toBeInTheDocument()
   })
 
@@ -93,7 +87,6 @@ describe('HomePage', () => {
     }
 
     render(<HomePage />)
-
     expect(screen.getByTestId('restricted-chat-access-card')).toBeInTheDocument()
   })
 
@@ -101,7 +94,6 @@ describe('HomePage', () => {
     authState.status = 'loading'
 
     render(<HomePage />)
-
     expect(screen.getByText('正在加载账户状态...')).toBeInTheDocument()
   })
 })

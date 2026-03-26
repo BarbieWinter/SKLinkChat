@@ -3,13 +3,14 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/app/store'
 import {
   AuthSessionPayload,
+  VerificationRequiredPayload,
   getAuthSession,
   loginAccount,
   logoutAccount,
   registerAccount,
-  resendVerification,
+  resendVerificationCode,
   updateAccountProfile,
-  verifyEmail
+  verifyEmailCode
 } from '@/features/auth/api/auth-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 
@@ -18,8 +19,7 @@ type AuthStatus = 'loading' | 'ready' | 'error'
 type AuthContextValue = {
   authSession: AuthSessionPayload
   status: AuthStatus
-  verifyStatus: 'idle' | 'success' | 'error'
-  verifyMessage: string | null
+  pendingVerificationEmail: string | null
   register: (payload: {
     email: string
     password: string
@@ -29,9 +29,11 @@ type AuthContextValue = {
   }) => Promise<void>
   login: (payload: { email: string; password: string }) => Promise<void>
   logout: () => Promise<void>
-  resendVerificationEmail: () => Promise<void>
+  verifyCode: (email: string, code: string) => Promise<void>
+  resendCode: (email: string) => Promise<void>
   syncProfile: (payload: { displayName: string; interests: string[] }) => Promise<void>
   refreshSession: () => Promise<void>
+  setPendingVerificationEmail: (email: string | null) => void
 }
 
 const EMPTY_AUTH_SESSION: AuthSessionPayload = {
@@ -44,29 +46,22 @@ const EMPTY_AUTH_SESSION: AuthSessionPayload = {
   chat_access_restricted: false
 }
 
+const isVerificationRequired = (
+  result: AuthSessionPayload | VerificationRequiredPayload
+): result is VerificationRequiredPayload => 'status' in result && result.status === 'verification_required'
+
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { setDisplayName, saveSettings, resetSession, clear } = useAppStore()
   const [authSession, setAuthSession] = useState<AuthSessionPayload>(EMPTY_AUTH_SESSION)
   const [status, setStatus] = useState<AuthStatus>('loading')
-  const [verifyStatus, setVerifyStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [verifyMessage, setVerifyMessage] = useState<string | null>(null)
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
 
   const applySession = (nextSession: AuthSessionPayload) => {
     setAuthSession(nextSession)
     setDisplayName(nextSession.display_name ?? '')
     saveSettings(nextSession.interests ?? [])
-  }
-
-  const clearVerificationFeedback = () => {
-    setVerifyStatus('idle')
-    setVerifyMessage(null)
-  }
-
-  const setVerificationFeedback = (status: 'success' | 'error', message: string) => {
-    setVerifyStatus(status)
-    setVerifyMessage(message)
   }
 
   const refreshSession = async () => {
@@ -84,27 +79,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let cancelled = false
 
     const bootstrap = async () => {
-      const params = new URLSearchParams(window.location.search)
-      const verifyToken = params.get('verify_token')
-
-      if (verifyToken) {
-        try {
-          const sessionAfterVerification = await verifyEmail(verifyToken)
-          if (!cancelled) {
-            applySession(sessionAfterVerification)
-            setVerificationFeedback('success', '邮箱验证成功。')
-          }
-        } catch (error) {
-          if (!cancelled) {
-            setVerificationFeedback('error', error instanceof Error ? error.message : '邮箱验证失败。')
-          }
-        } finally {
-          params.delete('verify_token')
-          const nextQuery = params.toString()
-          window.history.replaceState({}, '', nextQuery ? `/?${nextQuery}` : '/')
-        }
-      }
-
       try {
         const nextSession = await getAuthSession()
         if (!cancelled) {
@@ -129,42 +103,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     () => ({
       authSession,
       status,
-      verifyStatus,
-      verifyMessage,
+      pendingVerificationEmail,
       register: async ({ email, password, displayName, interests, turnstileToken }) => {
-        clearVerificationFeedback()
-        const nextSession = await registerAccount({
+        await registerAccount({
           email,
           password,
           display_name: displayName,
           interests,
           turnstile_token: turnstileToken
         })
-        applySession(nextSession)
-        setStatus('ready')
-        setVerificationFeedback('success', '验证邮件已发送，请先完成邮箱验证。')
+        setPendingVerificationEmail(email)
       },
       login: async ({ email, password }) => {
-        clearVerificationFeedback()
-        const nextSession = await loginAccount({ email, password })
-        applySession(nextSession)
+        const result = await loginAccount({ email, password })
+        if (isVerificationRequired(result)) {
+          setPendingVerificationEmail(email)
+          return
+        }
+        applySession(result)
         setStatus('ready')
       },
       logout: async () => {
-        clearVerificationFeedback()
         await logoutAccount()
         clearStoredSessionId()
         clear()
         resetSession()
         applySession(EMPTY_AUTH_SESSION)
+        setPendingVerificationEmail(null)
       },
-      resendVerificationEmail: async () => {
-        const nextSession = await resendVerification()
+      verifyCode: async (email: string, code: string) => {
+        const nextSession = await verifyEmailCode(email, code)
         applySession(nextSession)
-        setVerificationFeedback(
-          'success',
-          nextSession.email_verified ? '当前邮箱已验证，无需重新发送。' : '新的验证邮件已发送。'
-        )
+        setPendingVerificationEmail(null)
+        setStatus('ready')
+      },
+      resendCode: async (email: string) => {
+        await resendVerificationCode(email)
       },
       syncProfile: async ({ displayName, interests }) => {
         const nextProfile = await updateAccountProfile({
@@ -179,9 +153,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           interests: nextProfile.interests
         }))
       },
-      refreshSession
+      refreshSession,
+      setPendingVerificationEmail
     }),
-    [authSession, clear, resetSession, saveSettings, setDisplayName, status, verifyMessage, verifyStatus]
+    [authSession, clear, pendingVerificationEmail, resetSession, saveSettings, setDisplayName, status]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

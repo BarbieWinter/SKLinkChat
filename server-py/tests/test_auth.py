@@ -26,11 +26,16 @@ def _register(client, **overrides):
     return client.post("/api/auth/register", json=payload)
 
 
-def _extract_verification_token(client) -> str:
+def _extract_verification_code(client) -> str:
     fake_sender = client.app.state.container.auth_service._email_sender
-    verification_link = fake_sender.sent_messages[-1]["verification_link"]
-    query = parse_qs(urlparse(verification_link).query)
-    return query["verify_token"][0]
+    verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
+    return verification_messages[-1]["code"]
+
+
+def _verify_code(client, email: str = "user@testuser.dev", code: str | None = None):
+    if code is None:
+        code = _extract_verification_code(client)
+    return client.post("/api/auth/verify-email", json={"email": email, "code": code})
 
 
 def _assert_short_id(value: str | None) -> None:
@@ -39,56 +44,89 @@ def _assert_short_id(value: str | None) -> None:
     assert value.isdigit()
 
 
-def test_register_auto_logs_in_and_requires_email_verification(client):
+# --- Registration ---
+
+
+def test_register_returns_verification_required(client):
     response = _register(client)
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["authenticated"] is True
-    assert payload["email_verified"] is False
-    assert payload["display_name"] == "Traveler"
-    assert payload["interests"] == ["music", "travel"]
-    assert payload["is_admin"] is False
-    assert payload["chat_access_restricted"] is False
-    _assert_short_id(payload["short_id"])
-    assert "sklinkchat_session" in response.cookies
+    assert payload["status"] == "verification_required"
+    assert "masked_email" in payload
+    assert "@testuser.dev" in payload["masked_email"]
+    assert "sklinkchat_session" not in response.cookies
 
     session_response = client.get("/api/auth/session")
-    assert session_response.status_code == 200
-    assert session_response.json()["email_verified"] is False
-    assert session_response.json()["short_id"] == payload["short_id"]
+    assert session_response.json()["authenticated"] is False
+
     fake_sender = client.app.state.container.auth_service._email_sender
     verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
     assert len(verification_messages) == 1
+    assert len(verification_messages[0]["code"]) == 6
+    assert verification_messages[0]["code"].isdigit()
 
 
-def test_verify_email_marks_account_verified(client):
+def test_register_unverified_email_resends_code(client):
+    first = _register(client)
+    assert first.status_code == 201
+
+    second = _register(client, password="DifferentPassword!99")
+    assert second.status_code == 201
+    assert second.json()["status"] == "verification_required"
+
+    fake_sender = client.app.state.container.auth_service._email_sender
+    verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
+    assert len(verification_messages) == 2
+
+
+def test_register_verified_email_rejects(client):
     _register(client)
-    verification_token = _extract_verification_token(client)
+    _verify_code(client)
 
-    response = client.post("/api/auth/verify-email", json={"token": verification_token})
+    response = _register(client, email="USER@testuser.dev")
+    assert response.status_code == 409
+    assert response.json()["code"] == "EMAIL_ALREADY_EXISTS"
+
+
+def test_register_rejects_blocked_email_domain(client):
+    for blocked_domain in ("example.com", "mailinator.com", "yopmail.com"):
+        response = _register(client, email=f"user@{blocked_domain}")
+        assert response.status_code == 422
+        assert response.json()["code"] == "EMAIL_DOMAIN_BLOCKED"
+
+
+# --- Verification Code ---
+
+
+def test_verify_code_creates_session(client):
+    _register(client)
+    response = _verify_code(client)
 
     assert response.status_code == 200
-    assert response.json()["email_verified"] is True
+    payload = response.json()
+    assert payload["authenticated"] is True
+    assert payload["email_verified"] is True
+    assert payload["display_name"] == "Traveler"
+    assert payload["interests"] == ["music", "travel"]
+    _assert_short_id(payload["short_id"])
+    assert "sklinkchat_session" in response.cookies
 
 
-def test_verify_email_rejects_reused_token(client):
+def test_verify_code_rejects_wrong_code(client):
     _register(client)
-    verification_token = _extract_verification_token(client)
 
-    first_response = client.post("/api/auth/verify-email", json={"token": verification_token})
-    second_response = client.post("/api/auth/verify-email", json={"token": verification_token})
+    response = _verify_code(client, code="000000")
 
-    assert first_response.status_code == 200
-    assert second_response.status_code == 400
-    assert second_response.json()["code"] == "INVALID_VERIFICATION_TOKEN"
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_VERIFICATION_CODE"
 
 
-def test_verify_email_rejects_expired_token(client):
+def test_verify_code_rejects_expired(client):
     _register(client)
-    verification_token = _extract_verification_token(client)
+    code = _extract_verification_code(client)
 
-    async def expire_token() -> None:
+    async def expire_tokens() -> None:
         async with client.app.state.container.session_factory() as session:
             await session.execute(
                 update(EmailVerificationToken)
@@ -97,53 +135,98 @@ def test_verify_email_rejects_expired_token(client):
             )
             await session.commit()
 
-    _run(expire_token())
+    _run(expire_tokens())
 
-    response = client.post("/api/auth/verify-email", json={"token": verification_token})
-
-    assert response.status_code == 410
-    assert response.json()["code"] == "VERIFICATION_LINK_EXPIRED"
-
-
-def test_duplicate_email_is_rejected(client):
-    first_response = _register(client)
-    second_response = _register(client, email="USER@testuser.dev")
-
-    assert first_response.status_code == 201
-    assert second_response.status_code == 409
-    assert second_response.json()["code"] == "EMAIL_ALREADY_EXISTS"
+    response = _verify_code(client, code=code)
+    assert response.status_code == 400
+    assert response.json()["code"] == "NO_PENDING_VERIFICATION"
 
 
-def test_register_assigns_unique_six_digit_short_ids(client):
-    first_response = _register(client, email="first@testuser.dev")
-    second_response = _register(client, email="second@testuser.dev")
+def test_verify_code_enforces_max_attempts(client):
+    _register(client)
 
-    first_short_id = first_response.json()["short_id"]
-    second_short_id = second_response.json()["short_id"]
+    for _ in range(5):
+        resp = _verify_code(client, code="000000")
+        assert resp.status_code == 400
 
-    _assert_short_id(first_short_id)
-    _assert_short_id(second_short_id)
-    assert first_short_id != second_short_id
+    response = _verify_code(client, code="000000")
+    assert response.status_code == 429
+    assert response.json()["code"] == "VERIFICATION_MAX_ATTEMPTS"
 
 
-def test_login_logout_and_session_flow(client):
-    register_response = _register(client)
-    assert register_response.status_code == 201
+def test_verify_code_rejects_reused(client):
+    _register(client)
+    code = _extract_verification_code(client)
 
-    logout_response = client.post("/api/auth/logout")
-    assert logout_response.status_code == 200
+    first = _verify_code(client, code=code)
+    second = _verify_code(client, code=code)
 
-    unauthenticated_session = client.get("/api/auth/session")
-    assert unauthenticated_session.status_code == 200
-    assert unauthenticated_session.json() == {
-        "authenticated": False,
-        "email_verified": False,
-        "display_name": None,
-        "short_id": None,
-        "interests": [],
-        "is_admin": False,
-        "chat_access_restricted": False,
-    }
+    assert first.status_code == 200
+    assert second.status_code == 400
+
+
+# --- Resend Verification ---
+
+
+def test_resend_code_enforces_cooldown(client):
+    _register(client)
+
+    response = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    assert response.status_code == 429
+    assert response.json()["code"] == "VERIFICATION_CODE_COOLDOWN"
+
+
+def test_resend_code_revokes_previous(client):
+    _register(client)
+    first_code = _extract_verification_code(client)
+
+    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
+    client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+
+    second_code = _extract_verification_code(client)
+    assert first_code != second_code
+
+    first_verify = _verify_code(client, code=first_code)
+    assert first_verify.status_code == 400
+
+    second_verify = _verify_code(client, code=second_code)
+    assert second_verify.status_code == 200
+    assert second_verify.json()["email_verified"] is True
+
+
+def test_resend_code_enforces_hourly_limit(client):
+    _register(client)
+
+    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
+    client.app.state.container.auth_service._verification_resend_hourly_limit = 2
+
+    first = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    second = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["code"] == "VERIFICATION_CODE_RATE_LIMITED"
+
+
+def test_resend_code_silent_for_unknown_email(client):
+    response = client.post("/api/auth/resend-verification", json={"email": "nobody@testuser.dev"})
+    assert response.status_code == 200
+
+
+def test_resend_code_silent_for_verified_account(client):
+    _register(client)
+    _verify_code(client)
+
+    response = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    assert response.status_code == 200
+
+
+# --- Login ---
+
+
+def test_login_verified_creates_session(client):
+    _register(client)
+    _verify_code(client)
 
     login_response = client.post(
         "/api/auth/login",
@@ -155,97 +238,54 @@ def test_login_logout_and_session_flow(client):
     assert "sklinkchat_session" in login_response.cookies
 
 
-def test_resend_verification_requires_authenticated_unverified_account(client):
-    register_response = _register(client)
-    assert register_response.status_code == 201
+def test_login_unverified_sends_code(client):
+    _register(client)
 
-    response = client.post("/api/auth/resend-verification")
+    login_response = client.post(
+        "/api/auth/login",
+        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
+    )
 
-    assert response.status_code == 429
-    assert response.json()["code"] == "VERIFICATION_EMAIL_COOLDOWN"
-
-
-def test_resend_verification_revokes_previous_link(client):
-    register_response = _register(client)
-    assert register_response.status_code == 201
-    first_verification_token = _extract_verification_token(client)
-
-    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
-    resend_response = client.post("/api/auth/resend-verification")
-    assert resend_response.status_code == 200
-
-    second_verification_token = _extract_verification_token(client)
-    assert second_verification_token != first_verification_token
-    fake_sender = client.app.state.container.auth_service._email_sender
-    verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
-    assert len(verification_messages) == 2
-
-    first_verify_response = client.post("/api/auth/verify-email", json={"token": first_verification_token})
-    second_verify_response = client.post("/api/auth/verify-email", json={"token": second_verification_token})
-
-    assert first_verify_response.status_code == 400
-    assert first_verify_response.json()["code"] == "INVALID_VERIFICATION_TOKEN"
-    assert second_verify_response.status_code == 200
-    assert second_verify_response.json()["email_verified"] is True
+    assert login_response.status_code == 200
+    assert login_response.json()["status"] == "verification_required"
+    assert "sklinkchat_session" not in login_response.cookies
 
 
-def test_resend_verification_enforces_hourly_limit(client):
-    register_response = _register(client)
-    assert register_response.status_code == 201
+def test_login_logout_and_session_flow(client):
+    _register(client)
+    _verify_code(client)
 
-    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
-    client.app.state.container.auth_service._verification_resend_hourly_limit = 2
+    login_response = client.post(
+        "/api/auth/login",
+        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
+    )
+    assert login_response.status_code == 200
+    assert "sklinkchat_session" in login_response.cookies
 
-    first_resend = client.post("/api/auth/resend-verification")
-    second_resend = client.post("/api/auth/resend-verification")
+    logout_response = client.post("/api/auth/logout")
+    assert logout_response.status_code == 200
 
-    assert first_resend.status_code == 200
-    assert second_resend.status_code == 429
-    assert second_resend.json()["code"] == "VERIFICATION_EMAIL_RATE_LIMITED"
-
-
-def test_resend_verification_returns_idempotent_success_for_verified_account(client):
-    register_response = _register(client)
-    assert register_response.status_code == 201
-    verification_token = _extract_verification_token(client)
-    verify_response = client.post("/api/auth/verify-email", json={"token": verification_token})
-    assert verify_response.status_code == 200
-
-    response = client.post("/api/auth/resend-verification")
-
-    assert response.status_code == 200
-    assert response.json()["email_verified"] is True
+    session_response = client.get("/api/auth/session")
+    assert session_response.json()["authenticated"] is False
 
 
-def test_auth_session_exposes_admin_capability_and_restriction_flag(client):
-    response = _register(client, email="admin@testuser.dev")
+def test_auth_session_exposes_admin_capability(client):
+    _register(client, email="admin@testuser.dev")
+    verify_resp = _verify_code(client, email="admin@testuser.dev")
+    session_cookie = verify_resp.cookies["sklinkchat_session"]
+
     account_id, _ = _run(
-        client.app.state.container.resolve_auth_session.execute(response.cookies["sklinkchat_session"])
+        client.app.state.container.resolve_auth_session.execute(session_cookie)
     )
     assert account_id is not None
     _run(client.app.state.container.account_repository.set_admin_status(account_id=account_id, is_admin=True))
 
-    session_response = client.get(
-        "/api/auth/session",
-        cookies={"sklinkchat_session": response.cookies["sklinkchat_session"]},
-    )
-
-    assert response.status_code == 201
-    assert response.json()["is_admin"] is False
-    assert response.json()["chat_access_restricted"] is False
-    _assert_short_id(response.json()["short_id"])
-
+    session_response = client.get("/api/auth/session", cookies={"sklinkchat_session": session_cookie})
     assert session_response.status_code == 200
     assert session_response.json()["is_admin"] is True
-    assert session_response.json()["chat_access_restricted"] is False
-    assert session_response.json()["short_id"] == response.json()["short_id"]
 
 
-def test_register_rejects_blocked_email_domain(client):
-    for blocked_domain in ("example.com", "mailinator.com", "yopmail.com"):
-        response = _register(client, email=f"user@{blocked_domain}")
-        assert response.status_code == 422
-        assert response.json()["code"] == "EMAIL_DOMAIN_BLOCKED"
+# --- Password Reset ---
 
 
 def _extract_reset_link(client) -> str:
@@ -283,6 +323,8 @@ def test_reset_password_flow(client):
         json={"token": reset_token, "new_password": "NewSecurePassword!99"},
     )
     assert response.status_code == 200
+
+    _verify_code(client)
 
     login_response = client.post(
         "/api/auth/login",

@@ -1,12 +1,11 @@
 import { useAuth } from '@/features/auth/auth-provider'
 import { AuthEntryCard } from '@/features/auth/ui/auth-entry-card'
-import { EmailVerificationPendingCard } from '@/features/auth/ui/email-verification-pending-card'
 import { RestrictedChatAccessCard } from '@/features/auth/ui/restricted-chat-access-card'
 import { ChatWorkspace } from '@/features/chat/ui/chat-workspace'
 
 
 const HomePage = () => {
-  const { authSession, status } = useAuth()
+  const { authSession, status, pendingVerificationEmail } = useAuth()
 
   if (status === 'loading') {
     return (
@@ -18,12 +17,8 @@ const HomePage = () => {
     )
   }
 
-  if (!authSession.authenticated) {
+  if (!authSession.authenticated || pendingVerificationEmail) {
     return <AuthEntryCard />
-  }
-
-  if (!authSession.email_verified) {
-    return <EmailVerificationPendingCard />
   }
 
   if (authSession.chat_access_restricted) {

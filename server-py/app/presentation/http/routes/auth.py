@@ -5,8 +5,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field
 
+from app.application.auth.service import AuthTokenBundle, RegistrationResult
 from app.bootstrap.container import ApplicationContainer
-from app.presentation.http.dependencies import CurrentAccountDep, CurrentAuthDep, get_container
+from app.presentation.http.dependencies import CurrentAuthDep, get_container
 
 router = APIRouter()
 ContainerOnlyDep = Annotated[ApplicationContainer, Depends(get_container)]
@@ -25,8 +26,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class VerifyEmailRequest(BaseModel):
-    token: str
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
 
 
 def _set_auth_cookie(response: Response, container: ApplicationContainer, raw_session_token: str) -> None:
@@ -63,14 +69,17 @@ def _session_dict(session_view) -> dict[str, object]:
     }
 
 
+def _registration_result_dict(result: RegistrationResult) -> dict[str, object]:
+    return {"status": result.status, "masked_email": result.masked_email}
+
+
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(
     payload: RegisterRequest,
     request: Request,
-    response: Response,
     container: ContainerOnlyDep,
 ) -> dict[str, object]:
-    bundle = await container.auth_service.register(
+    result = await container.auth_service.register(
         email=payload.email,
         password=payload.password,
         display_name=payload.display_name,
@@ -79,15 +88,16 @@ async def register(
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
-    _set_auth_cookie(response, container, bundle.raw_session_token)
-    return _session_dict(bundle.auth_session)
+    return _registration_result_dict(result)
 
 
 @router.post("/api/auth/login")
 async def login(payload: LoginRequest, response: Response, container: ContainerOnlyDep) -> dict[str, object]:
-    bundle = await container.auth_service.login(email=payload.email, password=payload.password)
-    _set_auth_cookie(response, container, bundle.raw_session_token)
-    return _session_dict(bundle.auth_session)
+    result = await container.auth_service.login(email=payload.email, password=payload.password)
+    if isinstance(result, AuthTokenBundle):
+        _set_auth_cookie(response, container, result.raw_session_token)
+        return _session_dict(result.auth_session)
+    return _registration_result_dict(result)
 
 
 @router.post("/api/auth/logout")
@@ -102,15 +112,18 @@ async def logout(
 
 
 @router.post("/api/auth/verify-email")
-async def verify_email(payload: VerifyEmailRequest, container: ContainerOnlyDep) -> dict[str, object]:
-    session_view = await container.auth_service.verify_email(raw_token=payload.token)
-    return _session_dict(session_view)
+async def verify_email(
+    payload: VerifyCodeRequest, response: Response, container: ContainerOnlyDep,
+) -> dict[str, object]:
+    bundle = await container.auth_service.verify_code(email=payload.email, code=payload.code)
+    _set_auth_cookie(response, container, bundle.raw_session_token)
+    return _session_dict(bundle.auth_session)
 
 
 @router.post("/api/auth/resend-verification")
-async def resend_verification(account_id: CurrentAccountDep, container: ContainerOnlyDep) -> dict[str, object]:
-    session_view = await container.auth_service.resend_verification(account_id=account_id)
-    return _session_dict(session_view)
+async def resend_verification(payload: ResendVerificationRequest, container: ContainerOnlyDep) -> dict[str, str]:
+    await container.auth_service.resend_verification(email=payload.email)
+    return {"status": "ok"}
 
 
 @router.get("/api/auth/session")

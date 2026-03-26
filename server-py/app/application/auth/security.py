@@ -38,6 +38,10 @@ def issue_token(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 
+def generate_verification_code() -> str:
+    return f"{secrets.randbelow(1000000):06d}"
+
+
 def hash_password(password: str) -> str:
     return password_hasher.hash(password)
 

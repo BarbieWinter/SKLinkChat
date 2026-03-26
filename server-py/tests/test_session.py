@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 import pytest
@@ -29,12 +28,12 @@ def _register(client):
     )
 
 
-def _verify(client) -> None:
+def _verify(client, email="user@test.dev") -> str:
     fake_sender = client.app.state.container.auth_service._email_sender
-    verification_link = fake_sender.sent_messages[-1]["verification_link"]
-    verification_token = parse_qs(urlparse(verification_link).query)["verify_token"][0]
-    response = client.post("/api/auth/verify-email", json={"token": verification_token})
-    assert response.status_code == 200
+    code = [m for m in fake_sender.sent_messages if m.get("type") == "verification"][-1]["code"]
+    verify_resp = client.post("/api/auth/verify-email", json={"email": email, "code": code})
+    assert verify_resp.status_code == 200
+    return verify_resp.cookies["sklinkchat_session"]
 
 
 async def _list_active_chat_session_ids(client, *, account_id: str) -> list[str]:
@@ -62,17 +61,17 @@ def test_create_session_requires_verified_email(client):
     assert register_response.status_code == 201
 
     session_response = client.post("/api/session")
-    assert session_response.status_code == 403
-    assert session_response.json()["code"] == "EMAIL_NOT_VERIFIED"
+    assert session_response.status_code == 401
+    assert session_response.json()["code"] == "UNAUTHENTICATED"
 
 
 def test_create_session_rejects_restricted_account(client):
     register_response = _register(client)
     assert register_response.status_code == 201
-    _verify(client)
+    session_cookie = _verify(client)
 
     account_id, auth_session = _run(
-        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
+        client.app.state.container.resolve_auth_session.execute(session_cookie)
     )
     assert account_id is not None
     assert auth_session.authenticated is True
@@ -108,7 +107,7 @@ def test_create_session_returns_chat_session_for_verified_account(client):
 def test_create_session_reuses_existing_chat_session_for_same_account(client):
     register_response = _register(client)
     assert register_response.status_code == 201
-    _verify(client)
+    session_cookie = _verify(client)
 
     first_response = client.post("/api/session")
     second_response = client.post("/api/session")
@@ -118,7 +117,7 @@ def test_create_session_reuses_existing_chat_session_for_same_account(client):
     assert first_response.json()["session_id"] == second_response.json()["session_id"]
 
     account_id, auth_session = _run(
-        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
+        client.app.state.container.resolve_auth_session.execute(session_cookie)
     )
     assert account_id is not None
     assert auth_session.authenticated is True
@@ -130,10 +129,10 @@ def test_create_session_reuses_existing_chat_session_for_same_account(client):
 def test_concurrent_create_session_collapses_to_single_active_row(client):
     register_response = _register(client)
     assert register_response.status_code == 201
-    _verify(client)
+    session_cookie = _verify(client)
 
     account_id, auth_session = _run(
-        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
+        client.app.state.container.resolve_auth_session.execute(session_cookie)
     )
     assert account_id is not None
     assert auth_session.authenticated is True
@@ -154,11 +153,11 @@ def test_concurrent_create_session_collapses_to_single_active_row(client):
 def test_database_constraint_rejects_second_active_chat_session_row(client):
     register_response = _register(client)
     assert register_response.status_code == 201
-    _verify(client)
+    session_cookie = _verify(client)
 
     created_session_id = client.post("/api/session").json()["session_id"]
     account_id, auth_session = _run(
-        client.app.state.container.resolve_auth_session.execute(register_response.cookies["sklinkchat_session"])
+        client.app.state.container.resolve_auth_session.execute(session_cookie)
     )
     assert account_id is not None
     assert auth_session.authenticated is True

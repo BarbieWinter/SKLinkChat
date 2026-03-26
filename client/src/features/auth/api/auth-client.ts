@@ -10,6 +10,11 @@ export type AuthSessionPayload = {
   chat_access_restricted: boolean
 }
 
+export type VerificationRequiredPayload = {
+  status: 'verification_required'
+  masked_email: string
+}
+
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
@@ -49,13 +54,13 @@ export const registerAccount = (payload: {
   interests: string[]
   turnstile_token: string
 }) =>
-  requestJson<AuthSessionPayload>('/api/auth/register', {
+  requestJson<VerificationRequiredPayload>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(payload)
   })
 
 export const loginAccount = (payload: { email: string; password: string }) =>
-  requestJson<AuthSessionPayload>('/api/auth/login', {
+  requestJson<AuthSessionPayload | VerificationRequiredPayload>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload)
   })
@@ -66,16 +71,16 @@ export const logoutAccount = () =>
     body: JSON.stringify({})
   })
 
-export const verifyEmail = (token: string) =>
+export const verifyEmailCode = (email: string, code: string) =>
   requestJson<AuthSessionPayload>('/api/auth/verify-email', {
     method: 'POST',
-    body: JSON.stringify({ token })
+    body: JSON.stringify({ email, code })
   })
 
-export const resendVerification = () =>
-  requestJson<AuthSessionPayload>('/api/auth/resend-verification', {
+export const resendVerificationCode = (email: string) =>
+  requestJson<{ status: string }>('/api/auth/resend-verification', {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify({ email })
   })
 
 export const getAccountProfile = () =>

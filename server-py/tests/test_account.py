@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlparse
-
 
 def _register(client):
     return client.post(
@@ -16,12 +14,11 @@ def _register(client):
     )
 
 
-def _verify(client) -> None:
+def _verify(client, email="user@test.dev") -> None:
     fake_sender = client.app.state.container.auth_service._email_sender
-    verification_link = fake_sender.sent_messages[-1]["verification_link"]
-    verification_token = parse_qs(urlparse(verification_link).query)["verify_token"][0]
-    response = client.post("/api/auth/verify-email", json={"token": verification_token})
-    assert response.status_code == 200
+    code = [m for m in fake_sender.sent_messages if m.get("type") == "verification"][-1]["code"]
+    verify_resp = client.post("/api/auth/verify-email", json={"email": email, "code": code})
+    assert verify_resp.status_code == 200
 
 
 def test_get_account_profile_requires_authentication(client):

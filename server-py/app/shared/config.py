@@ -79,9 +79,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_email_settings(self) -> Settings:
-        if self.email_from is None and self.email_from_address is not None:
+        if not self.email_from and self.email_from_address:
             self.email_from = self.email_from_address
-        if self.app_base_url is None and self.frontend_base_url is not None:
+        if not self.app_base_url and self.frontend_base_url:
             self.app_base_url = self.frontend_base_url
 
         self.email_from = (self.email_from or "noreply@mail.sklinkchat.com").strip()

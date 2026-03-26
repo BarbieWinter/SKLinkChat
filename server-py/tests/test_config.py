@@ -36,7 +36,7 @@ def test_settings_requires_resend_api_key_when_provider_is_resend(monkeypatch: p
     monkeypatch.setenv("SERVER_PY_EMAIL_PROVIDER", "resend")
     monkeypatch.setenv("SERVER_PY_EMAIL_FROM", "noreply@mail.sklinkchat.com")
     monkeypatch.setenv("SERVER_PY_APP_BASE_URL", "http://localhost:4173")
-    monkeypatch.delenv("SERVER_PY_RESEND_API_KEY", raising=False)
+    monkeypatch.setenv("SERVER_PY_RESEND_API_KEY", "")
     get_settings.cache_clear()
 
     with pytest.raises(ValidationError, match="SERVER_PY_RESEND_API_KEY is required"):
@@ -47,9 +47,9 @@ def test_settings_supports_legacy_email_and_app_base_env_names(monkeypatch: pyte
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SERVER_PY_DATABASE_URL", "postgresql://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat")
     monkeypatch.setenv("SERVER_PY_EMAIL_PROVIDER", "fake")
-    monkeypatch.delenv("SERVER_PY_EMAIL_FROM", raising=False)
+    monkeypatch.setenv("SERVER_PY_EMAIL_FROM", "")
     monkeypatch.setenv("SERVER_PY_EMAIL_FROM_ADDRESS", "legacy@example.com")
-    monkeypatch.delenv("SERVER_PY_APP_BASE_URL", raising=False)
+    monkeypatch.setenv("SERVER_PY_APP_BASE_URL", "")
     monkeypatch.setenv("SERVER_PY_FRONTEND_BASE_URL", "http://localhost:4173")
     get_settings.cache_clear()
 

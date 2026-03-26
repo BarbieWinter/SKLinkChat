@@ -6,6 +6,7 @@ from email.utils import parseaddr
 
 from app.application.auth.security import (
     ensure_utc,
+    generate_verification_code,
     hash_ip,
     hash_password,
     hash_secret,
@@ -77,6 +78,16 @@ def normalize_interests(interests: list[str]) -> list[str]:
     return normalized[:10]
 
 
+def _mask_email(email: str) -> str:
+    local, domain = email.rsplit("@", 1)
+    if len(local) <= 1:
+        return f"*@{domain}"
+    return f"{local[0]}{'*' * (len(local) - 1)}@{domain}"
+
+
+_VERIFICATION_MAX_ATTEMPTS = 5
+
+
 @dataclass(slots=True, frozen=True)
 class AuthSessionView:
     authenticated: bool
@@ -92,6 +103,12 @@ class AuthSessionView:
 class AuthTokenBundle:
     raw_session_token: str
     auth_session: AuthSessionView
+
+
+@dataclass(slots=True, frozen=True)
+class RegistrationResult:
+    status: str
+    masked_email: str
 
 
 class AuthService:
@@ -140,7 +157,7 @@ class AuthService:
         turnstile_token: str,
         ip_address: str | None,
         user_agent: str | None,
-    ) -> AuthTokenBundle:
+    ) -> RegistrationResult:
         if len(password) < 8:
             raise AppError(message="Password is too short", code="PASSWORD_TOO_SHORT", status_code=422)
 
@@ -166,39 +183,57 @@ class AuthService:
 
         existing_account = await self._account_repository.get_by_email_normalized(email_normalized)
         if existing_account is not None:
+            if existing_account.email_verified_at is not None:
+                await self._risk_event_recorder.record(
+                    email_normalized=email_normalized,
+                    outcome="duplicate_email",
+                    details={"provider": turnstile_result.provider},
+                    account_id=existing_account.id,
+                    ip_hash=hash_ip(ip_address),
+                    user_agent=user_agent,
+                )
+                raise AppError(message="Email is already registered", code="EMAIL_ALREADY_EXISTS", status_code=409)
+
+            await self._account_repository.update_password(
+                account_id=existing_account.id,
+                password_hash=hash_password(password),
+            )
+            await self._account_repository.update_profile(
+                account_id=existing_account.id,
+                display_name=display_name,
+                interests=interests,
+            )
+            account = existing_account
+        else:
+            account = await self._account_repository.create(
+                email=email,
+                email_normalized=email_normalized,
+                password_hash=hash_password(password),
+                display_name=display_name,
+                interests=interests,
+            )
             await self._risk_event_recorder.record(
                 email_normalized=email_normalized,
-                outcome="duplicate_email",
+                outcome="registered",
                 details={"provider": turnstile_result.provider},
-                account_id=existing_account.id,
+                account_id=account.id,
                 ip_hash=hash_ip(ip_address),
                 user_agent=user_agent,
             )
-            raise AppError(message="Email is already registered", code="EMAIL_ALREADY_EXISTS", status_code=409)
 
-        account = await self._account_repository.create(
-            email=email,
-            email_normalized=email_normalized,
-            password_hash=hash_password(password),
-            display_name=display_name,
-            interests=interests,
-        )
-        await self._risk_event_recorder.record(
-            email_normalized=email_normalized,
-            outcome="registered",
-            details={"provider": turnstile_result.provider},
-            account_id=account.id,
-            ip_hash=hash_ip(ip_address),
-            user_agent=user_agent,
-        )
-        await self._issue_verification_email(account)
-        return await self._create_authenticated_session(account)
+        await self._issue_verification_code(account)
+        return RegistrationResult(status="verification_required", masked_email=_mask_email(account.email))
 
-    async def login(self, *, email: str, password: str) -> AuthTokenBundle:
+    async def login(self, *, email: str, password: str) -> AuthTokenBundle | RegistrationResult:
         _, email_normalized = normalize_email(email)
         account = await self._account_repository.get_by_email_normalized(email_normalized)
         if account is None or not verify_password(password, account.password_hash):
             raise AppError(message="Invalid credentials", code="INVALID_CREDENTIALS", status_code=401)
+
+        if account.email_verified_at is None:
+            await self._issue_verification_code(account)
+            return RegistrationResult(status="verification_required", masked_email=_mask_email(account.email))
+
         return await self._create_authenticated_session(account)
 
     async def logout(self, *, raw_session_token: str | None) -> None:
@@ -222,32 +257,46 @@ class AuthService:
             return None, AuthSessionView(authenticated=False)
         return account.id, await self._build_session_view(account)
 
-    async def verify_email(self, *, raw_token: str) -> AuthSessionView:
-        verification_token = await self._verification_token_repository.get_by_token_hash(hash_secret(raw_token))
-        if verification_token is None:
-            raise AppError(message="Verification link is invalid", code="INVALID_VERIFICATION_TOKEN", status_code=400)
-        if verification_token.consumed_at is not None:
-            raise AppError(message="Verification link is invalid", code="INVALID_VERIFICATION_TOKEN", status_code=400)
-        if verification_token.revoked_at is not None:
-            raise AppError(message="Verification link is invalid", code="INVALID_VERIFICATION_TOKEN", status_code=400)
-        if ensure_utc(verification_token.expires_at) <= utc_now():
+    async def verify_code(self, *, email: str, code: str) -> AuthTokenBundle:
+        _, email_normalized = normalize_email(email)
+        account = await self._account_repository.get_by_email_normalized(email_normalized)
+        if account is None:
+            raise AppError(message="Verification code is invalid", code="INVALID_VERIFICATION_CODE", status_code=400)
+
+        now = utc_now()
+        token = await self._verification_token_repository.get_active_for_account(account.id, now)
+        if token is None:
             raise AppError(
-                message="Verification link has expired",
-                code="VERIFICATION_LINK_EXPIRED",
-                status_code=410,
+                message="No pending verification code, please request a new one",
+                code="NO_PENDING_VERIFICATION",
+                status_code=400,
             )
 
-        await self._verification_token_repository.consume(token_id=verification_token.id, consumed_at=utc_now())
-        account = await self._account_repository.mark_verified(
-            account_id=verification_token.account_id,
-            verified_at=utc_now(),
-        )
-        return await self._build_session_view(account)
+        if token.attempts >= _VERIFICATION_MAX_ATTEMPTS:
+            raise AppError(
+                message="Too many failed attempts, please request a new code",
+                code="VERIFICATION_MAX_ATTEMPTS",
+                status_code=429,
+            )
 
-    async def resend_verification(self, *, account_id: str) -> AuthSessionView:
-        account = await self._require_account(account_id)
-        if account.email_verified_at is not None:
-            return await self._build_session_view(account)
+        expected_hash = hash_secret(f"{account.id}:{code}")
+        if token.token_hash != expected_hash:
+            await self._verification_token_repository.increment_attempts(token.id)
+            raise AppError(message="Verification code is invalid", code="INVALID_VERIFICATION_CODE", status_code=400)
+
+        await self._verification_token_repository.consume(token_id=token.id, consumed_at=now)
+        account = await self._account_repository.mark_verified(account_id=account.id, verified_at=now)
+        return await self._create_authenticated_session(account)
+
+    async def resend_verification(self, *, email: str) -> None:
+        try:
+            _, email_normalized = normalize_email(email)
+        except AppError:
+            return
+
+        account = await self._account_repository.get_by_email_normalized(email_normalized)
+        if account is None or account.email_verified_at is not None:
+            return
 
         latest_created_at = await self._verification_token_repository.latest_created_at(account.id)
         now = utc_now()
@@ -256,8 +305,8 @@ class AuthService:
             and (now - ensure_utc(latest_created_at)).total_seconds() < self._verification_resend_cooldown_seconds
         ):
             raise AppError(
-                message="Verification email was sent too recently",
-                code="VERIFICATION_EMAIL_COOLDOWN",
+                message="Verification code was sent too recently",
+                code="VERIFICATION_CODE_COOLDOWN",
                 status_code=429,
             )
 
@@ -267,13 +316,12 @@ class AuthService:
         )
         if sent_last_hour >= self._verification_resend_hourly_limit:
             raise AppError(
-                message="Verification email rate limit exceeded",
-                code="VERIFICATION_EMAIL_RATE_LIMITED",
+                message="Verification code rate limit exceeded",
+                code="VERIFICATION_CODE_RATE_LIMITED",
                 status_code=429,
             )
 
-        await self._issue_verification_email(account)
-        return await self._build_session_view(account)
+        await self._issue_verification_code(account)
 
     async def _create_authenticated_session(self, account: Account) -> AuthTokenBundle:
         raw_session_token = issue_token()
@@ -299,21 +347,21 @@ class AuthService:
             chat_access_restricted=getattr(account, "chat_access_restricted_at", None) is not None,
         )
 
-    async def _issue_verification_email(self, account: Account) -> None:
-        raw_token = issue_token()
+    async def _issue_verification_code(self, account: Account) -> None:
+        code = generate_verification_code()
         await self._verification_token_repository.revoke_active_for_account(
             account_id=account.id,
             revoked_at=utc_now(),
         )
         await self._verification_token_repository.create(
             account_id=account.id,
-            token_hash=hash_secret(raw_token),
+            token_hash=hash_secret(f"{account.id}:{code}"),
             expires_at=make_expiry(self._verification_token_ttl_seconds),
         )
-        await self._email_sender.send_verification_email(
+        await self._email_sender.send_verification_code(
             recipient=account.email,
             display_name=account.display_name,
-            verification_link=f"{self._app_base_url}/?verify_token={raw_token}",
+            code=code,
         )
 
     async def _require_account(self, account_id: str) -> Account:

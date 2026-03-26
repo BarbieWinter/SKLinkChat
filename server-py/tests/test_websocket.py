@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 from sqlalchemy import select
@@ -31,12 +30,12 @@ def _register_and_verify(client, *, email: str, display_name: str) -> str:
     )
     assert response.status_code == 201
 
-    verification_link = client.app.state.container.auth_service._email_sender.sent_messages[-1]["verification_link"]
-    verification_token = parse_qs(urlparse(verification_link).query)["verify_token"][0]
-    verify_response = client.post("/api/auth/verify-email", json={"token": verification_token})
-    assert verify_response.status_code == 200
+    fake_sender = client.app.state.container.auth_service._email_sender
+    code = [m for m in fake_sender.sent_messages if m.get("type") == "verification"][-1]["code"]
+    verify_resp = client.post("/api/auth/verify-email", json={"email": email, "code": code})
+    assert verify_resp.status_code == 200
 
-    return response.cookies[COOKIE_NAME]
+    return verify_resp.cookies[COOKIE_NAME]
 
 
 def _create_chat_session(client, *, session_cookie: str) -> str:
