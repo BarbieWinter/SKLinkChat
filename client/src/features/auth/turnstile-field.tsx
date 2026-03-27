@@ -90,7 +90,7 @@ export const TurnstileField = ({ onTokenChange }: TurnstileFieldProps) => {
   }, [onTokenChange])
 
   if (!TURNSTILE_SITE_KEY) {
-    return <p className="text-xs text-muted-foreground">开发环境使用内置 Turnstile 假令牌。</p>
+    return null
   }
 
   return <div ref={containerRef} />

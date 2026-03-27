@@ -4,9 +4,9 @@ import asyncio
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
-from app.application.auth.security import utc_now
+from app.application.auth.security import hash_secret, utc_now
 from app.infrastructure.postgres.models import EmailVerificationToken
 
 
@@ -26,16 +26,38 @@ def _register(client, **overrides):
     return client.post("/api/auth/register", json=payload)
 
 
-def _extract_verification_code(client) -> str:
+def _extract_verification_code(client, recipient: str = "user@testuser.dev") -> str:
     fake_sender = client.app.state.container.auth_service._email_sender
-    verification_messages = [m for m in fake_sender.sent_messages if m.get("type") == "verification"]
+    verification_messages = [
+        m
+        for m in fake_sender.sent_messages
+        if m.get("type") == "verification" and m.get("recipient") == recipient
+    ]
     return verification_messages[-1]["code"]
 
 
 def _verify_code(client, email: str = "user@testuser.dev", code: str | None = None):
     if code is None:
-        code = _extract_verification_code(client)
+        code = _extract_verification_code(client, recipient=email)
     return client.post("/api/auth/verify-email", json={"email": email, "code": code})
+
+
+def _latest_verification_token(client, email: str = "user@testuser.dev") -> EmailVerificationToken:
+    async def fetch() -> EmailVerificationToken:
+        account = await client.app.state.container.account_repository.get_by_email_normalized(email.lower())
+        assert account is not None
+        async with client.app.state.container.session_factory() as session:
+            result = await session.execute(
+                select(EmailVerificationToken)
+                .where(EmailVerificationToken.account_id == account.id)
+                .order_by(EmailVerificationToken.created_at.desc())
+                .limit(1)
+            )
+            token = result.scalar_one_or_none()
+            assert token is not None
+            return token
+
+    return _run(fetch())
 
 
 def _assert_short_id(value: str | None) -> None:
@@ -113,6 +135,15 @@ def test_verify_code_creates_session(client):
     assert "sklinkchat_session" in response.cookies
 
 
+def test_verification_token_hash_uses_random_token_id(client):
+    _register(client)
+    code = _extract_verification_code(client)
+    token = _latest_verification_token(client)
+
+    assert token.token_hash == hash_secret(f"{token.id}:{code}")
+    assert token.token_hash != hash_secret(f"{token.account_id}:{code}")
+
+
 def test_verify_code_rejects_wrong_code(client):
     _register(client)
 
@@ -145,13 +176,21 @@ def test_verify_code_rejects_expired(client):
 def test_verify_code_enforces_max_attempts(client):
     _register(client)
 
-    for _ in range(5):
+    for _ in range(4):
         resp = _verify_code(client, code="000000")
         assert resp.status_code == 400
 
-    response = _verify_code(client, code="000000")
-    assert response.status_code == 429
-    assert response.json()["code"] == "VERIFICATION_MAX_ATTEMPTS"
+    fifth = _verify_code(client, code="000000")
+    assert fifth.status_code == 429
+    assert fifth.json()["code"] == "VERIFICATION_MAX_ATTEMPTS"
+
+    token = _latest_verification_token(client)
+    assert token.attempts == 5
+    assert token.revoked_at is not None
+
+    follow_up = _verify_code(client, code="000000")
+    assert follow_up.status_code == 400
+    assert follow_up.json()["code"] == "NO_PENDING_VERIFICATION"
 
 
 def test_verify_code_rejects_reused(client):
@@ -163,6 +202,27 @@ def test_verify_code_rejects_reused(client):
 
     assert first.status_code == 200
     assert second.status_code == 400
+
+
+def test_verify_code_rejects_cross_account_token(client, monkeypatch):
+    _register(client, email="owner@testuser.dev")
+    _register(client, email="other@testuser.dev")
+
+    other_token = _latest_verification_token(client, email="other@testuser.dev")
+    other_code = _extract_verification_code(client, recipient="other@testuser.dev")
+
+    async def get_mismatched_token(account_id: str, now):
+        return other_token
+
+    monkeypatch.setattr(
+        client.app.state.container.auth_service._verification_token_repository,
+        "get_active_for_account",
+        get_mismatched_token,
+    )
+
+    response = _verify_code(client, email="owner@testuser.dev", code=other_code)
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_VERIFICATION_CODE"
 
 
 # --- Resend Verification ---
@@ -240,6 +300,7 @@ def test_login_verified_creates_session(client):
 
 def test_login_unverified_sends_code(client):
     _register(client)
+    client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
 
     login_response = client.post(
         "/api/auth/login",
@@ -249,6 +310,18 @@ def test_login_unverified_sends_code(client):
     assert login_response.status_code == 200
     assert login_response.json()["status"] == "verification_required"
     assert "sklinkchat_session" not in login_response.cookies
+
+
+def test_login_unverified_respects_resend_cooldown(client):
+    _register(client)
+
+    login_response = client.post(
+        "/api/auth/login",
+        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
+    )
+
+    assert login_response.status_code == 429
+    assert login_response.json()["code"] == "VERIFICATION_CODE_COOLDOWN"
 
 
 def test_login_logout_and_session_flow(client):

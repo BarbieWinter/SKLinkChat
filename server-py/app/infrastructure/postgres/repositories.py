@@ -207,9 +207,21 @@ class EmailVerificationTokenRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def create(self, *, account_id: str, token_hash: str, expires_at: datetime) -> EmailVerificationToken:
+    async def create(
+        self,
+        *,
+        account_id: str,
+        token_id: str,
+        token_hash: str,
+        expires_at: datetime,
+    ) -> EmailVerificationToken:
         async with self._session_factory() as session:
-            token = EmailVerificationToken(account_id=account_id, token_hash=token_hash, expires_at=expires_at)
+            token = EmailVerificationToken(
+                id=token_id,
+                account_id=account_id,
+                token_hash=token_hash,
+                expires_at=expires_at,
+            )
             session.add(token)
             await session.commit()
             await session.refresh(token)
@@ -275,6 +287,15 @@ class EmailVerificationTokenRepository:
             )
             await session.commit()
 
+    async def revoke(self, *, token_id: str, revoked_at: datetime) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                update(EmailVerificationToken)
+                .where(EmailVerificationToken.id == token_id)
+                .values(revoked_at=revoked_at)
+            )
+            await session.commit()
+
     async def get_active_for_account(self, account_id: str, now: datetime) -> EmailVerificationToken | None:
         async with self._session_factory() as session:
             result = await session.execute(
@@ -287,14 +308,22 @@ class EmailVerificationTokenRepository:
             )
             return result.scalar_one_or_none()
 
-    async def increment_attempts(self, token_id: str) -> None:
+    async def record_failed_attempt(self, *, token_id: str, failed_at: datetime, max_attempts: int) -> int:
         async with self._session_factory() as session:
-            await session.execute(
-                update(EmailVerificationToken)
+            result = await session.execute(
+                select(EmailVerificationToken)
                 .where(EmailVerificationToken.id == token_id)
-                .values(attempts=EmailVerificationToken.attempts + 1)
+                .with_for_update()
             )
+            token = result.scalar_one_or_none()
+            if token is None:
+                return max_attempts
+
+            token.attempts += 1
+            if token.attempts >= max_attempts and token.consumed_at is None and token.revoked_at is None:
+                token.revoked_at = failed_at
             await session.commit()
+            return token.attempts
 
 
 class PasswordResetTokenRepository:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 from email.utils import parseaddr
+from uuid import uuid4
 
 from app.application.auth.security import (
     ensure_utc,
@@ -86,6 +88,7 @@ def _mask_email(email: str) -> str:
 
 
 _VERIFICATION_MAX_ATTEMPTS = 5
+_RESEND_VERIFICATION_MIN_DELAY_SECONDS = 0.35
 
 
 @dataclass(slots=True, frozen=True)
@@ -231,7 +234,7 @@ class AuthService:
             raise AppError(message="Invalid credentials", code="INVALID_CREDENTIALS", status_code=401)
 
         if account.email_verified_at is None:
-            await self._issue_verification_code(account)
+            await self._issue_verification_code(account, enforce_rate_limits=True)
             return RegistrationResult(status="verification_required", masked_email=_mask_email(account.email))
 
         return await self._create_authenticated_session(account)
@@ -272,16 +275,31 @@ class AuthService:
                 status_code=400,
             )
 
+        if token.account_id != account.id:
+            await self._verification_token_repository.revoke(token_id=token.id, revoked_at=now)
+            raise AppError(message="Verification code is invalid", code="INVALID_VERIFICATION_CODE", status_code=400)
+
         if token.attempts >= _VERIFICATION_MAX_ATTEMPTS:
+            await self._verification_token_repository.revoke(token_id=token.id, revoked_at=now)
             raise AppError(
                 message="Too many failed attempts, please request a new code",
                 code="VERIFICATION_MAX_ATTEMPTS",
                 status_code=429,
             )
 
-        expected_hash = hash_secret(f"{account.id}:{code}")
+        expected_hash = hash_secret(f"{token.id}:{code}")
         if token.token_hash != expected_hash:
-            await self._verification_token_repository.increment_attempts(token.id)
+            attempts = await self._verification_token_repository.record_failed_attempt(
+                token_id=token.id,
+                failed_at=now,
+                max_attempts=_VERIFICATION_MAX_ATTEMPTS,
+            )
+            if attempts >= _VERIFICATION_MAX_ATTEMPTS:
+                raise AppError(
+                    message="Too many failed attempts, please request a new code",
+                    code="VERIFICATION_MAX_ATTEMPTS",
+                    status_code=429,
+                )
             raise AppError(message="Verification code is invalid", code="INVALID_VERIFICATION_CODE", status_code=400)
 
         await self._verification_token_repository.consume(token_id=token.id, consumed_at=now)
@@ -289,39 +307,20 @@ class AuthService:
         return await self._create_authenticated_session(account)
 
     async def resend_verification(self, *, email: str) -> None:
+        started_at = asyncio.get_running_loop().time()
         try:
-            _, email_normalized = normalize_email(email)
-        except AppError:
-            return
+            try:
+                _, email_normalized = normalize_email(email)
+            except AppError:
+                return
 
-        account = await self._account_repository.get_by_email_normalized(email_normalized)
-        if account is None or account.email_verified_at is not None:
-            return
+            account = await self._account_repository.get_by_email_normalized(email_normalized)
+            if account is None or account.email_verified_at is not None:
+                return
 
-        latest_created_at = await self._verification_token_repository.latest_created_at(account.id)
-        now = utc_now()
-        if (
-            latest_created_at is not None
-            and (now - ensure_utc(latest_created_at)).total_seconds() < self._verification_resend_cooldown_seconds
-        ):
-            raise AppError(
-                message="Verification code was sent too recently",
-                code="VERIFICATION_CODE_COOLDOWN",
-                status_code=429,
-            )
-
-        sent_last_hour = await self._verification_token_repository.sent_count_since(
-            account.id,
-            now - timedelta(hours=1),
-        )
-        if sent_last_hour >= self._verification_resend_hourly_limit:
-            raise AppError(
-                message="Verification code rate limit exceeded",
-                code="VERIFICATION_CODE_RATE_LIMITED",
-                status_code=429,
-            )
-
-        await self._issue_verification_code(account)
+            await self._issue_verification_code(account, enforce_rate_limits=True)
+        finally:
+            await self._apply_resend_verification_delay(started_at)
 
     async def _create_authenticated_session(self, account: Account) -> AuthTokenBundle:
         raw_session_token = issue_token()
@@ -347,15 +346,21 @@ class AuthService:
             chat_access_restricted=getattr(account, "chat_access_restricted_at", None) is not None,
         )
 
-    async def _issue_verification_code(self, account: Account) -> None:
+    async def _issue_verification_code(self, account: Account, *, enforce_rate_limits: bool = False) -> None:
+        now = utc_now()
+        if enforce_rate_limits:
+            await self._ensure_verification_code_send_allowed(account.id, now)
+
         code = generate_verification_code()
+        token_id = str(uuid4())
         await self._verification_token_repository.revoke_active_for_account(
             account_id=account.id,
-            revoked_at=utc_now(),
+            revoked_at=now,
         )
         await self._verification_token_repository.create(
             account_id=account.id,
-            token_hash=hash_secret(f"{account.id}:{code}"),
+            token_id=token_id,
+            token_hash=hash_secret(f"{token_id}:{code}"),
             expires_at=make_expiry(self._verification_token_ttl_seconds),
         )
         await self._email_sender.send_verification_code(
@@ -363,6 +368,34 @@ class AuthService:
             display_name=account.display_name,
             code=code,
         )
+
+    async def _ensure_verification_code_send_allowed(self, account_id: str, now) -> None:
+        latest_created_at = await self._verification_token_repository.latest_created_at(account_id)
+        if (
+            latest_created_at is not None
+            and (now - ensure_utc(latest_created_at)).total_seconds() < self._verification_resend_cooldown_seconds
+        ):
+            raise AppError(
+                message="Verification code was sent too recently",
+                code="VERIFICATION_CODE_COOLDOWN",
+                status_code=429,
+            )
+
+        sent_last_hour = await self._verification_token_repository.sent_count_since(
+            account_id,
+            now - timedelta(hours=1),
+        )
+        if sent_last_hour >= self._verification_resend_hourly_limit:
+            raise AppError(
+                message="Verification code rate limit exceeded",
+                code="VERIFICATION_CODE_RATE_LIMITED",
+                status_code=429,
+            )
+
+    async def _apply_resend_verification_delay(self, started_at: float) -> None:
+        remaining = _RESEND_VERIFICATION_MIN_DELAY_SECONDS - (asyncio.get_running_loop().time() - started_at)
+        if remaining > 0:
+            await asyncio.sleep(remaining)
 
     async def _require_account(self, account_id: str) -> Account:
         account = await self._account_repository.get_by_id(account_id)

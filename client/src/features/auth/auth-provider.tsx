@@ -15,6 +15,7 @@ import {
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 
 type AuthStatus = 'loading' | 'ready' | 'error'
+type LoginResult = 'authenticated' | 'verification_required'
 
 type AuthContextValue = {
   authSession: AuthSessionPayload
@@ -27,7 +28,7 @@ type AuthContextValue = {
     interests: string[]
     turnstileToken: string
   }) => Promise<void>
-  login: (payload: { email: string; password: string }) => Promise<void>
+  login: (payload: { email: string; password: string }) => Promise<LoginResult>
   logout: () => Promise<void>
   verifyCode: (email: string, code: string) => Promise<void>
   resendCode: (email: string) => Promise<void>
@@ -118,10 +119,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const result = await loginAccount({ email, password })
         if (isVerificationRequired(result)) {
           setPendingVerificationEmail(email)
-          return
+          return 'verification_required'
         }
         applySession(result)
         setStatus('ready')
+        return 'authenticated'
       },
       logout: async () => {
         await logoutAccount()
