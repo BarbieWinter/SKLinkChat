@@ -9,7 +9,12 @@ def _register(client):
             "password": "CorrectHorseBatteryStaple!23",
             "display_name": "Traveler",
             "interests": ["music", "travel"],
-            "turnstile_token": "test-token",
+            "captcha": {
+                "lot_number": "lot-register",
+                "captcha_output": "captcha-output",
+                "pass_token": "pass-token",
+                "gen_time": "2026-03-27T12:00:00Z",
+            },
         },
     )
 

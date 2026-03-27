@@ -33,10 +33,10 @@ docker compose up -d postgres redis
   - 开发/生产环境使用 `resend`（需配置 `SERVER_PY_RESEND_API_KEY`）
   - 测试环境使用 `fake`
   - 可选本地 SMTP 调试：`mailpit`
-- Turnstile:
-  - `register`、`login`、`resend-verification` 都会进行 Cloudflare Turnstile 服务端校验
-  - 生产环境必须配置真实 `SERVER_PY_TURNSTILE_SITE_KEY` 与 `SERVER_PY_TURNSTILE_SECRET_KEY`
-  - 前端仅使用 public site key，后端仅使用 secret key
+- GeeTest GT4:
+  - `register`、`login`、`resend-verification` 都会进行 GeeTest GT4 服务端校验
+  - 生产环境必须配置真实的 `SERVER_PY_GEETEST_*` 与 `VITE_GEETEST_*` 变量
+  - 前端仅使用 `captcha_id`，后端仅使用 `captcha_key`
 
 ### 3. Start Python backend
 
@@ -58,7 +58,7 @@ npm run dev
 ```
 
 前端默认连接 `http://localhost:8000` 和 `ws://localhost:8000/ws`。
-如果未单独设置 `VITE_TURNSTILE_ENABLED` / `VITE_TURNSTILE_SITE_KEY`，Vite 会优先读取 shell 中的 `SERVER_PY_TURNSTILE_ENABLED` / `SERVER_PY_TURNSTILE_SITE_KEY` 作为回退。
+如果未单独设置 `VITE_GEETEST_ENABLED` / `VITE_GEETEST_*`，Vite 会优先读取 shell 中的 `SERVER_PY_GEETEST_ENABLED` / `SERVER_PY_GEETEST_*` 作为回退。
 
 ## Docker Compose
 
@@ -141,11 +141,14 @@ curl -s http://localhost:8000/readyz
 
 - `VITE_ENDPOINT`
 - `VITE_WS_ENDPOINT`
-- `VITE_TURNSTILE_ENABLED`
-- `VITE_TURNSTILE_SITE_KEY`
-- `SERVER_PY_TURNSTILE_ENABLED`
-- `SERVER_PY_TURNSTILE_SITE_KEY`
-- `SERVER_PY_TURNSTILE_SECRET_KEY`
+- `VITE_GEETEST_ENABLED`
+- `VITE_GEETEST_REGISTER_CAPTCHA_ID`
+- `VITE_GEETEST_LOGIN_CAPTCHA_ID`
+- `SERVER_PY_GEETEST_ENABLED`
+- `SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID`
+- `SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY`
+- `SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID`
+- `SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY`
 - `SERVER_PY_DATABASE_URL`
 - `SERVER_PY_REDIS_URL`
 - `SERVER_PY_EMAIL_PROVIDER`

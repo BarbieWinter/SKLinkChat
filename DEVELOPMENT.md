@@ -99,20 +99,23 @@ SERVER_PY_EMAIL_PROVIDER=resend
 SERVER_PY_EMAIL_FROM=noreply@mail.sklinkchat.com
 SERVER_PY_RESEND_API_KEY=<your_resend_api_key>
 SERVER_PY_APP_BASE_URL=http://localhost:5173
-SERVER_PY_TURNSTILE_ENABLED=true
-SERVER_PY_TURNSTILE_SITE_KEY=<your_turnstile_site_key>
-SERVER_PY_TURNSTILE_SECRET_KEY=<your_turnstile_secret_key>
+SERVER_PY_GEETEST_ENABLED=true
+SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
+SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY=<your_register_captcha_key>
+SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
+SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY=<your_login_captcha_key>
 SERVER_PY_SECURE_COOKIES=false
 ```
 
 如果你只单独启动前端，也可以显式配置：
 
 ```
-VITE_TURNSTILE_ENABLED=true
-VITE_TURNSTILE_SITE_KEY=<your_turnstile_site_key>
+VITE_GEETEST_ENABLED=true
+VITE_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
+VITE_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
 ```
 
-其中 `site key` 只用于前端渲染组件，`secret key` 只用于后端服务端校验。
+其中 `captcha_id` 只用于前端渲染组件，`captcha_key` 只用于后端服务端校验。
 
 管理员身份现在由 PostgreSQL `accounts.is_admin` 字段驱动。测试或本地切换管理员时，可直接更新数据库：
 
@@ -230,12 +233,14 @@ cd client && npm run dev
 docker compose up --build
 ```
 
-如果需要通过 Docker Compose 一起启用 Turnstile，请在根目录 `.env` 中提供：
+如果需要通过 Docker Compose 一起启用 GeeTest GT4，请在根目录 `.env` 中提供：
 
 ```
-SERVER_PY_TURNSTILE_ENABLED=true
-SERVER_PY_TURNSTILE_SITE_KEY=<your_turnstile_site_key>
-SERVER_PY_TURNSTILE_SECRET_KEY=<your_turnstile_secret_key>
+SERVER_PY_GEETEST_ENABLED=true
+SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
+SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY=<your_register_captcha_key>
+SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
+SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY=<your_login_captcha_key>
 ```
 
 注意：当前开发机没有 Docker，上面的"全栈启动顺序"是主验证路径。

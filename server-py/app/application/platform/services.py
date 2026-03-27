@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 class EmailSender(Protocol):
@@ -11,23 +11,41 @@ class EmailSender(Protocol):
     async def send_password_reset_email(self, *, recipient: str, display_name: str, reset_link: str) -> None: ...
 
 
+CaptchaScenario = Literal["register", "login", "resend_verification"]
+
+
 @dataclass(slots=True, frozen=True)
-class TurnstileVerificationResult:
+class GeeTestCaptchaPayload:
+    lot_number: str
+    captcha_output: str
+    pass_token: str
+    gen_time: str
+
+
+@dataclass(slots=True, frozen=True)
+class GeeTestVerificationResult:
     success: bool
     provider: str
+    scenario: CaptchaScenario
     error_codes: tuple[str, ...] = ()
 
 
-class TurnstileConfigurationError(RuntimeError):
+class GeeTestConfigurationError(RuntimeError):
     pass
 
 
-class TurnstileServiceUnavailableError(RuntimeError):
+class GeeTestServiceUnavailableError(RuntimeError):
     pass
 
 
-class TurnstileVerifier(Protocol):
-    async def verify(self, token: str, *, remote_ip: str | None) -> TurnstileVerificationResult: ...
+class GeeTestVerifier(Protocol):
+    async def verify(
+        self,
+        payload: GeeTestCaptchaPayload,
+        *,
+        scenario: CaptchaScenario,
+        remote_ip: str | None,
+    ) -> GeeTestVerificationResult: ...
 
 
 @dataclass(slots=True, frozen=True)

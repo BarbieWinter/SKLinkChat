@@ -28,7 +28,9 @@ npm run dev
 
 - `VITE_ENDPOINT=http://localhost:8000`
 - `VITE_WS_ENDPOINT=ws://localhost:8000/ws`
-- `VITE_TURNSTILE_SITE_KEY=`
+- `VITE_GEETEST_ENABLED=false`
+- `VITE_GEETEST_REGISTER_CAPTCHA_ID=`
+- `VITE_GEETEST_LOGIN_CAPTCHA_ID=`
 
 ## Verification
 

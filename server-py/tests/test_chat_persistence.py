@@ -13,6 +13,15 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _captcha_payload() -> dict[str, str]:
+    return {
+        "lot_number": "lot-register",
+        "captcha_output": "captcha-output",
+        "pass_token": "pass-token",
+        "gen_time": "2026-03-27T12:00:00Z",
+    }
+
+
 def _register_and_verify(client, *, email: str, display_name: str) -> str:
     response = client.post(
         "/api/auth/register",
@@ -21,7 +30,7 @@ def _register_and_verify(client, *, email: str, display_name: str) -> str:
             "password": "CorrectHorseBatteryStaple!23",
             "display_name": display_name,
             "interests": ["music"],
-            "turnstile_token": "test-token",
+            "captcha": _captcha_payload(),
         },
     )
     assert response.status_code == 201

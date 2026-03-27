@@ -58,7 +58,7 @@ from app.infrastructure.redis.presence_repository import RedisPresenceRepository
 from app.infrastructure.redis.readiness_probe import RedisReadinessProbe
 from app.infrastructure.redis.redis_event_bus import RedisEventBus
 from app.infrastructure.redis.session_repository import RedisSessionRepository
-from app.infrastructure.turnstile_verifier import build_turnstile_verifier
+from app.infrastructure.geetest_verifier import build_geetest_verifier
 from app.shared.config import Settings
 
 
@@ -133,7 +133,7 @@ def build_container(
         password_reset_token_repository=password_reset_token_repository,
         risk_event_recorder=risk_event_repository,
         email_sender=build_email_sender(settings),
-        turnstile_verifier=build_turnstile_verifier(settings),
+        geetest_verifier=build_geetest_verifier(settings),
         verification_token_ttl_seconds=settings.verification_token_ttl_seconds,
         auth_session_ttl_seconds=settings.auth_session_ttl_seconds,
         verification_resend_cooldown_seconds=settings.verification_resend_cooldown_seconds,

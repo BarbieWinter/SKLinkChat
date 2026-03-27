@@ -5,8 +5,10 @@ import path from 'path'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY || env.SERVER_PY_TURNSTILE_SITE_KEY || ''
-  const turnstileEnabled = env.VITE_TURNSTILE_ENABLED || env.SERVER_PY_TURNSTILE_ENABLED || 'false'
+  const geetestEnabled = env.VITE_GEETEST_ENABLED || env.SERVER_PY_GEETEST_ENABLED || 'false'
+  const geetestRegisterCaptchaId =
+    env.VITE_GEETEST_REGISTER_CAPTCHA_ID || env.SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID || ''
+  const geetestLoginCaptchaId = env.VITE_GEETEST_LOGIN_CAPTCHA_ID || env.SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID || ''
   const previewAllowedHosts = [
     'localhost',
     '127.0.0.1',
@@ -18,8 +20,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      'import.meta.env.VITE_TURNSTILE_SITE_KEY': JSON.stringify(turnstileSiteKey),
-      'import.meta.env.VITE_TURNSTILE_ENABLED': JSON.stringify(turnstileEnabled)
+      'import.meta.env.VITE_GEETEST_ENABLED': JSON.stringify(geetestEnabled),
+      'import.meta.env.VITE_GEETEST_REGISTER_CAPTCHA_ID': JSON.stringify(geetestRegisterCaptchaId),
+      'import.meta.env.VITE_GEETEST_LOGIN_CAPTCHA_ID': JSON.stringify(geetestLoginCaptchaId)
     },
     resolve: {
       alias: {

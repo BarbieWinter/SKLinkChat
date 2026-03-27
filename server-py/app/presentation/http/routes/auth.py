@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field
 
+from app.application.platform.services import GeeTestCaptchaPayload
 from app.application.auth.service import AuthTokenBundle, RegistrationResult
 from app.bootstrap.container import ApplicationContainer
 from app.presentation.http.dependencies import CurrentAuthDep, get_container
@@ -13,18 +14,33 @@ router = APIRouter()
 ContainerOnlyDep = Annotated[ApplicationContainer, Depends(get_container)]
 
 
+class GeeTestCaptchaRequest(BaseModel):
+    lot_number: str = Field(..., min_length=1)
+    captcha_output: str = Field(..., min_length=1)
+    pass_token: str = Field(..., min_length=1)
+    gen_time: str = Field(..., min_length=1)
+
+    def to_payload(self) -> GeeTestCaptchaPayload:
+        return GeeTestCaptchaPayload(
+            lot_number=self.lot_number,
+            captcha_output=self.captcha_output,
+            pass_token=self.pass_token,
+            gen_time=self.gen_time,
+        )
+
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
     display_name: str = Field(..., min_length=1, max_length=80)
     interests: list[str] = Field(default_factory=list)
-    turnstile_token: str = Field(..., min_length=1)
+    captcha: GeeTestCaptchaRequest
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
-    turnstile_token: str = Field(..., min_length=1)
+    captcha: GeeTestCaptchaRequest
 
 
 class VerifyCodeRequest(BaseModel):
@@ -34,7 +50,6 @@ class VerifyCodeRequest(BaseModel):
 
 class ResendVerificationRequest(BaseModel):
     email: str
-    turnstile_token: str = Field(..., min_length=1)
 
 
 def _set_auth_cookie(response: Response, container: ApplicationContainer, raw_session_token: str) -> None:
@@ -86,7 +101,7 @@ async def register(
         password=payload.password,
         display_name=payload.display_name,
         interests=payload.interests,
-        turnstile_token=payload.turnstile_token,
+        captcha_payload=payload.captcha.to_payload(),
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
@@ -103,7 +118,7 @@ async def login(
     result = await container.auth_service.login(
         email=payload.email,
         password=payload.password,
-        turnstile_token=payload.turnstile_token,
+        captcha_payload=payload.captcha.to_payload(),
         ip_address=request.client.host if request.client else None,
     )
     if isinstance(result, AuthTokenBundle):
@@ -140,7 +155,6 @@ async def resend_verification(
 ) -> dict[str, str]:
     await container.auth_service.resend_verification(
         email=payload.email,
-        turnstile_token=payload.turnstile_token,
         ip_address=request.client.host if request.client else None,
     )
     return {"status": "ok"}

@@ -15,6 +15,13 @@ export type VerificationRequiredPayload = {
   masked_email: string
 }
 
+export type GeeTestCaptchaPayload = {
+  lot_number: string
+  captcha_output: string
+  pass_token: string
+  gen_time: string
+}
+
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
@@ -50,14 +57,14 @@ export const registerAccount = (payload: {
   password: string
   display_name: string
   interests: string[]
-  turnstile_token: string
+  captcha: GeeTestCaptchaPayload
 }) =>
   requestJson<VerificationRequiredPayload>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(payload)
   })
 
-export const loginAccount = (payload: { email: string; password: string; turnstile_token: string }) =>
+export const loginAccount = (payload: { email: string; password: string; captcha: GeeTestCaptchaPayload }) =>
   requestJson<AuthSessionPayload | VerificationRequiredPayload>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload)
@@ -75,7 +82,7 @@ export const verifyEmailCode = (email: string, code: string) =>
     body: JSON.stringify({ email, code })
   })
 
-export const resendVerificationCode = (payload: { email: string; turnstile_token: string }) =>
+export const resendVerificationCode = (payload: { email: string }) =>
   requestJson<{ status: string }>('/api/auth/resend-verification', {
     method: 'POST',
     body: JSON.stringify(payload)

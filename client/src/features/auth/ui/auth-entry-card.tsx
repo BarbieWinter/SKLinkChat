@@ -1,11 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Clock3, KeyRound, LockKeyhole, MailCheck, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react'
+import { KeyRound, LockKeyhole, MailCheck, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { generateUsername } from 'unique-username-generator'
 
-import { requestPasswordReset, resetPassword } from '@/features/auth/api/auth-client'
+import { type GeeTestCaptchaPayload, requestPasswordReset, resetPassword } from '@/features/auth/api/auth-client'
 import { useAuth } from '@/features/auth/auth-provider'
-import { TurnstileField, type TurnstileFieldHandle } from '@/features/auth/turnstile-field'
+import { GeeTestField, type GeeTestFieldHandle } from '@/features/auth/geetest-field'
+import { GEETEST_LOGIN_CAPTCHA_ID, GEETEST_REGISTER_CAPTCHA_ID } from '@/shared/config/runtime'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
@@ -53,7 +54,7 @@ export const AuthEntryCard = () => {
   const [authMode, setAuthMode] = useState<'register' | 'login' | 'forgot' | 'reset' | 'verify'>(() =>
     pendingVerificationEmail ? 'verify' : getInitialAuthMode()
   )
-  const [turnstileToken, setTurnstileToken] = useState('')
+  const [captchaPayload, setCaptchaPayload] = useState<GeeTestCaptchaPayload | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
   const [resetForm, setResetForm] = useState({ password: '', confirm: '' })
@@ -70,26 +71,27 @@ export const AuthEntryCard = () => {
   const [verifyCode_, setVerifyCode_] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const turnstileRef = useRef<TurnstileFieldHandle | null>(null)
+  const geetestRef = useRef<GeeTestFieldHandle | null>(null)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [turnstileError, setTurnstileError] = useState<string | null>(null)
+  const [captchaError, setCaptchaError] = useState<string | null>(null)
+  const activeCaptchaId = authMode === 'login' ? GEETEST_LOGIN_CAPTCHA_ID : GEETEST_REGISTER_CAPTCHA_ID
 
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }))
   const switchAuthMode = (nextMode: typeof authMode) => {
     setTouched({})
-    setTurnstileToken('')
-    setTurnstileError(null)
+    setCaptchaPayload(null)
+    setCaptchaError(null)
     setAuthMode(nextMode)
   }
 
-  const resetTurnstile = useCallback(() => {
-    setTurnstileToken('')
-    turnstileRef.current?.reset()
+  const resetCaptcha = useCallback(() => {
+    setCaptchaPayload(null)
+    geetestRef.current?.reset()
   }, [])
 
-  const requireTurnstileToken = () => {
-    if (turnstileToken) return true
-    const description = turnstileError ?? '请先完成人机校验。'
+  const requireCaptchaPayload = () => {
+    if (captchaPayload) return true
+    const description = captchaError ?? '请先完成人机校验。'
     toast({
       title: t('common.error'),
       description,
@@ -98,25 +100,25 @@ export const AuthEntryCard = () => {
     return false
   }
 
-  const handleTurnstileFailure = (code?: string, fallback = '人机校验失败，请重试。') => {
+  const handleCaptchaFailure = (code?: string, fallback = '人机校验失败，请重试。') => {
     let description = fallback
-    if (code === 'TURNSTILE_VALIDATION_FAILED') {
+    if (code === 'GEETEST_VALIDATION_FAILED') {
       description = '人机校验未通过，请重新完成验证。'
-    } else if (code === 'TURNSTILE_UNAVAILABLE') {
+    } else if (code === 'GEETEST_UNAVAILABLE') {
       description = '人机校验服务暂时不可用，请稍后重试。'
-    } else if (code === 'TURNSTILE_NOT_CONFIGURED') {
-      description = 'Turnstile 配置缺失，当前无法提交。'
-    } else if (code === 'TURNSTILE_TOKEN_REQUIRED') {
+    } else if (code === 'GEETEST_NOT_CONFIGURED') {
+      description = '极验配置缺失，当前无法提交。'
+    } else if (code === 'GEETEST_FIELDS_REQUIRED') {
       description = '请先完成人机校验。'
     }
-    setTurnstileError(description)
+    setCaptchaError(description)
 
     toast({
       title: t('common.error'),
       description,
       variant: 'destructive'
     })
-    resetTurnstile()
+    resetCaptcha()
   }
 
   const startResendCooldown = useCallback(() => {
@@ -147,7 +149,7 @@ export const AuthEntryCard = () => {
       return
     }
 
-    if (!requireTurnstileToken()) {
+    if (!requireCaptchaPayload()) {
       return
     }
 
@@ -158,7 +160,7 @@ export const AuthEntryCard = () => {
         password: registerForm.password,
         displayName: registerForm.displayName.trim(),
         interests: parseInterestInput(registerForm.interests),
-        turnstileToken
+        captcha: captchaPayload as GeeTestCaptchaPayload
       })
       startResendCooldown()
       setVerifyCode_('')
@@ -169,8 +171,8 @@ export const AuthEntryCard = () => {
       })
     } catch (error) {
       const code = (error as Error & { code?: string }).code
-      if (code?.startsWith('TURNSTILE_')) {
-        handleTurnstileFailure(code)
+      if (code?.startsWith('GEETEST_')) {
+        handleCaptchaFailure(code)
         return
       }
       if (code === 'EMAIL_ALREADY_EXISTS') {
@@ -188,7 +190,7 @@ export const AuthEntryCard = () => {
         })
       }
     } finally {
-      resetTurnstile()
+      resetCaptcha()
       setSubmitting(false)
     }
   }
@@ -199,7 +201,7 @@ export const AuthEntryCard = () => {
       return
     }
 
-    if (!requireTurnstileToken()) {
+    if (!requireCaptchaPayload()) {
       return
     }
 
@@ -208,7 +210,7 @@ export const AuthEntryCard = () => {
       const result = await login({
         email: loginForm.email.trim(),
         password: loginForm.password,
-        turnstileToken
+        captcha: captchaPayload as GeeTestCaptchaPayload
       })
       if (result === 'verification_required') {
         startResendCooldown()
@@ -221,8 +223,8 @@ export const AuthEntryCard = () => {
       }
     } catch (error) {
       const code = (error as Error & { code?: string }).code
-      if (code?.startsWith('TURNSTILE_')) {
-        handleTurnstileFailure(code)
+      if (code?.startsWith('GEETEST_')) {
+        handleCaptchaFailure(code)
         return
       }
       toast({
@@ -232,7 +234,7 @@ export const AuthEntryCard = () => {
         variant: 'destructive'
       })
     } finally {
-      resetTurnstile()
+      resetCaptcha()
       setSubmitting(false)
     }
   }
@@ -260,28 +262,18 @@ export const AuthEntryCard = () => {
 
   const handleResendCode = async () => {
     if (!pendingVerificationEmail || resendCooldown > 0) return
-    if (!requireTurnstileToken()) {
-      return
-    }
 
     try {
-      await resendCode({ email: pendingVerificationEmail, turnstileToken })
+      await resendCode({ email: pendingVerificationEmail })
       startResendCooldown()
       setVerifyCode_('')
       toast({ title: '已发送', description: '新的验证码已发送。' })
     } catch (error) {
-      const code = (error as Error & { code?: string }).code
-      if (code?.startsWith('TURNSTILE_')) {
-        handleTurnstileFailure(code, '人机校验失败，请重新完成验证。')
-        return
-      }
       toast({
         title: t('common.error'),
         description: error instanceof Error ? error.message : '发送失败。',
         variant: 'destructive'
       })
-    } finally {
-      resetTurnstile()
     }
   }
 
@@ -369,7 +361,7 @@ export const AuthEntryCard = () => {
             : '完成注册与邮箱验证后即可开始聊天。'
 
   return (
-    <div className="relative flex min-h-[calc(100dvh-5rem)] items-start justify-center overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:items-center">
+    <div className="relative flex h-full min-h-0 items-start justify-center overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
       {/* Dynamic Background */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <motion.div
@@ -416,7 +408,7 @@ export const AuthEntryCard = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="hidden min-h-[640px] flex-col justify-between rounded-[32px] border border-sky-200/50 bg-slate-950 px-8 py-8 text-slate-50 shadow-2xl shadow-slate-950/25 lg:flex"
+          className="hidden self-start rounded-[32px] border border-sky-200/50 bg-slate-950 px-8 py-8 text-slate-50 shadow-2xl shadow-slate-950/25 lg:flex lg:min-h-[640px] lg:flex-col lg:gap-8"
         >
           <div className="space-y-6">
             <motion.div
@@ -444,34 +436,38 @@ export const AuthEntryCard = () => {
                 transition={{ delay: 0.5 }}
                 className="max-w-md text-sm leading-7 text-slate-300 xl:text-[15px]"
               >
-                匿名、安全、即时的陌生人聊天平台，守护每个用户的隐私。
+                一个让你轻松匿名开口的随机聊天空间，适合想找人倾诉、结识陌生人，或只是随手聊一会儿的时刻。
               </motion.p>
             </div>
 
             <div className="grid gap-3">
               {[
                 {
+                  icon: MessageCircle,
+                  title: '匿名开聊',
+                  description: '不需要公开真实身份，进入页面后就能轻量开始一段对话。'
+                },
+                {
+                  icon: Sparkles,
+                  title: '即时连接',
+                  description: '完成登录后即可开始匹配，把等待和复杂步骤压到最低。'
+                },
+                {
                   icon: ShieldCheck,
-                  title: '验证码链路加固',
-                  description: '验证码尝试次数受控，异常或越权 token 会被立即作废。'
-                },
-                {
-                  icon: Clock3,
-                  title: '发送频率受限',
-                  description: '注册后的补发、登录触发发送都会经过冷却与小时级限制。'
-                },
-                {
-                  icon: MailCheck,
-                  title: '邮箱验证闭环',
-                  description: '完成邮箱验证后再进入聊天，减少匿名滥用与错误注册。'
+                  title: '隐私优先',
+                  description: '把表达留给当下，把压力留在门外，让聊天回到轻松本身。'
                 }
               ].map(({ icon: Icon, title, description }, index) => (
                 <motion.div
                   key={title}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 + index * 0.1 }}
-                  whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.15)' }}
+                  transition={{ delay: 0.45 + index * 0.06, duration: 0.35, ease: 'easeOut' }}
+                  whileHover={{
+                    scale: 1.02,
+                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    transition: { duration: 0.12, ease: 'easeOut' }
+                  }}
                   className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm"
                 >
                   <div className="flex items-start gap-3">
@@ -486,35 +482,35 @@ export const AuthEntryCard = () => {
                 </motion.div>
               ))}
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.66, duration: 0.3, ease: 'easeOut' }}
+              className="rounded-[26px] border border-white/10 bg-white/6 p-5 backdrop-blur-sm"
+            >
+              <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-slate-300">适合这些时刻</p>
+              <div className="mt-4 flex flex-wrap gap-2.5">
+                {['想找人倾诉', '随机认识新朋友', '深夜想聊一会', '碎片时间随手开聊'].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-white/10 bg-white/8 px-3.5 py-2 text-[13px] text-slate-100"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 text-slate-100">
-            {[
-              { value: '6 位', label: '邮箱验证码' },
-              { value: '15 分钟', label: '有效时长' },
-              { value: '5 次', label: '错误上限' }
-            ].map((item, index) => (
-              <motion.div
-                key={item.label}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.9 + index * 0.1 }}
-                whileHover={{ y: -5 }}
-                className="rounded-2xl border border-white/10 bg-white/10 p-4 text-center backdrop-blur-sm"
-              >
-                <p className="text-xl font-semibold tracking-tight text-white">{item.value}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{item.label}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.section>
+	        </motion.section>
 
         {/* Form Section */}
         <motion.section
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="relative flex max-h-[calc(100dvh-3rem)] flex-col overflow-y-auto rounded-[28px] border border-slate-800/70 bg-slate-950/70 p-5 text-slate-50 shadow-2xl shadow-slate-950/30 backdrop-blur-xl sm:max-h-[calc(100dvh-4rem)] sm:p-7"
+          className="relative flex flex-col rounded-[28px] border border-slate-800/70 bg-slate-950/70 p-5 text-slate-50 shadow-2xl shadow-slate-950/30 backdrop-blur-xl sm:p-7 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto"
         >
           {/* Mobile Info Banner */}
           <div className="mb-7 rounded-[24px] border border-slate-800/80 bg-slate-900/85 p-4 text-slate-100 lg:hidden">
@@ -602,8 +598,8 @@ export const AuthEntryCard = () => {
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className="mt-5 space-y-3"
               >
-                {turnstileError && (authMode === 'register' || authMode === 'login' || authMode === 'verify') && (
-                  <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>
+                {captchaError && (authMode === 'register' || authMode === 'login') && (
+                  <p className="text-[13px] leading-6 text-destructive">{captchaError}</p>
                 )}
 
                 {authMode === 'forgot' && (
@@ -697,23 +693,16 @@ export const AuthEntryCard = () => {
                       placeholder="兴趣标签（逗号分隔，可选）"
                       className={authInputClassName}
                     />
-                    <TurnstileField
-                      ref={turnstileRef}
-                      onTokenChange={(token) => {
-                        setTurnstileError(null)
-                        setTurnstileToken(token)
+                    <GeeTestField
+                      ref={geetestRef}
+                      captchaId={activeCaptchaId}
+                      onValidateChange={(payload) => {
+                        setCaptchaError(null)
+                        setCaptchaPayload(payload)
                       }}
-                      onExpired={() => setTurnstileError('人机校验已过期，请重新完成验证。')}
-                      onError={setTurnstileError}
+                      onError={setCaptchaError}
                     />
-                    {turnstileError && <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>}
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="rounded-2xl border border-sky-900/60 bg-sky-950/18 px-4 py-3 text-[14px] leading-[1.65] text-sky-100"
-                    >
-                      我们会向您的邮箱发送 6 位验证码，完成后即可注册
-                    </motion.div>
+                    {captchaError && <p className="text-[13px] leading-6 text-destructive">{captchaError}</p>}
                     <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
                       <Button
                         onClick={handleRegister}
@@ -752,16 +741,16 @@ export const AuthEntryCard = () => {
                       placeholder="密码"
                       className={authInputClassName}
                     />
-                    <TurnstileField
-                      ref={turnstileRef}
-                      onTokenChange={(token) => {
-                        setTurnstileError(null)
-                        setTurnstileToken(token)
+                    <GeeTestField
+                      ref={geetestRef}
+                      captchaId={activeCaptchaId}
+                      onValidateChange={(payload) => {
+                        setCaptchaError(null)
+                        setCaptchaPayload(payload)
                       }}
-                      onExpired={() => setTurnstileError('人机校验已过期，请重新完成验证。')}
-                      onError={setTurnstileError}
+                      onError={setCaptchaError}
                     />
-                    {turnstileError && <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>}
+                    {captchaError && <p className="text-[13px] leading-6 text-destructive">{captchaError}</p>}
                     <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
                       <Button
                         onClick={handleLogin}
@@ -814,16 +803,6 @@ export const AuthEntryCard = () => {
                         autoComplete="one-time-code"
                       />
                     </motion.div>
-                    <TurnstileField
-                      ref={turnstileRef}
-                      onTokenChange={(token) => {
-                        setTurnstileError(null)
-                        setTurnstileToken(token)
-                      }}
-                      onExpired={() => setTurnstileError('人机校验已过期，请重新完成验证。')}
-                      onError={setTurnstileError}
-                    />
-                    {turnstileError && <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>}
                     <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
                       <Button
                         onClick={handleVerifyCode}

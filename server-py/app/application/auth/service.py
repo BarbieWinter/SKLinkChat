@@ -19,10 +19,11 @@ from app.application.auth.security import (
 )
 from app.application.platform.services import (
     EmailSender,
+    GeeTestCaptchaPayload,
+    GeeTestConfigurationError,
+    GeeTestServiceUnavailableError,
+    GeeTestVerifier,
     RiskEventRecorder,
-    TurnstileConfigurationError,
-    TurnstileServiceUnavailableError,
-    TurnstileVerifier,
 )
 from app.infrastructure.postgres.models import Account
 from app.infrastructure.postgres.repositories import (
@@ -131,7 +132,7 @@ class AuthService:
         password_reset_token_repository: PasswordResetTokenRepository,
         risk_event_recorder: RiskEventRecorder,
         email_sender: EmailSender,
-        turnstile_verifier: TurnstileVerifier,
+        geetest_verifier: GeeTestVerifier,
         verification_token_ttl_seconds: int,
         auth_session_ttl_seconds: int,
         verification_resend_cooldown_seconds: int,
@@ -147,7 +148,7 @@ class AuthService:
         self._password_reset_token_repository = password_reset_token_repository
         self._risk_event_recorder = risk_event_recorder
         self._email_sender = email_sender
-        self._turnstile_verifier = turnstile_verifier
+        self._geetest_verifier = geetest_verifier
         self._verification_token_ttl_seconds = verification_token_ttl_seconds
         self._auth_session_ttl_seconds = auth_session_ttl_seconds
         self._verification_resend_cooldown_seconds = verification_resend_cooldown_seconds
@@ -164,7 +165,7 @@ class AuthService:
         password: str,
         display_name: str,
         interests: list[str],
-        turnstile_token: str,
+        captcha_payload: GeeTestCaptchaPayload,
         ip_address: str | None,
         user_agent: str | None,
     ) -> RegistrationResult:
@@ -175,7 +176,11 @@ class AuthService:
         check_email_domain(email_normalized)
         display_name = normalize_display_name(display_name)
         interests = normalize_interests(interests)
-        turnstile_result = await self._verify_turnstile_or_raise(turnstile_token=turnstile_token, ip_address=ip_address)
+        geetest_result = await self._verify_geetest_or_raise(
+            captcha_payload=captcha_payload,
+            scenario="register",
+            ip_address=ip_address,
+        )
 
         existing_account = await self._account_repository.get_by_email_normalized(email_normalized)
         if existing_account is not None:
@@ -183,7 +188,7 @@ class AuthService:
                 await self._risk_event_recorder.record(
                     email_normalized=email_normalized,
                     outcome="duplicate_email",
-                    details={"provider": turnstile_result.provider},
+                    details={"provider": geetest_result.provider},
                     account_id=existing_account.id,
                     ip_hash=hash_ip(ip_address),
                     user_agent=user_agent,
@@ -211,7 +216,7 @@ class AuthService:
             await self._risk_event_recorder.record(
                 email_normalized=email_normalized,
                 outcome="registered",
-                details={"provider": turnstile_result.provider},
+                details={"provider": geetest_result.provider},
                 account_id=account.id,
                 ip_hash=hash_ip(ip_address),
                 user_agent=user_agent,
@@ -225,10 +230,14 @@ class AuthService:
         *,
         email: str,
         password: str,
-        turnstile_token: str,
+        captcha_payload: GeeTestCaptchaPayload,
         ip_address: str | None,
     ) -> AuthTokenBundle | RegistrationResult:
-        await self._verify_turnstile_or_raise(turnstile_token=turnstile_token, ip_address=ip_address)
+        await self._verify_geetest_or_raise(
+            captcha_payload=captcha_payload,
+            scenario="login",
+            ip_address=ip_address,
+        )
         _, email_normalized = normalize_email(email)
         account = await self._account_repository.get_by_email_normalized(email_normalized)
         if account is None or not verify_password(password, account.password_hash):
@@ -307,10 +316,14 @@ class AuthService:
         account = await self._account_repository.mark_verified(account_id=account.id, verified_at=now)
         return await self._create_authenticated_session(account)
 
-    async def resend_verification(self, *, email: str, turnstile_token: str, ip_address: str | None) -> None:
+    async def resend_verification(
+        self,
+        *,
+        email: str,
+        ip_address: str | None,
+    ) -> None:
         started_at = asyncio.get_running_loop().time()
         try:
-            await self._verify_turnstile_or_raise(turnstile_token=turnstile_token, ip_address=ip_address)
             try:
                 _, email_normalized = normalize_email(email)
             except AppError:
@@ -324,38 +337,51 @@ class AuthService:
         finally:
             await self._apply_resend_verification_delay(started_at)
 
-    async def _verify_turnstile_or_raise(
+    async def _verify_geetest_or_raise(
         self,
         *,
-        turnstile_token: str,
+        captcha_payload: GeeTestCaptchaPayload,
+        scenario: str,
         ip_address: str | None,
     ):
-        if not turnstile_token.strip():
+        if not all(
+            value.strip()
+            for value in (
+                captcha_payload.lot_number,
+                captcha_payload.captcha_output,
+                captcha_payload.pass_token,
+                captcha_payload.gen_time,
+            )
+        ):
             raise AppError(
-                message="Turnstile token is required",
-                code="TURNSTILE_TOKEN_REQUIRED",
+                message="GeeTest captcha fields are required",
+                code="GEETEST_FIELDS_REQUIRED",
                 status_code=400,
             )
 
         try:
-            result = await self._turnstile_verifier.verify(turnstile_token, remote_ip=ip_address)
-        except TurnstileConfigurationError as error:
+            result = await self._geetest_verifier.verify(
+                captcha_payload,
+                scenario=scenario,
+                remote_ip=ip_address,
+            )
+        except GeeTestConfigurationError as error:
             raise AppError(
                 message=str(error),
-                code="TURNSTILE_NOT_CONFIGURED",
+                code="GEETEST_NOT_CONFIGURED",
                 status_code=500,
             ) from error
-        except TurnstileServiceUnavailableError as error:
+        except GeeTestServiceUnavailableError as error:
             raise AppError(
-                message="Turnstile validation is temporarily unavailable",
-                code="TURNSTILE_UNAVAILABLE",
+                message="GeeTest validation is temporarily unavailable",
+                code="GEETEST_UNAVAILABLE",
                 status_code=503,
             ) from error
 
         if not result.success:
             raise AppError(
-                message="Turnstile validation failed",
-                code="TURNSTILE_VALIDATION_FAILED",
+                message="GeeTest validation failed",
+                code="GEETEST_VALIDATION_FAILED",
                 status_code=400,
             )
 

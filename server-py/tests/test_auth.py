@@ -9,9 +9,9 @@ from sqlalchemy import select, update
 
 from app.application.auth.security import hash_secret, utc_now
 from app.application.platform.services import (
-    TurnstileConfigurationError,
-    TurnstileServiceUnavailableError,
-    TurnstileVerificationResult,
+    GeeTestConfigurationError,
+    GeeTestServiceUnavailableError,
+    GeeTestVerificationResult,
 )
 from app.infrastructure.postgres.models import AuthSession, EmailVerificationToken
 
@@ -20,13 +20,22 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _captcha_payload() -> dict[str, str]:
+    return {
+        "lot_number": "lot-register",
+        "captcha_output": "captcha-output",
+        "pass_token": "pass-token",
+        "gen_time": "2026-03-27T12:00:00Z",
+    }
+
+
 def _register(client, **overrides):
     payload = {
         "email": "user@testuser.dev",
         "password": "CorrectHorseBatteryStaple!23",
         "display_name": "Traveler",
         "interests": ["music", "travel"],
-        "turnstile_token": "test-token",
+        "captcha": _captcha_payload(),
     }
     payload.update(overrides)
     return client.post("/api/auth/register", json=payload)
@@ -53,11 +62,11 @@ def _login(
     *,
     email: str = "user@testuser.dev",
     password: str = "CorrectHorseBatteryStaple!23",
-    turnstile_token: str = "test-token",
+    captcha: dict[str, str] | None = None,
 ):
     return client.post(
         "/api/auth/login",
-        json={"email": email, "password": password, "turnstile_token": turnstile_token},
+        json={"email": email, "password": password, "captcha": captcha or _captcha_payload()},
     )
 
 
@@ -65,11 +74,10 @@ def _resend_verification(
     client,
     *,
     email: str = "user@testuser.dev",
-    turnstile_token: str = "test-token",
 ):
     return client.post(
         "/api/auth/resend-verification",
-        json={"email": email, "turnstile_token": turnstile_token},
+        json={"email": email},
     )
 
 
@@ -168,7 +176,7 @@ def test_register_rejects_blocked_email_domain(client):
                 "password": "CorrectHorseBatteryStaple!23",
                 "display_name": "Traveler",
                 "interests": ["music"],
-                "turnstile_token": "test-token",
+                "captcha": _captcha_payload(),
             },
         ),
         (
@@ -176,58 +184,61 @@ def test_register_rejects_blocked_email_domain(client):
             {
                 "email": "user@testuser.dev",
                 "password": "CorrectHorseBatteryStaple!23",
-                "turnstile_token": "test-token",
+                "captcha": _captcha_payload(),
             },
         ),
         (
             "/api/auth/resend-verification",
             {
                 "email": "user@testuser.dev",
-                "turnstile_token": "test-token",
             },
         ),
     ],
 )
-def test_auth_endpoints_reject_turnstile_failure(client, monkeypatch, path, payload):
-    async def fail_verify(token: str, *, remote_ip: str | None):
-        return TurnstileVerificationResult(
+def test_auth_endpoints_reject_geetest_failure(client, monkeypatch, path, payload):
+    async def fail_verify(payload, *, scenario: str, remote_ip: str | None):
+        return GeeTestVerificationResult(
             success=False,
-            provider="cloudflare",
-            error_codes=("invalid-input-response",),
+            provider="geetest",
+            scenario=scenario,
+            error_codes=("forbidden",),
         )
 
-    monkeypatch.setattr(client.app.state.container.auth_service._turnstile_verifier, "verify", fail_verify)
+    monkeypatch.setattr(client.app.state.container.auth_service._geetest_verifier, "verify", fail_verify)
 
     if path != "/api/auth/register":
         _register(client)
 
     response = client.post(path, json=payload)
+    if path == "/api/auth/resend-verification":
+        assert response.status_code == 200
+        return
     assert response.status_code == 400
-    assert response.json()["code"] == "TURNSTILE_VALIDATION_FAILED"
+    assert response.json()["code"] == "GEETEST_VALIDATION_FAILED"
 
 
-def test_register_rejects_turnstile_service_unavailable(client, monkeypatch):
-    async def unavailable(token: str, *, remote_ip: str | None):
-        raise TurnstileServiceUnavailableError("Cloudflare Turnstile validation transport failed")
+def test_register_rejects_geetest_service_unavailable(client, monkeypatch):
+    async def unavailable(payload, *, scenario: str, remote_ip: str | None):
+        raise GeeTestServiceUnavailableError("GeeTest validation transport failed")
 
-    monkeypatch.setattr(client.app.state.container.auth_service._turnstile_verifier, "verify", unavailable)
+    monkeypatch.setattr(client.app.state.container.auth_service._geetest_verifier, "verify", unavailable)
 
     response = _register(client)
     assert response.status_code == 503
-    assert response.json()["code"] == "TURNSTILE_UNAVAILABLE"
+    assert response.json()["code"] == "GEETEST_UNAVAILABLE"
 
 
-def test_register_rejects_turnstile_missing_secret(client, monkeypatch):
-    async def misconfigured(token: str, *, remote_ip: str | None):
-        raise TurnstileConfigurationError(
-            "SERVER_PY_TURNSTILE_SECRET_KEY is required when SERVER_PY_TURNSTILE_ENABLED=true"
+def test_register_rejects_geetest_missing_secret(client, monkeypatch):
+    async def misconfigured(payload, *, scenario: str, remote_ip: str | None):
+        raise GeeTestConfigurationError(
+            "SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY is required when SERVER_PY_GEETEST_ENABLED=true"
         )
 
-    monkeypatch.setattr(client.app.state.container.auth_service._turnstile_verifier, "verify", misconfigured)
+    monkeypatch.setattr(client.app.state.container.auth_service._geetest_verifier, "verify", misconfigured)
 
     response = _register(client)
     assert response.status_code == 500
-    assert response.json()["code"] == "TURNSTILE_NOT_CONFIGURED"
+    assert response.json()["code"] == "GEETEST_NOT_CONFIGURED"
 
 
 # --- Verification Code ---

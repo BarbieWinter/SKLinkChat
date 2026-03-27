@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useAppStore } from '@/app/store'
 import {
   AuthSessionPayload,
+  GeeTestCaptchaPayload,
   VerificationRequiredPayload,
   getAuthSession,
   loginAccount,
@@ -26,12 +27,12 @@ type AuthContextValue = {
     password: string
     displayName: string
     interests: string[]
-    turnstileToken: string
+    captcha: GeeTestCaptchaPayload
   }) => Promise<void>
-  login: (payload: { email: string; password: string; turnstileToken: string }) => Promise<LoginResult>
+  login: (payload: { email: string; password: string; captcha: GeeTestCaptchaPayload }) => Promise<LoginResult>
   logout: () => Promise<void>
   verifyCode: (email: string, code: string) => Promise<void>
-  resendCode: (payload: { email: string; turnstileToken: string }) => Promise<void>
+  resendCode: (payload: { email: string }) => Promise<void>
   syncProfile: (payload: { displayName: string; interests: string[] }) => Promise<void>
   refreshSession: () => Promise<void>
   setPendingVerificationEmail: (email: string | null) => void
@@ -110,18 +111,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       authSession,
       status,
       pendingVerificationEmail,
-      register: async ({ email, password, displayName, interests, turnstileToken }) => {
+      register: async ({ email, password, displayName, interests, captcha }) => {
         await registerAccount({
           email,
           password,
           display_name: displayName,
           interests,
-          turnstile_token: turnstileToken
+          captcha
         })
         setPendingVerificationEmail(email)
       },
-      login: async ({ email, password, turnstileToken }) => {
-        const result = await loginAccount({ email, password, turnstile_token: turnstileToken })
+      login: async ({ email, password, captcha }) => {
+        const result = await loginAccount({ email, password, captcha })
         if (isVerificationRequired(result)) {
           setPendingVerificationEmail(email)
           return 'verification_required'
@@ -144,8 +145,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setPendingVerificationEmail(null)
         setStatus('ready')
       },
-      resendCode: async ({ email, turnstileToken }) => {
-        await resendVerificationCode({ email, turnstile_token: turnstileToken })
+      resendCode: async ({ email }) => {
+        await resendVerificationCode({ email })
       },
       syncProfile: async ({ displayName, interests }) => {
         const nextProfile = await updateAccountProfile({

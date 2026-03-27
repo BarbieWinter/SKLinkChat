@@ -72,34 +72,50 @@ vi.mock('@/features/auth/api/auth-client', () => ({
   resetPassword: vi.fn()
 }))
 
-vi.mock('@/features/auth/turnstile-field', () => {
-  const TurnstileField = React.forwardRef<
+vi.mock('@/features/auth/geetest-field', () => {
+  const GeeTestField = React.forwardRef<
     { reset: () => void },
-    { onTokenChange: (token: string) => void; onExpired?: () => void; onError?: (message: string) => void }
-  >(({ onTokenChange, onExpired, onError }, ref) => {
+    {
+      captchaId: string
+      onValidateChange: (payload: {
+        lot_number: string
+        captcha_output: string
+        pass_token: string
+        gen_time: string
+      } | null) => void
+      onError?: (message: string) => void
+    }
+  >(({ onValidateChange, onError }, ref) => {
     React.useImperativeHandle(ref, () => ({
-      reset: () => onTokenChange('')
+      reset: () => onValidateChange(null)
     }))
 
     return (
-      <div data-testid="turnstile-field">
-        <button type="button" onClick={() => onTokenChange('mock-turnstile-token')}>
-          issue turnstile token
-        </button>
-        <button type="button" onClick={() => onExpired?.()}>
-          expire turnstile token
+      <div data-testid="geetest-field">
+        <button
+          type="button"
+          onClick={() =>
+            onValidateChange({
+              lot_number: 'lot-1',
+              captcha_output: 'output-1',
+              pass_token: 'pass-1',
+              gen_time: '1000'
+            })
+          }
+        >
+          issue geetest payload
         </button>
         <button type="button" onClick={() => onError?.('人机校验失败，请重试。')}>
-          fail turnstile token
+          fail geetest
         </button>
       </div>
     )
   })
 
-  return { TurnstileField }
+  return { GeeTestField }
 })
 
-describe('AuthEntryCard turnstile integration', () => {
+describe('AuthEntryCard geetest integration', () => {
   beforeEach(() => {
     toastSpy.mockReset()
     registerSpy.mockReset()
@@ -109,7 +125,7 @@ describe('AuthEntryCard turnstile integration', () => {
     window.history.replaceState({}, '', '/')
   })
 
-  it('blocks register submit before a token is available', async () => {
+  it('blocks register submit before captcha validation is available', async () => {
     render(<AuthEntryCard />)
 
     fireEvent.change(screen.getByPlaceholderText('邮箱地址'), { target: { value: 'user@testuser.dev' } })
@@ -125,7 +141,7 @@ describe('AuthEntryCard turnstile integration', () => {
     )
   })
 
-  it('blocks login submit before a token is available', async () => {
+  it('blocks login submit before captcha validation is available', async () => {
     render(<AuthEntryCard />)
 
     fireEvent.click(screen.getByRole('button', { name: '登录' }))
@@ -142,15 +158,15 @@ describe('AuthEntryCard turnstile integration', () => {
     )
   })
 
-  it('shows a clear message when turnstile validation fails during login', async () => {
-    loginSpy.mockRejectedValueOnce(Object.assign(new Error('Turnstile validation failed'), { code: 'TURNSTILE_VALIDATION_FAILED' }))
+  it('shows a clear message when geetest validation fails during login', async () => {
+    loginSpy.mockRejectedValueOnce(Object.assign(new Error('GeeTest validation failed'), { code: 'GEETEST_VALIDATION_FAILED' }))
 
     render(<AuthEntryCard />)
 
     fireEvent.click(screen.getByRole('button', { name: '登录' }))
     fireEvent.change(screen.getByPlaceholderText('邮箱地址'), { target: { value: 'user@testuser.dev' } })
     fireEvent.change(screen.getByPlaceholderText('密码'), { target: { value: 'CorrectHorseBatteryStaple!23' } })
-    fireEvent.click(screen.getByRole('button', { name: 'issue turnstile token' }))
+    fireEvent.click(screen.getByRole('button', { name: 'issue geetest payload' }))
     fireEvent.click(screen.getAllByRole('button', { name: '登录' }).at(-1) as HTMLElement)
 
     await waitFor(() => {
@@ -163,36 +179,16 @@ describe('AuthEntryCard turnstile integration', () => {
     })
   })
 
-  it('blocks resend verification before a token is available', async () => {
-    authState.pendingVerificationEmail = 'user@testuser.dev'
-
-    render(<AuthEntryCard />)
-
-    fireEvent.click(screen.getByRole('button', { name: '重新发送验证码' }))
-
-    expect(resendSpy).not.toHaveBeenCalled()
-    expect(toastSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        description: '请先完成人机校验。',
-        variant: 'destructive'
-      })
-    )
-  })
-
-  it('sends the turnstile token when resending verification', async () => {
+  it('resends verification without requiring geetest again', async () => {
     authState.pendingVerificationEmail = 'user@testuser.dev'
     resendSpy.mockResolvedValueOnce(undefined)
 
     render(<AuthEntryCard />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'issue turnstile token' }))
     fireEvent.click(screen.getByRole('button', { name: '重新发送验证码' }))
 
     await waitFor(() => {
-      expect(resendSpy).toHaveBeenCalledWith({
-        email: 'user@testuser.dev',
-        turnstileToken: 'mock-turnstile-token'
-      })
+      expect(resendSpy).toHaveBeenCalledWith({ email: 'user@testuser.dev' })
     })
   })
 })

@@ -58,11 +58,12 @@ class Settings(BaseSettings):
     app_base_url: str | None = None
     frontend_base_url: str | None = None
 
-    turnstile_enabled: bool = False
-    turnstile_secret_key: str | None = None
-    turnstile_site_key: str | None = None
-    turnstile_base_url: str = "https://challenges.cloudflare.com"
-    fake_turnstile_always_pass: bool = True
+    geetest_enabled: bool = False
+    geetest_register_captcha_id: str | None = None
+    geetest_register_captcha_key: str | None = None
+    geetest_login_captcha_id: str | None = None
+    geetest_login_captcha_key: str | None = None
+    geetest_base_url: str = "https://gcaptcha4.geetest.com"
 
     secure_cookies: bool = False
 
@@ -88,8 +89,16 @@ class Settings(BaseSettings):
         self.email_from = (self.email_from or "noreply@mail.sklinkchat.com").strip()
         self.app_base_url = (self.app_base_url or "http://localhost:4173").rstrip("/")
         self.resend_api_key = self.resend_api_key.strip() if self.resend_api_key else None
-        self.turnstile_site_key = self.turnstile_site_key.strip() if self.turnstile_site_key else None
-        self.turnstile_secret_key = self.turnstile_secret_key.strip() if self.turnstile_secret_key else None
+        self.geetest_register_captcha_id = (
+            self.geetest_register_captcha_id.strip() if self.geetest_register_captcha_id else None
+        )
+        self.geetest_register_captcha_key = (
+            self.geetest_register_captcha_key.strip() if self.geetest_register_captcha_key else None
+        )
+        self.geetest_login_captcha_id = self.geetest_login_captcha_id.strip() if self.geetest_login_captcha_id else None
+        self.geetest_login_captcha_key = (
+            self.geetest_login_captcha_key.strip() if self.geetest_login_captcha_key else None
+        )
 
         if self.email_provider == "resend":
             if not self.resend_api_key:
@@ -99,17 +108,29 @@ class Settings(BaseSettings):
             if not self.app_base_url:
                 raise ValueError("SERVER_PY_APP_BASE_URL is required when SERVER_PY_EMAIL_PROVIDER=resend")
 
-        if self.turnstile_enabled:
-            if not self.turnstile_site_key:
-                raise ValueError("SERVER_PY_TURNSTILE_SITE_KEY is required when SERVER_PY_TURNSTILE_ENABLED=true")
-            if not self.turnstile_secret_key:
-                raise ValueError("SERVER_PY_TURNSTILE_SECRET_KEY is required when SERVER_PY_TURNSTILE_ENABLED=true")
+        if self.geetest_enabled:
+            if not self.geetest_register_captcha_id:
+                raise ValueError(
+                    "SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID is required when SERVER_PY_GEETEST_ENABLED=true"
+                )
+            if not self.geetest_register_captcha_key:
+                raise ValueError(
+                    "SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY is required when SERVER_PY_GEETEST_ENABLED=true"
+                )
+            if not self.geetest_login_captcha_id:
+                raise ValueError(
+                    "SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID is required when SERVER_PY_GEETEST_ENABLED=true"
+                )
+            if not self.geetest_login_captcha_key:
+                raise ValueError(
+                    "SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY is required when SERVER_PY_GEETEST_ENABLED=true"
+                )
 
         if self.environment == "production":
             if self.email_provider != "resend":
                 raise ValueError("SERVER_PY_EMAIL_PROVIDER must be resend when SERVER_PY_ENVIRONMENT=production")
-            if not self.turnstile_enabled:
-                raise ValueError("SERVER_PY_TURNSTILE_ENABLED must be true when SERVER_PY_ENVIRONMENT=production")
+            if not self.geetest_enabled:
+                raise ValueError("SERVER_PY_GEETEST_ENABLED must be true when SERVER_PY_ENVIRONMENT=production")
             if not self.secure_cookies:
                 raise ValueError("SERVER_PY_SECURE_COOKIES must be true when SERVER_PY_ENVIRONMENT=production")
 

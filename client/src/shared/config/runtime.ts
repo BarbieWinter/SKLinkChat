@@ -76,5 +76,6 @@ export const WS_ENDPOINT = (() => {
   return url.toString()
 })()
 
-export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
-export const TURNSTILE_ENABLED = import.meta.env.VITE_TURNSTILE_ENABLED?.trim() === 'true'
+export const GEETEST_ENABLED = import.meta.env.VITE_GEETEST_ENABLED?.trim() === 'true'
+export const GEETEST_REGISTER_CAPTCHA_ID = import.meta.env.VITE_GEETEST_REGISTER_CAPTCHA_ID?.trim() ?? ''
+export const GEETEST_LOGIN_CAPTCHA_ID = import.meta.env.VITE_GEETEST_LOGIN_CAPTCHA_ID?.trim() ?? ''

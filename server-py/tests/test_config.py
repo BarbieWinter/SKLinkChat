@@ -68,27 +68,31 @@ def test_settings_rejects_non_postgresql_database_url(monkeypatch: pytest.Monkey
         get_settings()
 
 
-def test_settings_require_turnstile_site_key_when_enabled(monkeypatch: pytest.MonkeyPatch):
+def test_settings_require_geetest_register_captcha_id_when_enabled(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SERVER_PY_DATABASE_URL", "postgresql://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_ENABLED", "true")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_SITE_KEY", "")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_SECRET_KEY", "secret")
+    monkeypatch.setenv("SERVER_PY_GEETEST_ENABLED", "true")
+    monkeypatch.setenv("SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID", "")
+    monkeypatch.setenv("SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY", "register-key")
+    monkeypatch.setenv("SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID", "login-id")
+    monkeypatch.setenv("SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY", "login-key")
     get_settings.cache_clear()
 
-    with pytest.raises(ValidationError, match="SERVER_PY_TURNSTILE_SITE_KEY is required"):
+    with pytest.raises(ValidationError, match="SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID is required"):
         get_settings()
 
 
-def test_settings_require_turnstile_secret_key_when_enabled(monkeypatch: pytest.MonkeyPatch):
+def test_settings_require_geetest_login_captcha_key_when_enabled(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SERVER_PY_DATABASE_URL", "postgresql://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_ENABLED", "true")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_SITE_KEY", "site")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_SECRET_KEY", "")
+    monkeypatch.setenv("SERVER_PY_GEETEST_ENABLED", "true")
+    monkeypatch.setenv("SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID", "register-id")
+    monkeypatch.setenv("SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY", "register-key")
+    monkeypatch.setenv("SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID", "login-id")
+    monkeypatch.setenv("SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY", "")
     get_settings.cache_clear()
 
-    with pytest.raises(ValidationError, match="SERVER_PY_TURNSTILE_SECRET_KEY is required"):
+    with pytest.raises(ValidationError, match="SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY is required"):
         get_settings()
 
 
@@ -100,9 +104,11 @@ def test_settings_require_secure_production_auth(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("SERVER_PY_EMAIL_FROM", "noreply@mail.sklinkchat.com")
     monkeypatch.setenv("SERVER_PY_RESEND_API_KEY", "re_test_key")
     monkeypatch.setenv("SERVER_PY_APP_BASE_URL", "https://chat.example.com")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_ENABLED", "true")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_SITE_KEY", "site")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_SECRET_KEY", "secret")
+    monkeypatch.setenv("SERVER_PY_GEETEST_ENABLED", "true")
+    monkeypatch.setenv("SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID", "register-id")
+    monkeypatch.setenv("SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY", "register-key")
+    monkeypatch.setenv("SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID", "login-id")
+    monkeypatch.setenv("SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY", "login-key")
     monkeypatch.setenv("SERVER_PY_SECURE_COOKIES", "false")
     get_settings.cache_clear()
 
@@ -110,12 +116,12 @@ def test_settings_require_secure_production_auth(monkeypatch: pytest.MonkeyPatch
         get_settings()
 
 
-def test_settings_require_production_turnstile_and_resend(monkeypatch: pytest.MonkeyPatch):
+def test_settings_require_production_geetest_and_resend(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SERVER_PY_DATABASE_URL", "postgresql://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat")
     monkeypatch.setenv("SERVER_PY_ENVIRONMENT", "production")
     monkeypatch.setenv("SERVER_PY_EMAIL_PROVIDER", "fake")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_ENABLED", "false")
+    monkeypatch.setenv("SERVER_PY_GEETEST_ENABLED", "false")
     get_settings.cache_clear()
 
     with pytest.raises(ValidationError, match="SERVER_PY_EMAIL_PROVIDER must be resend"):
