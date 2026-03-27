@@ -1,32 +1,68 @@
 services:
   postgres:
+    image: postgres:16-alpine
     environment:
+      POSTGRES_DB: sklinkchat
+      POSTGRES_USER: sklinkchat
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ab051122}
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sklinkchat -d sklinkchat"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 100mb --maxmemory-policy allkeys-lru
     ports:
       - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   server-py:
+    build:
+      context: ./server-py
     environment:
-      SERVER_PY_ENVIRONMENT: ${SERVER_PY_ENVIRONMENT:-staging}
       SERVER_PY_DATABASE_URL: postgresql+psycopg://sklinkchat:${POSTGRES_PASSWORD:-ab051122}@postgres:5432/sklinkchat
       SERVER_PY_REDIS_URL: redis://redis:6379/0
+      SERVER_PY_HOST: 0.0.0.0
+      SERVER_PY_PORT: 8000
+      SERVER_PY_LOG_LEVEL: INFO
+      SERVER_PY_RECONNECT_WINDOW_SECONDS: 180
+      SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS: 1
       SERVER_PY_EMAIL_PROVIDER: ${SERVER_PY_EMAIL_PROVIDER:-resend}
       SERVER_PY_EMAIL_FROM: ${SERVER_PY_EMAIL_FROM:?set SERVER_PY_EMAIL_FROM in the production env file}
       SERVER_PY_RESEND_API_KEY: ${SERVER_PY_RESEND_API_KEY:?set SERVER_PY_RESEND_API_KEY in the production env file}
       SERVER_PY_APP_BASE_URL: ${SERVER_PY_APP_BASE_URL:-http://154.94.233.250}
-      SERVER_PY_SECURE_COOKIES: ${SERVER_PY_SECURE_COOKIES:-false}
       SERVER_PY_TURNSTILE_ENABLED: ${SERVER_PY_TURNSTILE_ENABLED:-true}
       SERVER_PY_TURNSTILE_SITE_KEY: ${SERVER_PY_TURNSTILE_SITE_KEY:?set SERVER_PY_TURNSTILE_SITE_KEY in the production env file}
       SERVER_PY_TURNSTILE_SECRET_KEY: ${SERVER_PY_TURNSTILE_SECRET_KEY:?set SERVER_PY_TURNSTILE_SECRET_KEY in the production env file}
+      SERVER_PY_SECURE_COOKIES: ${SERVER_PY_SECURE_COOKIES:-false}
+      SERVER_PY_ENVIRONMENT: ${SERVER_PY_ENVIRONMENT:-staging}
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   client:
     build:
+      context: ./client
       args:
         VITE_ENDPOINT: ${VITE_ENDPOINT:-http://154.94.233.250}
         VITE_WS_ENDPOINT: ${VITE_WS_ENDPOINT:-ws://154.94.233.250/ws}
@@ -34,3 +70,9 @@ services:
         VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:?set VITE_TURNSTILE_SITE_KEY in the production env file}
     ports:
       - "127.0.0.1:4173:4173"
+    depends_on:
+      server-py:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
