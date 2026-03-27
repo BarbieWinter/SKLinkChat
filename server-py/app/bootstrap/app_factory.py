@@ -1,5 +1,6 @@
 import logging
 import uuid
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -22,6 +23,36 @@ def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "unknown")
 
 
+def _build_allowed_origins() -> list[str]:
+    settings = get_settings()
+    allowed_origins = {
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+
+    for configured_url in filter(None, [settings.app_base_url, settings.frontend_base_url]):
+        parsed = urlparse(configured_url)
+        if not parsed.scheme or not parsed.netloc:
+            continue
+
+        allowed_origins.add(f"{parsed.scheme}://{parsed.netloc}")
+
+        hostname = parsed.hostname or ""
+        if hostname in {"localhost", "127.0.0.1"}:
+            continue
+
+        port_suffix = f":{parsed.port}" if parsed.port else ""
+        alternate_hostname = hostname.removeprefix("www.") if hostname.startswith("www.") else f"www.{hostname}"
+
+        for scheme in ("http", "https"):
+            allowed_origins.add(f"{scheme}://{hostname}{port_suffix}")
+            allowed_origins.add(f"{scheme}://{alternate_hostname}{port_suffix}")
+
+    return sorted(allowed_origins)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -29,12 +60,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:4173",
-            "http://127.0.0.1:4173",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
+        allow_origins=_build_allowed_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
