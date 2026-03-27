@@ -1,3 +1,4 @@
 .env
 .run/
 server-py/.env
+__pycache__/

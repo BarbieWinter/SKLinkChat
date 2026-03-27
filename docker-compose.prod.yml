@@ -1,0 +1,36 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ab051122}
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  server-py:
+    environment:
+      SERVER_PY_ENVIRONMENT: ${SERVER_PY_ENVIRONMENT:-staging}
+      SERVER_PY_DATABASE_URL: postgresql+psycopg://sklinkchat:${POSTGRES_PASSWORD:-ab051122}@postgres:5432/sklinkchat
+      SERVER_PY_REDIS_URL: redis://redis:6379/0
+      SERVER_PY_EMAIL_PROVIDER: ${SERVER_PY_EMAIL_PROVIDER:-resend}
+      SERVER_PY_EMAIL_FROM: ${SERVER_PY_EMAIL_FROM:?set SERVER_PY_EMAIL_FROM in the production env file}
+      SERVER_PY_RESEND_API_KEY: ${SERVER_PY_RESEND_API_KEY:?set SERVER_PY_RESEND_API_KEY in the production env file}
+      SERVER_PY_APP_BASE_URL: ${SERVER_PY_APP_BASE_URL:-http://154.94.233.250}
+      SERVER_PY_SECURE_COOKIES: ${SERVER_PY_SECURE_COOKIES:-false}
+      SERVER_PY_TURNSTILE_ENABLED: ${SERVER_PY_TURNSTILE_ENABLED:-true}
+      SERVER_PY_TURNSTILE_SITE_KEY: ${SERVER_PY_TURNSTILE_SITE_KEY:?set SERVER_PY_TURNSTILE_SITE_KEY in the production env file}
+      SERVER_PY_TURNSTILE_SECRET_KEY: ${SERVER_PY_TURNSTILE_SECRET_KEY:?set SERVER_PY_TURNSTILE_SECRET_KEY in the production env file}
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  client:
+    build:
+      args:
+        VITE_ENDPOINT: ${VITE_ENDPOINT:-http://154.94.233.250}
+        VITE_WS_ENDPOINT: ${VITE_WS_ENDPOINT:-ws://154.94.233.250/ws}
+        VITE_TURNSTILE_ENABLED: ${VITE_TURNSTILE_ENABLED:-true}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:?set VITE_TURNSTILE_SITE_KEY in the production env file}
+    ports:
+      - "127.0.0.1:4173:4173"
