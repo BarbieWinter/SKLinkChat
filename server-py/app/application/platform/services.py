@@ -18,6 +18,14 @@ class TurnstileVerificationResult:
     error_codes: tuple[str, ...] = ()
 
 
+class TurnstileConfigurationError(RuntimeError):
+    pass
+
+
+class TurnstileServiceUnavailableError(RuntimeError):
+    pass
+
+
 class TurnstileVerifier(Protocol):
     async def verify(self, token: str, *, remote_ip: str | None) -> TurnstileVerificationResult: ...
 

@@ -24,6 +24,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    turnstile_token: str = Field(..., min_length=1)
 
 
 class VerifyCodeRequest(BaseModel):
@@ -33,6 +34,7 @@ class VerifyCodeRequest(BaseModel):
 
 class ResendVerificationRequest(BaseModel):
     email: str
+    turnstile_token: str = Field(..., min_length=1)
 
 
 def _set_auth_cookie(response: Response, container: ApplicationContainer, raw_session_token: str) -> None:
@@ -92,8 +94,18 @@ async def register(
 
 
 @router.post("/api/auth/login")
-async def login(payload: LoginRequest, response: Response, container: ContainerOnlyDep) -> dict[str, object]:
-    result = await container.auth_service.login(email=payload.email, password=payload.password)
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    container: ContainerOnlyDep,
+) -> dict[str, object]:
+    result = await container.auth_service.login(
+        email=payload.email,
+        password=payload.password,
+        turnstile_token=payload.turnstile_token,
+        ip_address=request.client.host if request.client else None,
+    )
     if isinstance(result, AuthTokenBundle):
         _set_auth_cookie(response, container, result.raw_session_token)
         return _session_dict(result.auth_session)
@@ -121,8 +133,16 @@ async def verify_email(
 
 
 @router.post("/api/auth/resend-verification")
-async def resend_verification(payload: ResendVerificationRequest, container: ContainerOnlyDep) -> dict[str, str]:
-    await container.auth_service.resend_verification(email=payload.email)
+async def resend_verification(
+    payload: ResendVerificationRequest,
+    request: Request,
+    container: ContainerOnlyDep,
+) -> dict[str, str]:
+    await container.auth_service.resend_verification(
+        email=payload.email,
+        turnstile_token=payload.turnstile_token,
+        ip_address=request.client.host if request.client else None,
+    )
     return {"status": "ok"}
 
 

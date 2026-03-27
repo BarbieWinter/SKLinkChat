@@ -26,12 +26,10 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   })
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as
-      | {
-          code?: string
-          message?: string
-        }
-      | null
+    const payload = (await response.json().catch(() => null)) as {
+      code?: string
+      message?: string
+    } | null
 
     const error = new Error(payload?.message ?? `Request failed: ${response.status}`) as Error & {
       code?: string
@@ -59,7 +57,7 @@ export const registerAccount = (payload: {
     body: JSON.stringify(payload)
   })
 
-export const loginAccount = (payload: { email: string; password: string }) =>
+export const loginAccount = (payload: { email: string; password: string; turnstile_token: string }) =>
   requestJson<AuthSessionPayload | VerificationRequiredPayload>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload)
@@ -77,10 +75,10 @@ export const verifyEmailCode = (email: string, code: string) =>
     body: JSON.stringify({ email, code })
   })
 
-export const resendVerificationCode = (email: string) =>
+export const resendVerificationCode = (payload: { email: string; turnstile_token: string }) =>
   requestJson<{ status: string }>('/api/auth/resend-verification', {
     method: 'POST',
-    body: JSON.stringify({ email })
+    body: JSON.stringify(payload)
   })
 
 export const getAccountProfile = () =>

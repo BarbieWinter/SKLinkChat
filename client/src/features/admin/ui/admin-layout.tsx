@@ -4,7 +4,9 @@ import { useAuth } from '@/features/auth/auth-provider'
 
 const getNavClassName = ({ isActive }: { isActive: boolean }) =>
   `rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-    isActive ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+    isActive
+      ? 'bg-foreground text-background'
+      : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
   }`
 
 export const AdminLayout = () => {

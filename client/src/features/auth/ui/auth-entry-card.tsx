@@ -1,10 +1,11 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { Clock3, KeyRound, LockKeyhole, MailCheck, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { generateUsername } from 'unique-username-generator'
 
 import { requestPasswordReset, resetPassword } from '@/features/auth/api/auth-client'
 import { useAuth } from '@/features/auth/auth-provider'
-import { TurnstileField } from '@/features/auth/turnstile-field'
+import { TurnstileField, type TurnstileFieldHandle } from '@/features/auth/turnstile-field'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
@@ -41,13 +42,16 @@ const getInitialAuthMode = (): 'register' | 'login' | 'forgot' | 'reset' | 'veri
   return params.has('reset_token') ? 'reset' : 'register'
 }
 
+const authInputClassName =
+  'h-14 rounded-2xl border border-slate-800/90 bg-slate-950/80 px-5 text-[16px] leading-6 text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-[15px] placeholder:text-slate-400/65 transition-all duration-200 focus-visible:border-sky-400/55 focus-visible:bg-slate-950/92 focus-visible:ring-2 focus-visible:ring-sky-400/12 focus-visible:ring-offset-0'
+
 export const AuthEntryCard = () => {
   const { t } = useI18n()
   const { toast } = useToast()
   const { login, register, verifyCode, resendCode, pendingVerificationEmail, setPendingVerificationEmail } = useAuth()
 
-  const [authMode, setAuthMode] = useState<'register' | 'login' | 'forgot' | 'reset' | 'verify'>(
-    () => (pendingVerificationEmail ? 'verify' : getInitialAuthMode())
+  const [authMode, setAuthMode] = useState<'register' | 'login' | 'forgot' | 'reset' | 'verify'>(() =>
+    pendingVerificationEmail ? 'verify' : getInitialAuthMode()
   )
   const [turnstileToken, setTurnstileToken] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -66,12 +70,53 @@ export const AuthEntryCard = () => {
   const [verifyCode_, setVerifyCode_] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const turnstileRef = useRef<TurnstileFieldHandle | null>(null)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [turnstileError, setTurnstileError] = useState<string | null>(null)
 
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }))
   const switchAuthMode = (nextMode: typeof authMode) => {
     setTouched({})
+    setTurnstileToken('')
+    setTurnstileError(null)
     setAuthMode(nextMode)
+  }
+
+  const resetTurnstile = useCallback(() => {
+    setTurnstileToken('')
+    turnstileRef.current?.reset()
+  }, [])
+
+  const requireTurnstileToken = () => {
+    if (turnstileToken) return true
+    const description = turnstileError ?? '请先完成人机校验。'
+    toast({
+      title: t('common.error'),
+      description,
+      variant: 'destructive'
+    })
+    return false
+  }
+
+  const handleTurnstileFailure = (code?: string, fallback = '人机校验失败，请重试。') => {
+    let description = fallback
+    if (code === 'TURNSTILE_VALIDATION_FAILED') {
+      description = '人机校验未通过，请重新完成验证。'
+    } else if (code === 'TURNSTILE_UNAVAILABLE') {
+      description = '人机校验服务暂时不可用，请稍后重试。'
+    } else if (code === 'TURNSTILE_NOT_CONFIGURED') {
+      description = 'Turnstile 配置缺失，当前无法提交。'
+    } else if (code === 'TURNSTILE_TOKEN_REQUIRED') {
+      description = '请先完成人机校验。'
+    }
+    setTurnstileError(description)
+
+    toast({
+      title: t('common.error'),
+      description,
+      variant: 'destructive'
+    })
+    resetTurnstile()
   }
 
   const startResendCooldown = useCallback(() => {
@@ -102,12 +147,7 @@ export const AuthEntryCard = () => {
       return
     }
 
-    if (!turnstileToken) {
-      toast({
-        title: t('common.error'),
-        description: 'Turnstile 校验尚未完成。',
-        variant: 'destructive'
-      })
+    if (!requireTurnstileToken()) {
       return
     }
 
@@ -129,6 +169,10 @@ export const AuthEntryCard = () => {
       })
     } catch (error) {
       const code = (error as Error & { code?: string }).code
+      if (code?.startsWith('TURNSTILE_')) {
+        handleTurnstileFailure(code)
+        return
+      }
       if (code === 'EMAIL_ALREADY_EXISTS') {
         toast({
           title: '该邮箱已注册',
@@ -144,6 +188,7 @@ export const AuthEntryCard = () => {
         })
       }
     } finally {
+      resetTurnstile()
       setSubmitting(false)
     }
   }
@@ -154,11 +199,16 @@ export const AuthEntryCard = () => {
       return
     }
 
+    if (!requireTurnstileToken()) {
+      return
+    }
+
     setSubmitting(true)
     try {
       const result = await login({
         email: loginForm.email.trim(),
-        password: loginForm.password
+        password: loginForm.password,
+        turnstileToken
       })
       if (result === 'verification_required') {
         startResendCooldown()
@@ -171,6 +221,10 @@ export const AuthEntryCard = () => {
       }
     } catch (error) {
       const code = (error as Error & { code?: string }).code
+      if (code?.startsWith('TURNSTILE_')) {
+        handleTurnstileFailure(code)
+        return
+      }
       toast({
         title: t('common.error'),
         description:
@@ -178,6 +232,7 @@ export const AuthEntryCard = () => {
         variant: 'destructive'
       })
     } finally {
+      resetTurnstile()
       setSubmitting(false)
     }
   }
@@ -205,18 +260,28 @@ export const AuthEntryCard = () => {
 
   const handleResendCode = async () => {
     if (!pendingVerificationEmail || resendCooldown > 0) return
+    if (!requireTurnstileToken()) {
+      return
+    }
 
     try {
-      await resendCode(pendingVerificationEmail)
+      await resendCode({ email: pendingVerificationEmail, turnstileToken })
       startResendCooldown()
       setVerifyCode_('')
       toast({ title: '已发送', description: '新的验证码已发送。' })
     } catch (error) {
+      const code = (error as Error & { code?: string }).code
+      if (code?.startsWith('TURNSTILE_')) {
+        handleTurnstileFailure(code, '人机校验失败，请重新完成验证。')
+        return
+      }
       toast({
         title: t('common.error'),
         description: error instanceof Error ? error.message : '发送失败。',
         variant: 'destructive'
       })
+    } finally {
+      resetTurnstile()
     }
   }
 
@@ -294,38 +359,93 @@ export const AuthEntryCard = () => {
 
   const authSubtitle =
     authMode === 'verify'
-      ? `验证码已发送到 ${pendingVerificationEmail ?? ''}`
+      ? '请输入邮箱中收到的 6 位验证码'
       : authMode === 'forgot'
         ? '输入注册邮箱，我们将发送重置链接。'
         : authMode === 'reset'
           ? '请输入你的新密码。'
-          : '完成注册与邮箱验证后，即可进入安全的匿名聊天。'
+          : authMode === 'login'
+            ? '登录即可开始聊天'
+            : '完成注册与邮箱验证后即可开始聊天。'
 
   return (
-    <div className="relative flex min-h-[calc(100dvh-5rem)] items-center justify-center overflow-hidden px-4 py-8 sm:px-6">
+    <div className="relative flex min-h-[calc(100dvh-5rem)] items-start justify-center overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:items-center">
+      {/* Dynamic Background */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-16 top-8 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl animate-float" />
-        <div className="absolute right-[-3rem] top-1/4 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-primary/15 blur-3xl animate-float [animation-delay:1.2s]" />
+        <motion.div
+          animate={{
+            x: [0, 50, -20, 0],
+            y: [0, -30, 40, 0],
+            scale: [1, 1.1, 0.9, 1]
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+          className="absolute -left-16 top-8 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl"
+        />
+        <motion.div
+          animate={{
+            x: [0, -40, 30, 0],
+            y: [0, 50, -20, 0],
+            scale: [1, 1.2, 0.8, 1]
+          }}
+          transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+          className="absolute right-[-3rem] top-1/4 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl"
+        />
+        <motion.div
+          animate={{
+            x: [0, 30, -50, 0],
+            y: [0, 40, -30, 0],
+            scale: [1, 0.9, 1.1, 1]
+          }}
+          transition={{ duration: 18, repeat: Infinity, ease: 'linear', delay: 2 }}
+          className="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-primary/15 blur-3xl"
+        />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.88),rgba(255,255,255,0.58))] dark:bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.14),transparent_34%),linear-gradient(135deg,rgba(9,14,26,0.92),rgba(7,11,20,0.7))]" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.09)_1px,transparent_1px)] bg-[size:32px_32px] opacity-40" />
+
+        {/* Animated Grid */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.4 }}
+          transition={{ duration: 2 }}
+          className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.09)_1px,transparent_1px)] bg-[size:32px_32px]"
+        />
       </div>
 
       <div className="relative grid w-full max-w-5xl gap-5 lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="hidden min-h-[640px] flex-col justify-between rounded-[32px] border border-sky-200/50 bg-slate-950 px-8 py-8 text-slate-50 shadow-2xl shadow-slate-950/25 lg:flex">
+        {/* Info Section */}
+        <motion.section
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="hidden min-h-[640px] flex-col justify-between rounded-[32px] border border-sky-200/50 bg-slate-950 px-8 py-8 text-slate-50 shadow-2xl shadow-slate-950/25 lg:flex"
+        >
           <div className="space-y-6">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-sky-100">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-sky-100"
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Secure onboarding
-            </div>
+            </motion.div>
 
             <div className="space-y-3">
-              <h2 className="max-w-md text-3xl font-semibold tracking-tight text-white xl:text-[2.6rem]">
-                更安全地进入实时匿名聊天
-              </h2>
-              <p className="max-w-md text-sm leading-7 text-slate-300 xl:text-[15px]">
-                注册、验证、登录和密码找回都在同一入口完成，验证码链路经过限流与归属校验，减少误用与刷取风险。
-              </p>
+              <motion.h2
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="max-w-md text-3xl font-semibold tracking-tight text-white xl:text-[2.6rem]"
+            >
+                SKLinkChat
+              </motion.h2>
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="max-w-md text-sm leading-7 text-slate-300 xl:text-[15px]"
+              >
+                匿名、安全、即时的陌生人聊天平台，守护每个用户的隐私。
+              </motion.p>
             </div>
 
             <div className="grid gap-3">
@@ -346,10 +466,13 @@ export const AuthEntryCard = () => {
                   description: '完成邮箱验证后再进入聊天，减少匿名滥用与错误注册。'
                 }
               ].map(({ icon: Icon, title, description }, index) => (
-                <div
+                <motion.div
                   key={title}
-                  className="animate-slide-up rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm"
-                  style={{ animationDelay: `${index * 120}ms` }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 + index * 0.1 }}
+                  whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.15)' }}
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm"
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-400/18 text-sky-100">
@@ -360,7 +483,7 @@ export const AuthEntryCard = () => {
                       <p className="mt-1 text-sm leading-6 text-slate-300">{description}</p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -371,52 +494,86 @@ export const AuthEntryCard = () => {
               { value: '15 分钟', label: '有效时长' },
               { value: '5 次', label: '错误上限' }
             ].map((item, index) => (
-              <div
+              <motion.div
                 key={item.label}
-                className="animate-slide-up rounded-2xl border border-white/10 bg-white/10 p-4 text-center backdrop-blur-sm"
-                style={{ animationDelay: `${index * 150}ms` }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.9 + index * 0.1 }}
+                whileHover={{ y: -5 }}
+                className="rounded-2xl border border-white/10 bg-white/10 p-4 text-center backdrop-blur-sm"
               >
                 <p className="text-xl font-semibold tracking-tight text-white">{item.value}</p>
                 <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{item.label}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        <section className="animate-slide-up rounded-[28px] border border-border/60 bg-background/[0.82] p-5 shadow-2xl shadow-slate-900/10 backdrop-blur-xl sm:p-7">
-          <div className="mb-5 rounded-[24px] border border-sky-200/50 bg-sky-50/80 p-4 text-slate-900 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-slate-100 lg:hidden">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300">
+        {/* Form Section */}
+        <motion.section
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="relative flex max-h-[calc(100dvh-3rem)] flex-col overflow-y-auto rounded-[28px] border border-slate-800/70 bg-slate-950/70 p-5 text-slate-50 shadow-2xl shadow-slate-950/30 backdrop-blur-xl sm:max-h-[calc(100dvh-4rem)] sm:p-7"
+        >
+          {/* Mobile Info Banner */}
+          <div className="mb-7 rounded-[24px] border border-slate-800/80 bg-slate-900/85 p-4 text-slate-100 lg:hidden">
+            <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.12em] text-sky-300">
               <Sparkles className="h-3.5 w-3.5" />
               Secure onboarding
             </div>
-            <p className="mt-3 text-lg font-semibold tracking-tight">完成验证后即可进入聊天</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              当前入口整合注册、登录、邮箱验证与找回密码，移动端与桌面端都保持一致体验。
+            <p className="mt-3 text-[22px] font-semibold leading-[1.25] tracking-[0.01em]">SKLinkChat</p>
+            <p className="mt-2 text-[14px] leading-[1.65] text-slate-300">
+              匿名、安全、即时的陌生人聊天平台，守护每个用户的隐私。
             </p>
           </div>
 
           <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 via-sky-400/20 to-cyan-300/25 text-primary shadow-inner shadow-white/40">
+            <motion.div
+              key={authMode}
+              initial={{ scale: 0.8, opacity: 0, rotate: -15 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400/16 via-cyan-300/12 to-slate-800 text-sky-200 shadow-inner shadow-white/5"
+            >
               {authMode === 'register' && <MessageCircle className="h-5 w-5" />}
               {authMode === 'login' && <LockKeyhole className="h-5 w-5" />}
               {authMode === 'verify' && <MailCheck className="h-5 w-5" />}
               {(authMode === 'forgot' || authMode === 'reset') && <KeyRound className="h-5 w-5" />}
-            </div>
+            </motion.div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">{authTitle}</h1>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground sm:text-[15px]">{authSubtitle}</p>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={authTitle}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <h1 className="text-[20px] font-semibold leading-[1.25] tracking-[0.01em] text-slate-50 sm:text-[22px]">
+                    {authTitle}
+                  </h1>
+                  <p className="mt-1.5 text-[14px] leading-[1.65] text-slate-300">{authSubtitle}</p>
+                  {authMode === 'verify' && pendingVerificationEmail && (
+                    <p className="mt-1 text-[14px] leading-6 text-slate-400">{pendingVerificationEmail}</p>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
 
           {(authMode === 'register' || authMode === 'login') && (
-            <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-border/60 bg-muted/50 p-1.5">
+            <div className="relative mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-800/80 bg-slate-900/75 p-1.5">
+              <div
+                className="absolute inset-y-1.5 left-1.5 right-1.5 w-[calc(50%-1.5px)] pointer-events-none transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${authMode === 'login' ? '100%' : '0'})` }}
+              >
+                <div className="h-full w-full rounded-2xl bg-slate-800 shadow-sm shadow-black/20" />
+              </div>
               <button
                 type="button"
                 className={cn(
-                  'rounded-2xl px-3 py-2.5 text-[15px] font-medium transition-all',
-                  authMode === 'register'
-                    ? 'bg-background text-foreground shadow-sm shadow-slate-900/5'
-                    : 'text-muted-foreground hover:text-foreground'
+                  'relative z-10 h-11 rounded-2xl px-3 text-[15px] font-medium transition-colors',
+                  authMode === 'register' ? 'text-slate-50' : 'text-slate-400 hover:text-slate-50'
                 )}
                 onClick={() => switchAuthMode('register')}
               >
@@ -425,10 +582,8 @@ export const AuthEntryCard = () => {
               <button
                 type="button"
                 className={cn(
-                  'rounded-2xl px-3 py-2.5 text-[15px] font-medium transition-all',
-                  authMode === 'login'
-                    ? 'bg-background text-foreground shadow-sm shadow-slate-900/5'
-                    : 'text-muted-foreground hover:text-foreground'
+                  'relative z-10 h-11 rounded-2xl px-3 text-[15px] font-medium transition-colors',
+                  authMode === 'login' ? 'text-slate-50' : 'text-slate-400 hover:text-slate-50'
                 )}
                 onClick={() => switchAuthMode('login')}
               >
@@ -437,250 +592,349 @@ export const AuthEntryCard = () => {
             </div>
           )}
 
-          {authMode === 'forgot' && (
-            <button type="button" className="mt-5 text-sm text-primary hover:underline" onClick={() => switchAuthMode('login')}>
-              &larr; 返回登录
-            </button>
-          )}
-
-          {authMode === 'reset' && (
-            <button
-              type="button"
-              className="mt-5 text-sm text-primary hover:underline"
-              onClick={() => {
-                switchAuthMode('login')
-                window.history.replaceState({}, '', '/')
-              }}
-            >
-              &larr; 返回登录
-            </button>
-          )}
-
-          {authMode === 'verify' && (
-            <button
-              type="button"
-              className="mt-5 text-sm text-primary hover:underline"
-              onClick={() => {
-                setPendingVerificationEmail(null)
-                switchAuthMode('register')
-              }}
-            >
-              &larr; 返回注册
-            </button>
-          )}
-
-          {authMode === 'register' && (
-            <div className="mt-5 space-y-3">
-              <div>
-                <Input
-                  value={registerForm.email}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
-                  onBlur={() => markTouched('reg-email')}
-                  placeholder="邮箱地址"
-                  className={cn(
-                    'h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base',
-                    touched['reg-email'] && validateEmail(registerForm.email) && 'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {touched['reg-email'] && validateEmail(registerForm.email) && (
-                  <p className="mt-1 text-xs text-destructive">{validateEmail(registerForm.email)}</p>
-                )}
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))}
-                  onBlur={() => markTouched('reg-password')}
-                  placeholder="密码（至少 8 位）"
-                  className={cn(
-                    'h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base',
-                    touched['reg-password'] &&
-                      validatePassword(registerForm.password) &&
-                      'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {touched['reg-password'] && validatePassword(registerForm.password) && (
-                  <p className="mt-1 text-xs text-destructive">{validatePassword(registerForm.password)}</p>
-                )}
-              </div>
-              <Input
-                value={registerForm.displayName}
-                onChange={(event) => setRegisterForm((current) => ({ ...current, displayName: event.target.value }))}
-                placeholder="聊天展示名"
-                className="h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base"
-              />
-              <Input
-                value={registerForm.interests}
-                onChange={(event) => setRegisterForm((current) => ({ ...current, interests: event.target.value }))}
-                placeholder="兴趣标签（逗号分隔，可选）"
-                className="h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base"
-              />
-              <TurnstileField onTokenChange={setTurnstileToken} />
-              <div className="rounded-2xl border border-sky-200/60 bg-sky-50/75 px-4 py-3 text-sm leading-6 text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
-                提交后系统会发送 6 位验证码到你的邮箱，用于完成注册校验。
-              </div>
-              <Button
-                onClick={handleRegister}
-                disabled={submitting}
-                className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary via-sky-500 to-cyan-500 text-[15px] font-medium shadow-lg shadow-sky-500/20"
+          <div className="flex-1">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={authMode}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="mt-5 space-y-3"
               >
-                注册并发送验证码
-              </Button>
-            </div>
-          )}
-
-          {authMode === 'login' && (
-            <div className="mt-5 space-y-3">
-              <div>
-                <Input
-                  value={loginForm.email}
-                  onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
-                  onBlur={() => markTouched('login-email')}
-                  placeholder="邮箱地址"
-                  className={cn(
-                    'h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base',
-                    touched['login-email'] && validateEmail(loginForm.email) && 'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {touched['login-email'] && validateEmail(loginForm.email) && (
-                  <p className="mt-1 text-xs text-destructive">{validateEmail(loginForm.email)}</p>
+                {turnstileError && (authMode === 'register' || authMode === 'login' || authMode === 'verify') && (
+                  <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>
                 )}
-              </div>
-              <Input
-                type="password"
-                value={loginForm.password}
-                onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
-                placeholder="密码"
-                className="h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base"
-              />
-              <Button onClick={handleLogin} disabled={submitting} className="h-12 w-full rounded-2xl text-[15px] font-medium">
-                登录
-              </Button>
-              <div className="text-center">
-                <button
-                  type="button"
-                  className="text-sm text-muted-foreground transition-colors hover:text-primary hover:underline"
-                  onClick={() => {
-                    switchAuthMode('forgot')
-                    setForgotEmail(loginForm.email)
-                  }}
-                >
-                  忘记密码？
-                </button>
-              </div>
-            </div>
-          )}
 
-          {authMode === 'verify' && (
-            <div className="mt-5 space-y-3">
-              <div className="rounded-2xl border border-border/60 bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-                请输入邮箱中收到的 6 位数字验证码，验证码 15 分钟内有效，错误尝试过多后需要重新获取。
-              </div>
-              <Input
-                value={verifyCode_}
-                onChange={(event) => {
-                  const val = event.target.value.replace(/\D/g, '').slice(0, 6)
-                  setVerifyCode_(val)
-                }}
-                placeholder="请输入 6 位验证码"
-                className="h-14 rounded-2xl border-border/70 bg-background/70 text-center text-2xl tracking-[0.42em] sm:text-[2rem]"
-                maxLength={6}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-              />
-              <Button
-                onClick={handleVerifyCode}
-                disabled={submitting || verifyCode_.length !== 6}
-                className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary via-sky-500 to-cyan-500 text-[15px] font-medium shadow-lg shadow-sky-500/20"
-              >
-                验证
-              </Button>
-              <div className="text-center">
-                <button
-                  type="button"
-                  className={cn(
-                    'text-sm transition-colors',
-                    resendCooldown > 0
-                      ? 'cursor-not-allowed text-muted-foreground/50'
-                      : 'text-muted-foreground hover:text-primary hover:underline'
-                  )}
-                  onClick={handleResendCode}
-                  disabled={resendCooldown > 0}
-                >
-                  {resendCooldown > 0 ? `${resendCooldown}s 后可重新发送` : '重新发送验证码'}
-                </button>
-              </div>
-            </div>
-          )}
+                {authMode === 'forgot' && (
+                  <button
+                    type="button"
+                    className="text-[14px] text-primary hover:underline"
+                    onClick={() => switchAuthMode('login')}
+                  >
+                    &larr; 返回登录
+                  </button>
+                )}
 
-          {authMode === 'forgot' && (
-            <div className="mt-5 space-y-3">
-              <div>
-                <Input
-                  value={forgotEmail}
-                  onChange={(event) => setForgotEmail(event.target.value)}
-                  onBlur={() => markTouched('forgot-email')}
-                  placeholder="注册时使用的邮箱地址"
-                  className={cn(
-                    'h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base',
-                    touched['forgot-email'] && validateEmail(forgotEmail) && 'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {touched['forgot-email'] && validateEmail(forgotEmail) && (
-                  <p className="mt-1 text-xs text-destructive">{validateEmail(forgotEmail)}</p>
+                {authMode === 'reset' && (
+                  <button
+                    type="button"
+                    className="text-[14px] text-primary hover:underline"
+                    onClick={() => {
+                      switchAuthMode('login')
+                      window.history.replaceState({}, '', '/')
+                    }}
+                  >
+                    &larr; 返回登录
+                  </button>
                 )}
-              </div>
-              <Button onClick={handleForgotPassword} disabled={submitting} className="h-12 w-full rounded-2xl text-[15px] font-medium">
-                发送重置链接
-              </Button>
-            </div>
-          )}
 
-          {authMode === 'reset' && (
-            <div className="mt-5 space-y-3">
-              <div>
-                <Input
-                  type="password"
-                  value={resetForm.password}
-                  onChange={(event) => setResetForm((current) => ({ ...current, password: event.target.value }))}
-                  onBlur={() => markTouched('reset-password')}
-                  placeholder="新密码（至少 8 位）"
-                  className={cn(
-                    'h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base',
-                    touched['reset-password'] &&
-                      validatePassword(resetForm.password) &&
-                      'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {touched['reset-password'] && validatePassword(resetForm.password) && (
-                  <p className="mt-1 text-xs text-destructive">{validatePassword(resetForm.password)}</p>
+                {authMode === 'verify' && (
+                  <button
+                    type="button"
+                    className="text-[14px] text-primary hover:underline"
+                    onClick={() => {
+                      setPendingVerificationEmail(null)
+                      switchAuthMode('register')
+                    }}
+                  >
+                    &larr; 返回注册
+                  </button>
                 )}
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  value={resetForm.confirm}
-                  onChange={(event) => setResetForm((current) => ({ ...current, confirm: event.target.value }))}
-                  onBlur={() => markTouched('reset-confirm')}
-                  placeholder="确认新密码"
-                  className={cn(
-                    'h-12 rounded-2xl border-border/70 bg-background/70 px-4 text-[15px] sm:text-base',
-                    touched['reset-confirm'] &&
-                      resetForm.password !== resetForm.confirm &&
-                      'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {touched['reset-confirm'] && resetForm.password !== resetForm.confirm && (
-                  <p className="mt-1 text-xs text-destructive">两次密码不一致</p>
+
+                {authMode === 'register' && (
+                  <div className="space-y-3">
+                    <div>
+                      <Input
+                        value={registerForm.email}
+                        onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
+                        onBlur={() => markTouched('reg-email')}
+                        placeholder="邮箱地址"
+                        className={cn(
+                          authInputClassName,
+                          touched['reg-email'] &&
+                            validateEmail(registerForm.email) &&
+                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
+                        )}
+                      />
+                      {touched['reg-email'] && validateEmail(registerForm.email) && (
+                        <p className="mt-1 text-xs text-destructive">{validateEmail(registerForm.email)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Input
+                        type="password"
+                        value={registerForm.password}
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({ ...current, password: event.target.value }))
+                        }
+                        onBlur={() => markTouched('reg-password')}
+                        placeholder="密码（至少 8 位）"
+                        className={cn(
+                          authInputClassName,
+                          touched['reg-password'] &&
+                            validatePassword(registerForm.password) &&
+                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
+                        )}
+                      />
+                      {touched['reg-password'] && validatePassword(registerForm.password) && (
+                        <p className="mt-1 text-xs text-destructive">{validatePassword(registerForm.password)}</p>
+                      )}
+                    </div>
+                    <Input
+                      value={registerForm.displayName}
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({ ...current, displayName: event.target.value }))
+                      }
+                      placeholder="聊天展示名"
+                      className={authInputClassName}
+                    />
+                    <Input
+                      value={registerForm.interests}
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({ ...current, interests: event.target.value }))
+                      }
+                      placeholder="兴趣标签（逗号分隔，可选）"
+                      className={authInputClassName}
+                    />
+                    <TurnstileField
+                      ref={turnstileRef}
+                      onTokenChange={(token) => {
+                        setTurnstileError(null)
+                        setTurnstileToken(token)
+                      }}
+                      onExpired={() => setTurnstileError('人机校验已过期，请重新完成验证。')}
+                      onError={setTurnstileError}
+                    />
+                    {turnstileError && <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="rounded-2xl border border-sky-900/60 bg-sky-950/18 px-4 py-3 text-[14px] leading-[1.65] text-sky-100"
+                    >
+                      我们会向您的邮箱发送 6 位验证码，完成后即可注册
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={handleRegister}
+                        disabled={submitting}
+                        className="h-14 w-full rounded-2xl bg-gradient-to-r from-primary via-sky-500 to-cyan-500 text-[16px] font-semibold shadow-md shadow-sky-500/10 transition-all hover:shadow-sky-500/15 active:opacity-90"
+                      >
+                        注册并发送验证码
+                      </Button>
+                    </motion.div>
+                  </div>
                 )}
-              </div>
-              <Button onClick={handleResetPassword} disabled={submitting} className="h-12 w-full rounded-2xl text-[15px] font-medium">
-                重置密码
-              </Button>
-            </div>
-          )}
-        </section>
+
+                {authMode === 'login' && (
+                  <div className="space-y-3">
+                    <div>
+                      <Input
+                        value={loginForm.email}
+                        onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
+                        onBlur={() => markTouched('login-email')}
+                        placeholder="邮箱地址"
+                        className={cn(
+                          authInputClassName,
+                          touched['login-email'] &&
+                            validateEmail(loginForm.email) &&
+                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
+                        )}
+                      />
+                      {touched['login-email'] && validateEmail(loginForm.email) && (
+                        <p className="mt-1 text-xs text-destructive">{validateEmail(loginForm.email)}</p>
+                      )}
+                    </div>
+                    <Input
+                      type="password"
+                      value={loginForm.password}
+                      onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                      placeholder="密码"
+                      className={authInputClassName}
+                    />
+                    <TurnstileField
+                      ref={turnstileRef}
+                      onTokenChange={(token) => {
+                        setTurnstileError(null)
+                        setTurnstileToken(token)
+                      }}
+                      onExpired={() => setTurnstileError('人机校验已过期，请重新完成验证。')}
+                      onError={setTurnstileError}
+                    />
+                    {turnstileError && <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>}
+                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={handleLogin}
+                        disabled={submitting}
+                        className="h-14 w-full rounded-2xl text-[16px] font-semibold shadow-sm transition-all"
+                      >
+                        登录
+                      </Button>
+                    </motion.div>
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        className="text-[14px] text-muted-foreground transition-colors hover:text-primary hover:underline"
+                        onClick={() => {
+                          switchAuthMode('forgot')
+                          setForgotEmail(loginForm.email)
+                        }}
+                      >
+                        忘记密码？
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {authMode === 'verify' && (
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-4 text-[14px] leading-[1.65] text-slate-300">
+                      请输入邮箱中收到的 6 位验证码
+                      <br />
+                      验证码 15 分钟内有效，错误过多需重新获取
+                    </div>
+                    <motion.div
+                      initial={{ scale: 0.95, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                    >
+                      <Input
+                        value={verifyCode_}
+                        onChange={(event) => {
+                          const val = event.target.value.replace(/\D/g, '').slice(0, 6)
+                          setVerifyCode_(val)
+                        }}
+                        placeholder="请输入 6 位验证码"
+                        className={cn(
+                          authInputClassName,
+                          'text-center tracking-[0.02em] placeholder:tracking-[0.02em]'
+                        )}
+                        maxLength={6}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                      />
+                    </motion.div>
+                    <TurnstileField
+                      ref={turnstileRef}
+                      onTokenChange={(token) => {
+                        setTurnstileError(null)
+                        setTurnstileToken(token)
+                      }}
+                      onExpired={() => setTurnstileError('人机校验已过期，请重新完成验证。')}
+                      onError={setTurnstileError}
+                    />
+                    {turnstileError && <p className="text-[13px] leading-6 text-destructive">{turnstileError}</p>}
+                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={handleVerifyCode}
+                        disabled={submitting || verifyCode_.length !== 6}
+                        className="h-14 w-full rounded-2xl bg-gradient-to-r from-primary via-sky-500 to-cyan-500 text-[16px] font-semibold shadow-md shadow-sky-500/10 transition-all"
+                      >
+                        验证
+                      </Button>
+                    </motion.div>
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        className={cn(
+                          'text-[13px] transition-colors',
+                          resendCooldown > 0
+                            ? 'cursor-not-allowed text-muted-foreground/50'
+                            : 'text-muted-foreground hover:text-primary hover:underline'
+                        )}
+                        onClick={handleResendCode}
+                        disabled={resendCooldown > 0}
+                      >
+                        {resendCooldown > 0 ? `${resendCooldown}s 后可重新发送` : '重新发送验证码'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {authMode === 'forgot' && (
+                  <div className="space-y-3">
+                    <div>
+                      <Input
+                        value={forgotEmail}
+                        onChange={(event) => setForgotEmail(event.target.value)}
+                        onBlur={() => markTouched('forgot-email')}
+                        placeholder="注册时使用的邮箱地址"
+                        className={cn(
+                          authInputClassName,
+                          touched['forgot-email'] &&
+                            validateEmail(forgotEmail) &&
+                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
+                        )}
+                      />
+                      {touched['forgot-email'] && validateEmail(forgotEmail) && (
+                        <p className="mt-1 text-xs text-destructive">{validateEmail(forgotEmail)}</p>
+                      )}
+                    </div>
+                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={handleForgotPassword}
+                        disabled={submitting}
+                        className="h-14 w-full rounded-2xl text-[16px] font-semibold shadow-sm transition-all"
+                      >
+                        发送重置链接
+                      </Button>
+                    </motion.div>
+                  </div>
+                )}
+
+                {authMode === 'reset' && (
+                  <div className="space-y-3">
+                    <div>
+                      <Input
+                        type="password"
+                        value={resetForm.password}
+                        onChange={(event) => setResetForm((current) => ({ ...current, password: event.target.value }))}
+                        onBlur={() => markTouched('reset-password')}
+                        placeholder="新密码（至少 8 位）"
+                        className={cn(
+                          authInputClassName,
+                          touched['reset-password'] &&
+                            validatePassword(resetForm.password) &&
+                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
+                        )}
+                      />
+                      {touched['reset-password'] && validatePassword(resetForm.password) && (
+                        <p className="mt-1 text-xs text-destructive">{validatePassword(resetForm.password)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Input
+                        type="password"
+                        value={resetForm.confirm}
+                        onChange={(event) => setResetForm((current) => ({ ...current, confirm: event.target.value }))}
+                        onBlur={() => markTouched('reset-confirm')}
+                        placeholder="确认新密码"
+                        className={cn(
+                          authInputClassName,
+                          touched['reset-confirm'] &&
+                            resetForm.password !== resetForm.confirm &&
+                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
+                        )}
+                      />
+                      {touched['reset-confirm'] && resetForm.password !== resetForm.confirm && (
+                        <p className="mt-1 text-xs text-destructive">两次密码不一致</p>
+                      )}
+                    </div>
+                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={handleResetPassword}
+                        disabled={submitting}
+                        className="h-14 w-full rounded-2xl text-[16px] font-semibold shadow-sm transition-all"
+                      >
+                        重置密码
+                      </Button>
+                    </motion.div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </motion.section>
       </div>
     </div>
   )

@@ -18,12 +18,10 @@ export const createChatReport = async (payload: CreateChatReportPayload) => {
   })
 
   if (!response.ok) {
-    const errorPayload = (await response.json().catch(() => null)) as
-      | {
-          code?: string
-          message?: string
-        }
-      | null
+    const errorPayload = (await response.json().catch(() => null)) as {
+      code?: string
+      message?: string
+    } | null
 
     const error = new Error(errorPayload?.message ?? `Request failed: ${response.status}`) as Error & {
       code?: string

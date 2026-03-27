@@ -11,7 +11,7 @@ from tests.postgres_utils import ensure_database_exists, get_test_database_url
 os.environ.setdefault("SERVER_PY_REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SERVER_PY_DATABASE_URL", get_test_database_url())
 os.environ.setdefault("SERVER_PY_EMAIL_PROVIDER", "fake")
-os.environ.setdefault("SERVER_PY_TURNSTILE_PROVIDER", "fake")
+os.environ.setdefault("SERVER_PY_TURNSTILE_ENABLED", "false")
 os.environ.setdefault("SERVER_PY_APP_BASE_URL", "http://localhost:4173")
 
 import app.bootstrap.lifespan as lifespan_module
@@ -38,9 +38,10 @@ def base_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv("SERVER_PY_RECONNECT_WINDOW_SECONDS", "1")
     monkeypatch.setenv("SERVER_PY_PARTNER_DISCONNECT_GRACE_SECONDS", "1")
     monkeypatch.setenv("SERVER_PY_EMAIL_PROVIDER", "fake")
-    monkeypatch.setenv("SERVER_PY_TURNSTILE_PROVIDER", "fake")
+    monkeypatch.setenv("SERVER_PY_TURNSTILE_ENABLED", "false")
+    monkeypatch.setenv("SERVER_PY_TURNSTILE_SITE_KEY", "")
+    monkeypatch.setenv("SERVER_PY_TURNSTILE_SECRET_KEY", "")
     monkeypatch.setenv("SERVER_PY_APP_BASE_URL", "http://localhost:4173")
-    monkeypatch.setenv("SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS", "true")
     get_settings.cache_clear()
     asyncio.run(_prepare_database(database_url))
     yield

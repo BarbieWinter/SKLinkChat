@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 import { useAppStore } from '@/app/store'
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/features/auth/api/auth-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 
-type AuthStatus = 'loading' | 'ready' | 'error'
+type AuthStatus = 'loading' | 'ready'
 type LoginResult = 'authenticated' | 'verification_required'
 
 type AuthContextValue = {
@@ -28,10 +28,10 @@ type AuthContextValue = {
     interests: string[]
     turnstileToken: string
   }) => Promise<void>
-  login: (payload: { email: string; password: string }) => Promise<LoginResult>
+  login: (payload: { email: string; password: string; turnstileToken: string }) => Promise<LoginResult>
   logout: () => Promise<void>
   verifyCode: (email: string, code: string) => Promise<void>
-  resendCode: (email: string) => Promise<void>
+  resendCode: (payload: { email: string; turnstileToken: string }) => Promise<void>
   syncProfile: (payload: { displayName: string; interests: string[] }) => Promise<void>
   refreshSession: () => Promise<void>
   setPendingVerificationEmail: (email: string | null) => void
@@ -54,27 +54,31 @@ const isVerificationRequired = (
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { setDisplayName, saveSettings, resetSession, clear } = useAppStore()
+  const setDisplayName = useAppStore((state) => state.setDisplayName)
+  const saveSettings = useAppStore((state) => state.saveSettings)
+  const resetSession = useAppStore((state) => state.resetSession)
+  const clear = useAppStore((state) => state.clear)
   const [authSession, setAuthSession] = useState<AuthSessionPayload>(EMPTY_AUTH_SESSION)
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
 
-  const applySession = (nextSession: AuthSessionPayload) => {
+  const applySession = useCallback((nextSession: AuthSessionPayload) => {
     setAuthSession(nextSession)
     setDisplayName(nextSession.display_name ?? '')
     saveSettings(nextSession.interests ?? [])
-  }
+  }, [saveSettings, setDisplayName])
 
-  const refreshSession = async () => {
+  const refreshSession = useCallback(async () => {
     setStatus('loading')
     try {
       const nextSession = await getAuthSession()
       applySession(nextSession)
-      setStatus('ready')
     } catch {
-      setStatus('error')
+      // Session probing must always settle so the entry page can render for anonymous users.
+    } finally {
+      setStatus('ready')
     }
-  }
+  }, [applySession])
 
   useEffect(() => {
     let cancelled = false
@@ -84,11 +88,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const nextSession = await getAuthSession()
         if (!cancelled) {
           applySession(nextSession)
-          setStatus('ready')
         }
       } catch {
+        // Leave the default anonymous session in place when bootstrap fails.
+      } finally {
         if (!cancelled) {
-          setStatus('error')
+          setStatus('ready')
         }
       }
     }
@@ -98,7 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       cancelled = true
     }
-  }, [saveSettings, setDisplayName])
+  }, [applySession])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -115,8 +120,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         })
         setPendingVerificationEmail(email)
       },
-      login: async ({ email, password }) => {
-        const result = await loginAccount({ email, password })
+      login: async ({ email, password, turnstileToken }) => {
+        const result = await loginAccount({ email, password, turnstile_token: turnstileToken })
         if (isVerificationRequired(result)) {
           setPendingVerificationEmail(email)
           return 'verification_required'
@@ -139,8 +144,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setPendingVerificationEmail(null)
         setStatus('ready')
       },
-      resendCode: async (email: string) => {
-        await resendVerificationCode(email)
+      resendCode: async ({ email, turnstileToken }) => {
+        await resendVerificationCode({ email, turnstile_token: turnstileToken })
       },
       syncProfile: async ({ displayName, interests }) => {
         const nextProfile = await updateAccountProfile({

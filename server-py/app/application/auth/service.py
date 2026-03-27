@@ -17,7 +17,13 @@ from app.application.auth.security import (
     utc_now,
     verify_password,
 )
-from app.application.platform.services import EmailSender, RiskEventRecorder, TurnstileVerifier
+from app.application.platform.services import (
+    EmailSender,
+    RiskEventRecorder,
+    TurnstileConfigurationError,
+    TurnstileServiceUnavailableError,
+    TurnstileVerifier,
+)
 from app.infrastructure.postgres.models import Account
 from app.infrastructure.postgres.repositories import (
     AccountRepository,
@@ -89,6 +95,7 @@ def _mask_email(email: str) -> str:
 
 _VERIFICATION_MAX_ATTEMPTS = 5
 _RESEND_VERIFICATION_MIN_DELAY_SECONDS = 0.35
+_PASSWORD_RESET_MIN_DELAY_SECONDS = 0.35
 
 
 @dataclass(slots=True, frozen=True)
@@ -168,21 +175,7 @@ class AuthService:
         check_email_domain(email_normalized)
         display_name = normalize_display_name(display_name)
         interests = normalize_interests(interests)
-        turnstile_result = await self._turnstile_verifier.verify(turnstile_token, remote_ip=ip_address)
-        if not turnstile_result.success:
-            await self._risk_event_recorder.record(
-                email_normalized=email_normalized,
-                outcome="turnstile_failed",
-                details={"provider": turnstile_result.provider, "error_codes": list(turnstile_result.error_codes)},
-                account_id=None,
-                ip_hash=hash_ip(ip_address),
-                user_agent=user_agent,
-            )
-            raise AppError(
-                message="Turnstile validation failed",
-                code="TURNSTILE_VALIDATION_FAILED",
-                status_code=400,
-            )
+        turnstile_result = await self._verify_turnstile_or_raise(turnstile_token=turnstile_token, ip_address=ip_address)
 
         existing_account = await self._account_repository.get_by_email_normalized(email_normalized)
         if existing_account is not None:
@@ -227,7 +220,15 @@ class AuthService:
         await self._issue_verification_code(account)
         return RegistrationResult(status="verification_required", masked_email=_mask_email(account.email))
 
-    async def login(self, *, email: str, password: str) -> AuthTokenBundle | RegistrationResult:
+    async def login(
+        self,
+        *,
+        email: str,
+        password: str,
+        turnstile_token: str,
+        ip_address: str | None,
+    ) -> AuthTokenBundle | RegistrationResult:
+        await self._verify_turnstile_or_raise(turnstile_token=turnstile_token, ip_address=ip_address)
         _, email_normalized = normalize_email(email)
         account = await self._account_repository.get_by_email_normalized(email_normalized)
         if account is None or not verify_password(password, account.password_hash):
@@ -306,9 +307,10 @@ class AuthService:
         account = await self._account_repository.mark_verified(account_id=account.id, verified_at=now)
         return await self._create_authenticated_session(account)
 
-    async def resend_verification(self, *, email: str) -> None:
+    async def resend_verification(self, *, email: str, turnstile_token: str, ip_address: str | None) -> None:
         started_at = asyncio.get_running_loop().time()
         try:
+            await self._verify_turnstile_or_raise(turnstile_token=turnstile_token, ip_address=ip_address)
             try:
                 _, email_normalized = normalize_email(email)
             except AppError:
@@ -321,6 +323,43 @@ class AuthService:
             await self._issue_verification_code(account, enforce_rate_limits=True)
         finally:
             await self._apply_resend_verification_delay(started_at)
+
+    async def _verify_turnstile_or_raise(
+        self,
+        *,
+        turnstile_token: str,
+        ip_address: str | None,
+    ):
+        if not turnstile_token.strip():
+            raise AppError(
+                message="Turnstile token is required",
+                code="TURNSTILE_TOKEN_REQUIRED",
+                status_code=400,
+            )
+
+        try:
+            result = await self._turnstile_verifier.verify(turnstile_token, remote_ip=ip_address)
+        except TurnstileConfigurationError as error:
+            raise AppError(
+                message=str(error),
+                code="TURNSTILE_NOT_CONFIGURED",
+                status_code=500,
+            ) from error
+        except TurnstileServiceUnavailableError as error:
+            raise AppError(
+                message="Turnstile validation is temporarily unavailable",
+                code="TURNSTILE_UNAVAILABLE",
+                status_code=503,
+            ) from error
+
+        if not result.success:
+            raise AppError(
+                message="Turnstile validation failed",
+                code="TURNSTILE_VALIDATION_FAILED",
+                status_code=400,
+            )
+
+        return result
 
     async def _create_authenticated_session(self, account: Account) -> AuthTokenBundle:
         raw_session_token = issue_token()
@@ -404,45 +443,49 @@ class AuthService:
         return account
 
     async def request_password_reset(self, *, email: str) -> None:
+        started_at = asyncio.get_running_loop().time()
         try:
-            _, email_normalized = normalize_email(email)
-        except AppError:
-            return
+            try:
+                _, email_normalized = normalize_email(email)
+            except AppError:
+                return
 
-        account = await self._account_repository.get_by_email_normalized(email_normalized)
-        if account is None:
-            return
+            account = await self._account_repository.get_by_email_normalized(email_normalized)
+            if account is None:
+                return
 
-        now = utc_now()
-        latest_created_at = await self._password_reset_token_repository.latest_created_at(account.id)
-        if (
-            latest_created_at is not None
-            and (now - ensure_utc(latest_created_at)).total_seconds() < self._password_reset_resend_cooldown_seconds
-        ):
-            return
+            now = utc_now()
+            latest_created_at = await self._password_reset_token_repository.latest_created_at(account.id)
+            if (
+                latest_created_at is not None
+                and (now - ensure_utc(latest_created_at)).total_seconds() < self._password_reset_resend_cooldown_seconds
+            ):
+                return
 
-        sent_last_hour = await self._password_reset_token_repository.sent_count_since(
-            account.id,
-            now - timedelta(hours=1),
-        )
-        if sent_last_hour >= self._password_reset_hourly_limit:
-            return
+            sent_last_hour = await self._password_reset_token_repository.sent_count_since(
+                account.id,
+                now - timedelta(hours=1),
+            )
+            if sent_last_hour >= self._password_reset_hourly_limit:
+                return
 
-        raw_token = issue_token()
-        await self._password_reset_token_repository.revoke_active_for_account(
-            account_id=account.id,
-            revoked_at=now,
-        )
-        await self._password_reset_token_repository.create(
-            account_id=account.id,
-            token_hash=hash_secret(raw_token),
-            expires_at=make_expiry(self._password_reset_token_ttl_seconds),
-        )
-        await self._email_sender.send_password_reset_email(
-            recipient=account.email,
-            display_name=account.display_name,
-            reset_link=f"{self._app_base_url}/?reset_token={raw_token}",
-        )
+            raw_token = issue_token()
+            await self._password_reset_token_repository.revoke_active_for_account(
+                account_id=account.id,
+                revoked_at=now,
+            )
+            await self._password_reset_token_repository.create(
+                account_id=account.id,
+                token_hash=hash_secret(raw_token),
+                expires_at=make_expiry(self._password_reset_token_ttl_seconds),
+            )
+            await self._email_sender.send_password_reset_email(
+                recipient=account.email,
+                display_name=account.display_name,
+                reset_link=f"{self._app_base_url}/?reset_token={raw_token}",
+            )
+        finally:
+            await self._apply_password_reset_delay(started_at)
 
     async def reset_password(self, *, raw_token: str, new_password: str) -> None:
         if len(new_password) < 8:
@@ -468,3 +511,9 @@ class AuthService:
             account_id=account.id,
             password_hash=hash_password(new_password),
         )
+        await self._auth_session_repository.delete_by_account_id(account.id)
+
+    async def _apply_password_reset_delay(self, started_at: float) -> None:
+        remaining = _PASSWORD_RESET_MIN_DELAY_SECONDS - (asyncio.get_running_loop().time() - started_at)
+        if remaining > 0:
+            await asyncio.sleep(remaining)

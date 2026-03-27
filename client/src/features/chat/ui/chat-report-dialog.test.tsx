@@ -15,12 +15,10 @@ describe('ChatReportDialog', () => {
   })
 
   it('requires details when reason is other and submits the expected payload', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({ status: 'accepted', report_id: 1 })
-      })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'accepted', report_id: 1 })
+    })
 
     vi.stubGlobal('fetch', fetchMock)
 

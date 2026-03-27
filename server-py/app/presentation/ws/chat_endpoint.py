@@ -14,6 +14,9 @@ from app.shared.protocol import PayloadType
 
 router = APIRouter()
 
+_MAX_WEBSOCKET_DISPLAY_NAME_LENGTH = 80
+_MAX_WEBSOCKET_MESSAGE_LENGTH = 4000
+
 
 def _serialize_user(session: ChatSession) -> dict[str, Any]:
     return {
@@ -74,6 +77,11 @@ async def _handle_user_info(
     if name is not None and not isinstance(name, str):
         await _send_error(websocket, "Malformed payload")
         return
+    if name is not None:
+        normalized_name = name.strip()
+        if not normalized_name or len(normalized_name) > _MAX_WEBSOCKET_DISPLAY_NAME_LENGTH:
+            await _send_error(websocket, "Display name is invalid")
+            return
 
     session = await container.update_profile.execute(session_id, name=name)
     await _broadcast_to_session(container, session_id, PayloadType.USER_INFO, _serialize_user(session))
@@ -116,6 +124,9 @@ async def _handle_message(
     raw_message = payload.get("message")
     if not isinstance(raw_message, str):
         await _send_error(websocket, "Malformed payload")
+        return
+    if len(raw_message.strip()) > _MAX_WEBSOCKET_MESSAGE_LENGTH:
+        await _send_error(websocket, "Message is too long")
         return
 
     client_message_id = payload.get("client_message_id")

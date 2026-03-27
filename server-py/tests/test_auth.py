@@ -4,10 +4,16 @@ import asyncio
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from sqlalchemy import select, update
 
 from app.application.auth.security import hash_secret, utc_now
-from app.infrastructure.postgres.models import EmailVerificationToken
+from app.application.platform.services import (
+    TurnstileConfigurationError,
+    TurnstileServiceUnavailableError,
+    TurnstileVerificationResult,
+)
+from app.infrastructure.postgres.models import AuthSession, EmailVerificationToken
 
 
 def _run(coro):
@@ -42,6 +48,31 @@ def _verify_code(client, email: str = "user@testuser.dev", code: str | None = No
     return client.post("/api/auth/verify-email", json={"email": email, "code": code})
 
 
+def _login(
+    client,
+    *,
+    email: str = "user@testuser.dev",
+    password: str = "CorrectHorseBatteryStaple!23",
+    turnstile_token: str = "test-token",
+):
+    return client.post(
+        "/api/auth/login",
+        json={"email": email, "password": password, "turnstile_token": turnstile_token},
+    )
+
+
+def _resend_verification(
+    client,
+    *,
+    email: str = "user@testuser.dev",
+    turnstile_token: str = "test-token",
+):
+    return client.post(
+        "/api/auth/resend-verification",
+        json={"email": email, "turnstile_token": turnstile_token},
+    )
+
+
 def _latest_verification_token(client, email: str = "user@testuser.dev") -> EmailVerificationToken:
     async def fetch() -> EmailVerificationToken:
         account = await client.app.state.container.account_repository.get_by_email_normalized(email.lower())
@@ -64,6 +95,15 @@ def _assert_short_id(value: str | None) -> None:
     assert value is not None
     assert len(value) == 6
     assert value.isdigit()
+
+
+def _count_auth_sessions(client, account_id: str) -> int:
+    async def count() -> int:
+        async with client.app.state.container.session_factory() as session:
+            result = await session.execute(select(AuthSession.id).where(AuthSession.account_id == account_id))
+            return len(list(result.scalars()))
+
+    return _run(count())
 
 
 # --- Registration ---
@@ -116,6 +156,78 @@ def test_register_rejects_blocked_email_domain(client):
         response = _register(client, email=f"user@{blocked_domain}")
         assert response.status_code == 422
         assert response.json()["code"] == "EMAIL_DOMAIN_BLOCKED"
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            "/api/auth/register",
+            {
+                "email": "user@testuser.dev",
+                "password": "CorrectHorseBatteryStaple!23",
+                "display_name": "Traveler",
+                "interests": ["music"],
+                "turnstile_token": "test-token",
+            },
+        ),
+        (
+            "/api/auth/login",
+            {
+                "email": "user@testuser.dev",
+                "password": "CorrectHorseBatteryStaple!23",
+                "turnstile_token": "test-token",
+            },
+        ),
+        (
+            "/api/auth/resend-verification",
+            {
+                "email": "user@testuser.dev",
+                "turnstile_token": "test-token",
+            },
+        ),
+    ],
+)
+def test_auth_endpoints_reject_turnstile_failure(client, monkeypatch, path, payload):
+    async def fail_verify(token: str, *, remote_ip: str | None):
+        return TurnstileVerificationResult(
+            success=False,
+            provider="cloudflare",
+            error_codes=("invalid-input-response",),
+        )
+
+    monkeypatch.setattr(client.app.state.container.auth_service._turnstile_verifier, "verify", fail_verify)
+
+    if path != "/api/auth/register":
+        _register(client)
+
+    response = client.post(path, json=payload)
+    assert response.status_code == 400
+    assert response.json()["code"] == "TURNSTILE_VALIDATION_FAILED"
+
+
+def test_register_rejects_turnstile_service_unavailable(client, monkeypatch):
+    async def unavailable(token: str, *, remote_ip: str | None):
+        raise TurnstileServiceUnavailableError("Cloudflare Turnstile validation transport failed")
+
+    monkeypatch.setattr(client.app.state.container.auth_service._turnstile_verifier, "verify", unavailable)
+
+    response = _register(client)
+    assert response.status_code == 503
+    assert response.json()["code"] == "TURNSTILE_UNAVAILABLE"
+
+
+def test_register_rejects_turnstile_missing_secret(client, monkeypatch):
+    async def misconfigured(token: str, *, remote_ip: str | None):
+        raise TurnstileConfigurationError(
+            "SERVER_PY_TURNSTILE_SECRET_KEY is required when SERVER_PY_TURNSTILE_ENABLED=true"
+        )
+
+    monkeypatch.setattr(client.app.state.container.auth_service._turnstile_verifier, "verify", misconfigured)
+
+    response = _register(client)
+    assert response.status_code == 500
+    assert response.json()["code"] == "TURNSTILE_NOT_CONFIGURED"
 
 
 # --- Verification Code ---
@@ -231,7 +343,7 @@ def test_verify_code_rejects_cross_account_token(client, monkeypatch):
 def test_resend_code_enforces_cooldown(client):
     _register(client)
 
-    response = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    response = _resend_verification(client)
     assert response.status_code == 429
     assert response.json()["code"] == "VERIFICATION_CODE_COOLDOWN"
 
@@ -241,7 +353,7 @@ def test_resend_code_revokes_previous(client):
     first_code = _extract_verification_code(client)
 
     client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
-    client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    _resend_verification(client)
 
     second_code = _extract_verification_code(client)
     assert first_code != second_code
@@ -260,8 +372,8 @@ def test_resend_code_enforces_hourly_limit(client):
     client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
     client.app.state.container.auth_service._verification_resend_hourly_limit = 2
 
-    first = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
-    second = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    first = _resend_verification(client)
+    second = _resend_verification(client)
 
     assert first.status_code == 200
     assert second.status_code == 429
@@ -269,7 +381,7 @@ def test_resend_code_enforces_hourly_limit(client):
 
 
 def test_resend_code_silent_for_unknown_email(client):
-    response = client.post("/api/auth/resend-verification", json={"email": "nobody@testuser.dev"})
+    response = _resend_verification(client, email="nobody@testuser.dev")
     assert response.status_code == 200
 
 
@@ -277,7 +389,7 @@ def test_resend_code_silent_for_verified_account(client):
     _register(client)
     _verify_code(client)
 
-    response = client.post("/api/auth/resend-verification", json={"email": "user@testuser.dev"})
+    response = _resend_verification(client)
     assert response.status_code == 200
 
 
@@ -288,10 +400,7 @@ def test_login_verified_creates_session(client):
     _register(client)
     _verify_code(client)
 
-    login_response = client.post(
-        "/api/auth/login",
-        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
-    )
+    login_response = _login(client)
 
     assert login_response.status_code == 200
     assert login_response.json()["authenticated"] is True
@@ -302,10 +411,7 @@ def test_login_unverified_sends_code(client):
     _register(client)
     client.app.state.container.auth_service._verification_resend_cooldown_seconds = 0
 
-    login_response = client.post(
-        "/api/auth/login",
-        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
-    )
+    login_response = _login(client)
 
     assert login_response.status_code == 200
     assert login_response.json()["status"] == "verification_required"
@@ -315,10 +421,7 @@ def test_login_unverified_sends_code(client):
 def test_login_unverified_respects_resend_cooldown(client):
     _register(client)
 
-    login_response = client.post(
-        "/api/auth/login",
-        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
-    )
+    login_response = _login(client)
 
     assert login_response.status_code == 429
     assert login_response.json()["code"] == "VERIFICATION_CODE_COOLDOWN"
@@ -328,10 +431,7 @@ def test_login_logout_and_session_flow(client):
     _register(client)
     _verify_code(client)
 
-    login_response = client.post(
-        "/api/auth/login",
-        json={"email": "user@testuser.dev", "password": "CorrectHorseBatteryStaple!23"},
-    )
+    login_response = _login(client)
     assert login_response.status_code == 200
     assert "sklinkchat_session" in login_response.cookies
 
@@ -399,12 +499,33 @@ def test_reset_password_flow(client):
 
     _verify_code(client)
 
-    login_response = client.post(
-        "/api/auth/login",
-        json={"email": "user@testuser.dev", "password": "NewSecurePassword!99"},
-    )
+    login_response = _login(client, password="NewSecurePassword!99")
     assert login_response.status_code == 200
     assert login_response.json()["authenticated"] is True
+
+
+def test_reset_password_revokes_existing_auth_sessions(client):
+    _register(client)
+    verify_response = _verify_code(client)
+    session_cookie = verify_response.cookies["sklinkchat_session"]
+    account_id, auth_session = _run(client.app.state.container.resolve_auth_session.execute(session_cookie))
+    assert account_id is not None
+    assert auth_session.authenticated is True
+    assert _count_auth_sessions(client, account_id) == 1
+
+    client.post("/api/auth/request-password-reset", json={"email": "user@testuser.dev"})
+    reset_token = _extract_reset_token(client)
+
+    response = client.post(
+        "/api/auth/reset-password",
+        json={"token": reset_token, "new_password": "NewSecurePassword!99"},
+    )
+    assert response.status_code == 200
+    assert _count_auth_sessions(client, account_id) == 0
+
+    session_response = client.get("/api/auth/session", cookies={"sklinkchat_session": session_cookie})
+    assert session_response.status_code == 200
+    assert session_response.json()["authenticated"] is False
 
 
 def test_reset_password_rejects_reused_token(client):

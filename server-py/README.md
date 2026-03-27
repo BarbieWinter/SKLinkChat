@@ -20,8 +20,8 @@ FastAPI backend for the active SKLinkChat runtime.
 - 开发/生产环境邮件使用 `resend`（需配置 `SERVER_PY_RESEND_API_KEY`）
 - 测试环境邮件使用 `fake`
 - 可选本地 SMTP 调试：`mailpit`
-- 开发/测试环境 Turnstile 不依赖真实校验，可使用 `fake` 或 Cloudflare 测试 key
-- 生产环境 Turnstile 必须使用真实 Cloudflare 校验
+- `register`、`login`、`resend-verification` 会先进行 Cloudflare Turnstile 服务端校验
+- 开发/测试环境可关闭 `SERVER_PY_TURNSTILE_ENABLED`，启用后需提供 Cloudflare 的 site key 与 secret key
 - 管理员身份由 PostgreSQL `accounts.is_admin` 字段动态判定
 
 ## Data Invariants
@@ -53,7 +53,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `SERVER_PY_RESEND_API_KEY`
 - `SERVER_PY_EMAIL_FROM`
 - `SERVER_PY_APP_BASE_URL`
-- `SERVER_PY_TURNSTILE_PROVIDER`
+- `SERVER_PY_TURNSTILE_ENABLED`
+- `SERVER_PY_TURNSTILE_SITE_KEY`
+- `SERVER_PY_TURNSTILE_SECRET_KEY`
+
+说明：
+
+- `SERVER_PY_TURNSTILE_SITE_KEY` 仅用于前端渲染 Turnstile 组件
+- `SERVER_PY_TURNSTILE_SECRET_KEY` 仅用于后端调用 Cloudflare Siteverify
+- 缺失配置时，后端会返回明确错误，不会静默跳过校验
 
 ## Verification
 

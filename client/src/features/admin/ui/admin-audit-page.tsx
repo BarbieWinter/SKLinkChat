@@ -70,7 +70,10 @@ export const AdminAuditPage = () => {
   }, [])
 
   return (
-    <section data-testid="admin-audit-page" className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+    <section
+      data-testid="admin-audit-page"
+      className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5"
+    >
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">审计日志</h2>
@@ -84,7 +87,11 @@ export const AdminAuditPage = () => {
       <div className="mt-5 grid gap-3 md:grid-cols-3">
         <label className="grid gap-2 text-sm text-muted-foreground">
           event_type
-          <Input value={eventType} onChange={(event) => setEventType(event.target.value)} placeholder="admin.report.reviewed" />
+          <Input
+            value={eventType}
+            onChange={(event) => setEventType(event.target.value)}
+            placeholder="admin.report.reviewed"
+          />
         </label>
         <label className="grid gap-2 text-sm text-muted-foreground">
           account_id

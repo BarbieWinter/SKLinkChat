@@ -48,8 +48,9 @@ services:
       SERVER_PY_EMAIL_FROM: noreply@mail.sklinkchat.com
       SERVER_PY_RESEND_API_KEY: ${SERVER_PY_RESEND_API_KEY:?set SERVER_PY_RESEND_API_KEY in .env}
       SERVER_PY_APP_BASE_URL: http://localhost:4173
-      SERVER_PY_TURNSTILE_PROVIDER: fake
-      SERVER_PY_FAKE_TURNSTILE_ALWAYS_PASS: "true"
+      SERVER_PY_TURNSTILE_ENABLED: ${SERVER_PY_TURNSTILE_ENABLED:-false}
+      SERVER_PY_TURNSTILE_SITE_KEY: ${SERVER_PY_TURNSTILE_SITE_KEY:-}
+      SERVER_PY_TURNSTILE_SECRET_KEY: ${SERVER_PY_TURNSTILE_SECRET_KEY:-}
       SERVER_PY_SECURE_COOKIES: "false"
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
@@ -71,7 +72,8 @@ services:
       args:
         VITE_ENDPOINT: http://localhost:8000
         VITE_WS_ENDPOINT: ws://localhost:8000/ws
-        VITE_TURNSTILE_SITE_KEY: ""
+        VITE_TURNSTILE_ENABLED: ${SERVER_PY_TURNSTILE_ENABLED:-false}
+        VITE_TURNSTILE_SITE_KEY: ${SERVER_PY_TURNSTILE_SITE_KEY:-}
     ports:
       - "4173:4173"
     depends_on:

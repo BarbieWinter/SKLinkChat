@@ -190,6 +190,54 @@ def test_websocket_queue_match_message_and_typing_flow(client):
             }
 
 
+def test_websocket_rejects_oversized_message_payload(client):
+    left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")
+    left_id = _create_chat_session(client, session_cookie=left_cookie)
+    right_id = _create_chat_session(client, session_cookie=right_cookie)
+    left_short_id = _resolve_short_id(client, session_cookie=left_cookie)
+    right_short_id = _resolve_short_id(client, session_cookie=right_cookie)
+
+    with client.websocket_connect(f"/ws?sessionId={left_id}", cookies={COOKIE_NAME: left_cookie}) as ws_left:
+        with client.websocket_connect(f"/ws?sessionId={right_id}", cookies={COOKIE_NAME: right_cookie}) as ws_right:
+            assert _receive_json_ignoring_presence(ws_left)["type"] == "user-info"
+            assert _receive_json_ignoring_presence(ws_right)["type"] == "user-info"
+            _queue_and_match(
+                ws_left,
+                ws_right,
+                left_id=left_id,
+                right_id=right_id,
+                left_name="Left",
+                right_name="Right",
+                left_short_id=left_short_id,
+                right_short_id=right_short_id,
+            )
+
+            ws_left.send_json({"type": "message", "payload": {"message": "x" * 4001}})
+            assert _receive_json_ignoring_presence(ws_left) == {
+                "type": "error",
+                "payload": "Message is too long",
+            }
+
+
+def test_websocket_rejects_invalid_runtime_display_name(client):
+    session_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
+    session_id = _create_chat_session(client, session_cookie=session_cookie)
+    short_id = _resolve_short_id(client, session_cookie=session_cookie)
+
+    with client.websocket_connect(f"/ws?sessionId={session_id}", cookies={COOKIE_NAME: session_cookie}) as ws:
+        assert _receive_json_ignoring_presence(ws) == {
+            "type": "user-info",
+            "payload": {"id": session_id, "name": "Left", "short_id": short_id, "state": "idle"},
+        }
+
+        ws.send_json({"type": "user-info", "payload": {"name": "x" * 81}})
+        assert _receive_json_ignoring_presence(ws) == {
+            "type": "error",
+            "payload": "Display name is invalid",
+        }
+
+
 def test_websocket_reconnect_preserves_existing_match(client):
     left_cookie = _register_and_verify(client, email="left@test.dev", display_name="Left")
     right_cookie = _register_and_verify(client, email="right@test.dev", display_name="Right")

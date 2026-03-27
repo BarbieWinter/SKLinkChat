@@ -129,7 +129,6 @@ class ResendEmailSender:
                 extra={
                     "provider": "resend",
                     "status_code": error.response.status_code,
-                    "recipient": recipient,
                     "subject": subject,
                 },
             )
@@ -137,7 +136,7 @@ class ResendEmailSender:
         except httpx.HTTPError as error:
             logger.exception(
                 "resend email transport failed",
-                extra={"provider": "resend", "recipient": recipient, "subject": subject},
+                extra={"provider": "resend", "subject": subject},
             )
             raise RuntimeError("Resend email transport failed") from error
 

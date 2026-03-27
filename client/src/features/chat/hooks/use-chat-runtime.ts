@@ -52,8 +52,7 @@ export const useChatRuntime = (): ChatProviderState => {
     resetSession
   } = useAppStore()
 
-  const enabled =
-    authSession.authenticated && authSession.email_verified && !authSession.chat_access_restricted
+  const enabled = authSession.authenticated && authSession.email_verified && !authSession.chat_access_restricted
   const {
     retry,
     sessionId,

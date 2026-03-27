@@ -135,7 +135,7 @@ export const AdminReportsPage = () => {
       const nextSelectedReportId =
         preferredReportId && response.items.some((report) => report.id === preferredReportId)
           ? preferredReportId
-          : response.items[0]?.id ?? null
+          : (response.items[0]?.id ?? null)
       setSelectedReportId(nextSelectedReportId)
     } catch (error) {
       setListError(error instanceof Error ? error.message : '举报列表加载失败。')
@@ -422,7 +422,9 @@ export const AdminReportsPage = () => {
                     </div>
                   </div>
 
-                  <div className={`mt-3 flex flex-wrap gap-2 ${active ? 'text-background/80' : 'text-muted-foreground'}`}>
+                  <div
+                    className={`mt-3 flex flex-wrap gap-2 ${active ? 'text-background/80' : 'text-muted-foreground'}`}
+                  >
                     <ReasonBadge reason={report.reason} />
                   </div>
 
@@ -432,7 +434,9 @@ export const AdminReportsPage = () => {
                       {report.reporter_short_id ? ` · #${report.reporter_short_id}` : ''}
                     </span>
                     <span>提交时间：{formatDateTime(report.created_at)}</span>
-                    {report.reported_account_chat_access_restriction_report_id === report.id ? <span>当前限制来源：本举报</span> : null}
+                    {report.reported_account_chat_access_restriction_report_id === report.id ? (
+                      <span>当前限制来源：本举报</span>
+                    ) : null}
                   </div>
                 </button>
               )
@@ -488,17 +492,25 @@ export const AdminReportsPage = () => {
                 <div className="rounded-2xl border border-border/60 bg-card/90 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">本举报是否触发当前治理</p>
                   <p className="mt-3 text-sm font-medium text-foreground">
-                    {reportDetail.governance_triggered_by_this_report ? '是，当前限制来源于本举报' : '否，当前限制来自其他举报或尚未治理'}
+                    {reportDetail.governance_triggered_by_this_report
+                      ? '是，当前限制来源于本举报'
+                      : '否，当前限制来自其他举报或尚未治理'}
                   </p>
                 </div>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <DetailRow label="举报人昵称" value={reportDetail.reporter_display_name} />
-                <DetailRow label="举报人 short_id" value={reportDetail.reporter_short_id ? `#${reportDetail.reporter_short_id}` : null} />
+                <DetailRow
+                  label="举报人 short_id"
+                  value={reportDetail.reporter_short_id ? `#${reportDetail.reporter_short_id}` : null}
+                />
                 <DetailRow label="举报人邮箱" value={reportDetail.reporter_email} />
                 <DetailRow label="被举报人昵称" value={reportDetail.reported_display_name} />
-                <DetailRow label="被举报人 short_id" value={reportDetail.reported_short_id ? `#${reportDetail.reported_short_id}` : null} />
+                <DetailRow
+                  label="被举报人 short_id"
+                  value={reportDetail.reported_short_id ? `#${reportDetail.reported_short_id}` : null}
+                />
                 <DetailRow label="被举报人邮箱" value={reportDetail.reported_email} />
                 <DetailRow label="详情说明" value={reportDetail.details} />
                 <DetailRow label="当前举报状态" value={REPORT_STATUS_LABELS[reportDetail.status]} />
@@ -510,7 +522,10 @@ export const AdminReportsPage = () => {
                       : '未限制'
                   }
                 />
-                <DetailRow label="限制时间" value={formatDateTime(reportDetail.reported_account_chat_access_restricted_at)} />
+                <DetailRow
+                  label="限制时间"
+                  value={formatDateTime(reportDetail.reported_account_chat_access_restricted_at)}
+                />
                 <DetailRow
                   label="治理来源"
                   value={
@@ -530,7 +545,9 @@ export const AdminReportsPage = () => {
               <div className="grid gap-4 rounded-3xl border border-border/60 bg-background/70 p-4">
                 <div>
                   <h3 className="text-lg font-semibold text-foreground">审核举报</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">仅 `open` 状态允许一次性流转到终态，审核备注必填。</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    仅 `open` 状态允许一次性流转到终态，审核备注必填。
+                  </p>
                 </div>
 
                 <label className="grid gap-2 text-sm text-muted-foreground">
@@ -570,7 +587,9 @@ export const AdminReportsPage = () => {
               <div className="grid gap-4 rounded-3xl border border-border/60 bg-background/70 p-4">
                 <div>
                   <h3 className="text-lg font-semibold text-foreground">账号治理</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">限制或恢复聊天访问后，详情、列表和受限名单会即时同步。</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    限制或恢复聊天访问后，详情、列表和受限名单会即时同步。
+                  </p>
                 </div>
 
                 <label className="grid gap-2 text-sm text-muted-foreground">
@@ -613,9 +632,16 @@ export const AdminReportsPage = () => {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-foreground">当前已限制聊天账号</h2>
-            <p className="mt-1 text-sm text-muted-foreground">这里直接回显当前治理结果，刷新后也会保留当前状态与来源举报。</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              这里直接回显当前治理结果，刷新后也会保留当前状态与来源举报。
+            </p>
           </div>
-          <Button type="button" variant="outline" onClick={() => void loadRestrictedAccounts()} disabled={restrictedLoading}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void loadRestrictedAccounts()}
+            disabled={restrictedLoading}
+          >
             {restrictedLoading ? '刷新中...' : '刷新名单'}
           </Button>
         </div>
@@ -656,7 +682,9 @@ export const AdminReportsPage = () => {
                       来源举报：
                       {account.source_report_id
                         ? ` #${account.source_report_id} · ${account.source_report_reason ? REPORT_REASON_LABELS[account.source_report_reason] : '未知原因'} · ${
-                            account.source_report_status ? REPORT_STATUS_LABELS[account.source_report_status] : '未知状态'
+                            account.source_report_status
+                              ? REPORT_STATUS_LABELS[account.source_report_status]
+                              : '未知状态'
                           }`
                         : ' 无'}
                     </span>
@@ -676,7 +704,11 @@ export const AdminReportsPage = () => {
                   />
                   <div className="flex flex-wrap gap-2">
                     {account.source_report_id ? (
-                      <Button type="button" variant="outline" onClick={() => setSelectedReportId(account.source_report_id)}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSelectedReportId(account.source_report_id)}
+                      >
                         查看来源举报
                       </Button>
                     ) : null}

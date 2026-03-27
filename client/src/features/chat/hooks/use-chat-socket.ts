@@ -56,8 +56,7 @@ export const useChatSocket = ({
   const socket = useWebSocket(
     sessionId ? getSocketUrl(WS_ENDPOINT, sessionId) : null,
     {
-      shouldReconnect: (closeEvent) =>
-        !(closeEvent.code === 1008 && closeEvent.reason === 'CHAT_ACCESS_RESTRICTED'),
+      shouldReconnect: (closeEvent) => !(closeEvent.code === 1008 && closeEvent.reason === 'CHAT_ACCESS_RESTRICTED'),
       onClose: () => {
         onSocketClosed()
       },

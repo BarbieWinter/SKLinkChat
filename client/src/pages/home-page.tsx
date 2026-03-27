@@ -1,17 +1,35 @@
+import { motion } from 'framer-motion'
 import { useAuth } from '@/features/auth/auth-provider'
 import { AuthEntryCard } from '@/features/auth/ui/auth-entry-card'
 import { RestrictedChatAccessCard } from '@/features/auth/ui/restricted-chat-access-card'
 import { ChatWorkspace } from '@/features/chat/ui/chat-workspace'
-
 
 const HomePage = () => {
   const { authSession, status, pendingVerificationEmail } = useAuth()
 
   if (status === 'loading') {
     return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="w-full max-w-md rounded-2xl border border-border/50 bg-card/90 p-6 text-center shadow-xl shadow-black/5 dark:shadow-black/20">
-          <p className="text-sm text-muted-foreground">正在加载账户状态...</p>
+      <div className="relative flex h-[calc(100dvh-5rem)] items-center justify-center px-4">
+        <div className="relative flex flex-col items-center">
+          <motion.div
+            animate={{
+              rotate: 360,
+              scale: [1, 1.1, 1]
+            }}
+            transition={{
+              rotate: { duration: 2, repeat: Infinity, ease: 'linear' },
+              scale: { duration: 2, repeat: Infinity, ease: 'easeInOut' }
+            }}
+            className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary"
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-4 text-sm font-medium text-muted-foreground"
+          >
+            正在加载账户状态...
+          </motion.div>
         </div>
       </div>
     )

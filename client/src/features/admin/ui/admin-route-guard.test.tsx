@@ -37,7 +37,10 @@ describe('AdminRouteGuard', () => {
 
   it('redirects unauthenticated users back to home', () => {
     render(
-      <MemoryRouter initialEntries={['/admin/reports']} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <MemoryRouter
+        initialEntries={['/admin/reports']}
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+      >
         <Routes>
           <Route path="/" element={<div data-testid="home-page">home</div>} />
           <Route path="/admin" element={<AdminRouteGuard />}>
@@ -61,7 +64,10 @@ describe('AdminRouteGuard', () => {
     }
 
     render(
-      <MemoryRouter initialEntries={['/admin/reports']} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <MemoryRouter
+        initialEntries={['/admin/reports']}
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+      >
         <Routes>
           <Route path="/admin" element={<AdminRouteGuard />}>
             <Route path="reports" element={<div data-testid="admin-page">admin</div>} />
@@ -87,7 +93,10 @@ describe('AdminRouteGuard', () => {
     }
 
     render(
-      <MemoryRouter initialEntries={['/admin/reports']} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <MemoryRouter
+        initialEntries={['/admin/reports']}
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+      >
         <Routes>
           <Route path="/admin" element={<AdminRouteGuard />}>
             <Route path="reports" element={<div data-testid="admin-page">admin</div>} />
@@ -112,7 +121,10 @@ describe('AdminRouteGuard', () => {
     }
 
     render(
-      <MemoryRouter initialEntries={['/admin/reports']} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <MemoryRouter
+        initialEntries={['/admin/reports']}
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+      >
         <Routes>
           <Route path="/admin" element={<AdminRouteGuard />}>
             <Route path="reports" element={<div data-testid="admin-page">admin</div>} />

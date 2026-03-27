@@ -2,6 +2,8 @@
  * Profile settings dialog.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { motion } from 'framer-motion'
+import { Settings, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { generateUsername } from 'unique-username-generator'
@@ -62,14 +64,25 @@ const SettingsDialog = () => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="text-sm hover:underline" type="button">
-          ({t('settings.trigger')})
-        </button>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground shadow-sm"
+          type="button"
+          aria-label={t('settings.trigger')}
+        >
+          <Settings className="h-4 w-4" />
+        </motion.button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader className="gap-4">
-          <DialogTitle>{t('settings.title')}</DialogTitle>
-          <DialogDescription className="text-start text-sm">{t('settings.description')}</DialogDescription>
+      <DialogContent className="rounded-[28px] border-border/60 bg-background/95 backdrop-blur-xl sm:max-w-md">
+        <DialogHeader className="gap-2">
+          <div className="flex items-center gap-2 text-primary">
+            <Sparkles className="h-5 w-5" />
+            <DialogTitle className="text-xl font-bold tracking-tight">{t('settings.title')}</DialogTitle>
+          </div>
+          <DialogDescription className="text-start text-sm leading-relaxed">
+            {t('settings.description')}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form
@@ -77,35 +90,52 @@ const SettingsDialog = () => {
               e.stopPropagation()
               form.handleSubmit(onSubmit)(e)
             }}
-            className="space-y-4"
+            className="space-y-6 mt-4"
           >
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem className="flex-grow">
-                  <FormControl>
-                    <Input placeholder={t('settings.namePlaceholder')} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="keywords"
-              render={({ field }) => (
-                <FormItem className="flex-grow">
-                  <FormControl>
-                    <Input placeholder={t('settings.keywordsPlaceholder')} {...field} />
-                  </FormControl>
-                  <FormDescription>{t('settings.keywordsHint')}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        placeholder={t('settings.namePlaceholder')}
+                        className="h-12 rounded-2xl border-border/50 bg-muted/30 focus:bg-background transition-all"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="keywords"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        placeholder={t('settings.keywordsPlaceholder')}
+                        className="h-12 rounded-2xl border-border/50 bg-muted/30 focus:bg-background transition-all"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription className="px-1 text-[11px] leading-relaxed">
+                      {t('settings.keywordsHint')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <DialogFooter>
-              <Button type="submit">{t('settings.save')}</Button>
+              <Button
+                type="submit"
+                className="h-11 w-full rounded-2xl bg-gradient-to-r from-primary to-blue-500 font-bold shadow-lg shadow-primary/20"
+              >
+                {t('settings.save')}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

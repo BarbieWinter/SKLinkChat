@@ -34,8 +34,9 @@ docker compose up -d postgres redis
   - 测试环境使用 `fake`
   - 可选本地 SMTP 调试：`mailpit`
 - Turnstile:
-  - 开发/测试环境使用 `fake` 或 Cloudflare 官方测试 key
-  - 生产环境必须使用真实 Cloudflare Turnstile 校验
+  - `register`、`login`、`resend-verification` 都会进行 Cloudflare Turnstile 服务端校验
+  - 生产环境必须配置真实 `SERVER_PY_TURNSTILE_SITE_KEY` 与 `SERVER_PY_TURNSTILE_SECRET_KEY`
+  - 前端仅使用 public site key，后端仅使用 secret key
 
 ### 3. Start Python backend
 
@@ -57,6 +58,7 @@ npm run dev
 ```
 
 前端默认连接 `http://localhost:8000` 和 `ws://localhost:8000/ws`。
+如果未单独设置 `VITE_TURNSTILE_ENABLED` / `VITE_TURNSTILE_SITE_KEY`，Vite 会优先读取 shell 中的 `SERVER_PY_TURNSTILE_ENABLED` / `SERVER_PY_TURNSTILE_SITE_KEY` 作为回退。
 
 ## Docker Compose
 
@@ -99,11 +101,12 @@ docker compose up -d --build
 
 ## Current Behavior
 
-- 注册成功后自动登录，并建立 `HttpOnly` cookie 会话
+- 注册成功后返回 `verification_required`，不会提前建立 `HttpOnly` cookie 会话
+- `register`、`login`、`POST /api/auth/resend-verification` 需要有效的 Turnstile token
 - 默认登录会话有效期 7 天，只注销当前设备会话
-- 邮箱验证使用单次 token 链接，有效期 15 分钟，成功使用后立即失效
+- 邮箱验证使用 6 位验证码，有效期 15 分钟，成功使用后立即失效
 - 未验证邮箱的账号允许访问账户相关页面，但禁止创建 chat session、进入匹配和 websocket 聊天
-- `POST /api/auth/resend-verification` 仅允许已登录且未验证邮箱用户调用，包含 60 秒冷却和每小时 5 次上限
+- `POST /api/auth/resend-verification` 接收邮箱地址并保持静默响应，对未验证账号应用 60 秒冷却和每小时 5 次上限
 - 已受限账号仍可登录，但禁止创建 chat session、建立 websocket；若管理员执行 restrict，当前 chat session 会立即失效
 - 单账号最多只有一个 active `chat_session`
 - 任一 `chat_session` 不能同时处于多个 active `chat_match`
@@ -138,18 +141,22 @@ curl -s http://localhost:8000/readyz
 
 - `VITE_ENDPOINT`
 - `VITE_WS_ENDPOINT`
+- `VITE_TURNSTILE_ENABLED`
 - `VITE_TURNSTILE_SITE_KEY`
+- `SERVER_PY_TURNSTILE_ENABLED`
+- `SERVER_PY_TURNSTILE_SITE_KEY`
+- `SERVER_PY_TURNSTILE_SECRET_KEY`
 - `SERVER_PY_DATABASE_URL`
 - `SERVER_PY_REDIS_URL`
 - `SERVER_PY_EMAIL_PROVIDER`
 - `SERVER_PY_RESEND_API_KEY`
 - `SERVER_PY_EMAIL_FROM`
 - `SERVER_PY_APP_BASE_URL`
-- `SERVER_PY_TURNSTILE_PROVIDER`
 
 ## Security Notes
 
 - 浏览器认证使用服务端 `HttpOnly` Cookie
+- `register`、`login`、`resend-verification` 在进入业务逻辑前都会先做 Cloudflare Turnstile 服务端校验
 - 注册成功后自动登录，但 `email_verified = false` 时禁止创建 chat session 或进入 websocket
 - 管理端列表页仅显示 `display_name` 与脱敏邮箱；详情页允许查看完整邮箱
 - 对端只能看到 `display_name` 和匿名 `session_id`

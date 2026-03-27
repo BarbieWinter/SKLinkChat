@@ -197,6 +197,11 @@ class AuthSessionRepository:
             await session.execute(delete(AuthSession).where(AuthSession.token_hash == token_hash))
             await session.commit()
 
+    async def delete_by_account_id(self, account_id: str) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(AuthSession).where(AuthSession.account_id == account_id))
+            await session.commit()
+
     async def delete_expired(self, now: datetime) -> None:
         async with self._session_factory() as session:
             await session.execute(delete(AuthSession).where(AuthSession.expires_at <= now))

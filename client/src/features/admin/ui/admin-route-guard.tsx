@@ -69,7 +69,9 @@ export const AdminRouteGuard = () => {
           className="w-full max-w-lg rounded-3xl border border-border/50 bg-card/90 p-8 text-center shadow-2xl shadow-black/10"
         >
           <h1 className="text-xl font-semibold text-foreground">当前账号没有管理权限</h1>
-          <p className="mt-3 text-sm text-muted-foreground">如果这不是预期行为，请检查当前账号在数据库中的管理员状态。</p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            如果这不是预期行为，请检查当前账号在数据库中的管理员状态。
+          </p>
         </div>
       </div>
     )

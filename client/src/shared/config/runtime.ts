@@ -77,3 +77,4 @@ export const WS_ENDPOINT = (() => {
 })()
 
 export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? ''
+export const TURNSTILE_ENABLED = import.meta.env.VITE_TURNSTILE_ENABLED?.trim() === 'true'

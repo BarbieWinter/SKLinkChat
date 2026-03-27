@@ -84,12 +84,10 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   })
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as
-      | {
-          code?: string
-          message?: string
-        }
-      | null
+    const payload = (await response.json().catch(() => null)) as {
+      code?: string
+      message?: string
+    } | null
 
     const error = new Error(payload?.message ?? `Request failed: ${response.status}`) as Error & {
       code?: string
