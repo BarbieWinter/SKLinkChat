@@ -220,7 +220,7 @@ export const ChatWorkspace = () => {
   }, [isCompactViewport, me?.state])
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden rounded-[24px] bg-background">
+    <div className="mx-auto my-2 flex h-[calc(100%-1rem)] w-[calc(100%-1rem)] min-h-0 overflow-hidden rounded-[22px] bg-background sm:my-0 sm:h-full sm:w-full sm:rounded-[24px]">
       <AnimatePresence initial={false}>
         {!isSidebarCollapsed && !isCompactViewport && (
           <motion.div
