@@ -7,6 +7,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY || env.SERVER_PY_TURNSTILE_SITE_KEY || ''
   const turnstileEnabled = env.VITE_TURNSTILE_ENABLED || env.SERVER_PY_TURNSTILE_ENABLED || 'false'
+  const previewAllowedHosts = [
+    'localhost',
+    '127.0.0.1',
+    '154.94.233.250',
+    'sklinkchat.com',
+    'www.sklinkchat.com'
+  ]
 
   return {
     plugins: [react()],
@@ -18,6 +25,11 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src')
       }
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: 4173,
+      allowedHosts: previewAllowedHosts
     },
     build: {
       rollupOptions: {
