@@ -5,6 +5,7 @@ from typing import Iterable
 
 import psycopg
 from psycopg import sql
+from psycopg.types.json import Json
 
 TABLE_ORDER = [
     "accounts",
@@ -69,7 +70,11 @@ def insert_rows(conn: psycopg.Connection, table_name: str, columns: list[str], r
     )
 
     with conn.cursor() as cur:
-        cur.executemany(query, rows)
+        prepared_rows = [
+            tuple(Json(value) if isinstance(value, (dict, list)) else value for value in row)
+            for row in rows
+        ]
+        cur.executemany(query, prepared_rows)
 
 
 def reset_sequence(conn: psycopg.Connection, table_name: str) -> None:
