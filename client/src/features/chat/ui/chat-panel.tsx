@@ -32,6 +32,7 @@ type ChatPanelProps = {
 const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   const { t, formatUserState } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const { messages } = useAppStore()
   const {
     sendMessage,
@@ -77,6 +78,13 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
       })
     }
   }, [messages])
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    ref.current?.scrollTo({
+      top: ref.current.scrollHeight,
+      behavior
+    })
+  }
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     if (availability === 'error') {
@@ -149,7 +157,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
       <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="z-20 flex h-16 shrink-0 items-center gap-2 border-b border-border/40 bg-background/80 px-4 backdrop-blur-xl sm:px-6"
+        className="z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/40 bg-background/80 px-3 backdrop-blur-xl sm:h-16 sm:px-6"
       >
         <div className="flex items-center gap-3">
           {showSidebarToggle && (
@@ -165,14 +173,14 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
           <OnlineUserCount />
         </div>
 
-        <div className="mx-4 flex min-w-0 flex-1 items-center justify-center">
+        <div className="mx-2 flex min-w-0 flex-1 items-center justify-center sm:mx-4">
           <AnimatePresence mode="wait">
             <motion.div
               key={stranger?.id ?? 'searching'}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }}
-              className="flex min-w-0 items-center gap-2 rounded-full border border-border/50 bg-card/45 px-3 py-1.5 shadow-sm backdrop-blur-sm"
+              className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/50 bg-card/45 px-2.5 py-1.5 shadow-sm backdrop-blur-sm sm:gap-2 sm:px-3"
             >
               <span
                 className={cn(
@@ -184,12 +192,12 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                       : 'bg-slate-400/70'
                 )}
               />
-              <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+              <span className="truncate text-[13px] font-semibold tracking-tight text-foreground sm:text-sm">
                 {headerTitle}
               </span>
               <span
                 className={cn(
-                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors duration-300',
+                  'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors duration-300 sm:text-[11px]',
                   stranger?.isTyping || isSearching
                     ? 'bg-primary/10 text-primary'
                     : stranger
@@ -221,14 +229,14 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
 
       {/* ── Messages Area ── */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
-        <div className="absolute inset-0 scroll-touch overflow-y-auto px-4 py-6 sm:px-6 space-y-4" ref={ref}>
+        <div className="absolute inset-0 scroll-touch overflow-y-auto px-3 py-3 sm:px-6 sm:py-6 space-y-3 sm:space-y-4" ref={ref}>
           <AnimatePresence>
             {messages.length === 0 && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="flex flex-col items-center justify-center min-h-full text-center max-w-sm mx-auto"
+                className="mx-auto flex min-h-full max-w-sm flex-col items-center justify-start pt-8 text-center sm:justify-center sm:pt-0"
               >
                 <motion.div
                   animate={{
@@ -236,13 +244,13 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                     rotate: [0, 5, -5, 0]
                   }}
                   transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                  className="mb-6 flex h-20 w-20 items-center justify-center rounded-[32px] bg-gradient-to-br from-primary/20 via-blue-500/20 to-cyan-400/20 text-primary shadow-inner"
+                  className="mb-5 flex h-16 w-16 items-center justify-center rounded-[28px] bg-gradient-to-br from-primary/20 via-blue-500/20 to-cyan-400/20 text-primary shadow-inner sm:mb-6 sm:h-20 sm:w-20 sm:rounded-[32px]"
                 >
-                  <Sparkles className="h-10 w-10" />
+                  <Sparkles className="h-8 w-8 sm:h-10 sm:w-10" />
                 </motion.div>
 
-                <h3 className="text-xl font-bold tracking-tight text-foreground">{t('chat.emptyTitle')}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                <h3 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">{t('chat.emptyTitle')}</h3>
+                <p className="mt-2 max-w-[28ch] text-[13px] leading-relaxed text-muted-foreground sm:max-w-none sm:text-sm">
                   {isServiceUnavailable
                     ? t('chat.serviceUnavailable')
                     : isReconnecting
@@ -268,10 +276,10 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                 )}
 
                 {!isSearching && isNotConnected && !isServiceUnavailable && !isBootstrapping && (
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="mt-8 w-full">
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="mt-6 w-full sm:mt-8">
                     <Button
                       onClick={() => connect?.()}
-                      className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-cyan-500 text-[15px] font-bold shadow-lg shadow-primary/20"
+                      className="h-11 w-full rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-cyan-500 text-[15px] font-bold shadow-lg shadow-primary/20 sm:h-12"
                     >
                       {t('home.startChat')}
                     </Button>
@@ -324,13 +332,15 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                   )}
                   <div
                     className={cn(
-                      'relative max-w-[85%] px-4 py-3 shadow-md sm:max-w-[70%]',
+                      'relative max-w-[88%] px-3.5 py-2.5 shadow-md sm:max-w-[70%] sm:px-4 sm:py-3',
                       isMe
                         ? 'rounded-3xl rounded-br-lg bg-gradient-to-br from-primary via-blue-600 to-cyan-500 text-primary-foreground shadow-primary/10'
                         : 'rounded-3xl rounded-bl-lg bg-card text-foreground ring-1 ring-border/40 backdrop-blur-xl'
                     )}
                   >
-                    <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{message.message}</p>
+                    <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed sm:text-[15px]">
+                      {message.message}
+                    </p>
                   </div>
                 </motion.div>
               )
@@ -343,46 +353,58 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="z-20 border-t border-border/40 bg-background/80 px-4 py-3 backdrop-blur-xl sm:px-6 safe-area-bottom"
+        className="z-20 border-t border-border/40 bg-background/80 px-3 py-2.5 backdrop-blur-xl sm:px-6 sm:py-3 safe-area-bottom"
       >
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-end gap-3 mx-auto max-w-4xl">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto flex max-w-4xl items-end gap-2 sm:gap-3">
             <FormField
               control={form.control}
               name="message"
-              render={({ field }) => (
-                <FormItem className="min-w-0 flex-1">
-                  <FormControl>
-                    <div className="relative">
-                      <Textarea
-                        rows={1}
-                        placeholder={t('chat.placeholder')}
-                        className="max-h-32 min-h-[48px] resize-none rounded-2xl border-border/50 bg-muted/30 px-4 py-3.5 text-[15px] leading-5 transition-all duration-300 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 focus:bg-background"
-                        {...field}
-                        onCompositionStart={() => setIsComposing(true)}
-                        onCompositionEnd={() => setIsComposing(false)}
-                        onKeyDown={(e) => {
-                          if (!meTyping) {
-                            setMeTyping(true)
-                            setTyping?.(true)
-                          }
-                          const composing = isComposing || e.nativeEvent.isComposing
-                          if (e.key === 'Enter' && !e.shiftKey && !composing) {
-                            e.preventDefault()
-                            form.handleSubmit(onSubmit)()
-                          }
-                        }}
-                      />
-                    </div>
-                  </FormControl>
-                </FormItem>
-              )}
+              render={({ field }) => {
+                const { ref: fieldRef, ...fieldProps } = field
+
+                return (
+                  <FormItem className="min-w-0 flex-1">
+                    <FormControl>
+                      <div className="relative">
+                        <Textarea
+                          ref={(node) => {
+                            fieldRef(node)
+                            composerRef.current = node
+                          }}
+                          rows={1}
+                          placeholder={t('chat.placeholder')}
+                          className="max-h-28 min-h-[44px] resize-none rounded-2xl border-border/50 bg-muted/30 px-3.5 py-3 text-[14px] leading-5 transition-all duration-300 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 focus:bg-background sm:max-h-32 sm:min-h-[48px] sm:px-4 sm:py-3.5 sm:text-[15px]"
+                          {...fieldProps}
+                          onCompositionStart={() => setIsComposing(true)}
+                          onCompositionEnd={() => setIsComposing(false)}
+                          onFocus={() => {
+                            scrollToBottom('auto')
+                            window.setTimeout(() => scrollToBottom('auto'), 280)
+                          }}
+                          onKeyDown={(e) => {
+                            if (!meTyping) {
+                              setMeTyping(true)
+                              setTyping?.(true)
+                            }
+                            const composing = isComposing || e.nativeEvent.isComposing
+                            if (e.key === 'Enter' && !e.shiftKey && !composing) {
+                              e.preventDefault()
+                              form.handleSubmit(onSubmit)()
+                            }
+                          }}
+                        />
+                      </div>
+                    </FormControl>
+                  </FormItem>
+                )
+              }}
             />
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 type="submit"
                 disabled={isComposerDisabled || isSubmitting}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-cyan-500 text-primary-foreground shadow-lg shadow-primary/20 transition-all disabled:opacity-50"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-cyan-500 text-primary-foreground shadow-lg shadow-primary/20 transition-all disabled:opacity-50 sm:h-12 sm:w-12"
               >
                 {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               </Button>
