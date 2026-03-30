@@ -4,6 +4,8 @@
 export interface Message {
   sender: string
   message: string
+  /** Pretext prepared handle for layout measurement (set at addMessage time) */
+  _prepared?: import('@chenglou/pretext').PreparedTextWithSegments
 }
 
 export interface User {

@@ -70,14 +70,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [saveSettings, setDisplayName])
 
   const refreshSession = useCallback(async () => {
-    setStatus('loading')
     try {
       const nextSession = await getAuthSession()
       applySession(nextSession)
     } catch {
       // Session probing must always settle so the entry page can render for anonymous users.
-    } finally {
-      setStatus('ready')
     }
   }, [applySession])
 

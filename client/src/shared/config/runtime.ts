@@ -45,6 +45,22 @@ const getApiBaseUrlFromWebSocketUrl = (configuredWebSocketUrl?: string) => {
   }
 }
 
+const getWebSocketUrlFromApiBaseUrl = (configuredApiBaseUrl?: string) => {
+  const normalizedApiBaseUrl = normalizeConfiguredUrl(configuredApiBaseUrl)
+  if (!normalizedApiBaseUrl) return ''
+
+  try {
+    const url = new URL(normalizedApiBaseUrl)
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    url.pathname = '/ws'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
 const resolveBaseUrl = (configuredValue?: string) => {
   const normalizedConfiguredValue = normalizeConfiguredUrl(configuredValue)
   if (normalizedConfiguredValue) return normalizedConfiguredValue
@@ -63,11 +79,15 @@ const resolveBaseUrl = (configuredValue?: string) => {
 export const API_BASE_URL = resolveBaseUrl(import.meta.env.VITE_ENDPOINT)
 
 /**
- * WebSocket 地址：优先使用显式环境变量；如果未配置，则根据当前页面协议自动推导 ws/wss 地址。
+ * WebSocket 地址：优先使用显式环境变量；如果未配置，则优先复用 HTTP API 地址推导，
+ * 以避免 `localhost` / `127.0.0.1` / 局域网 IP 不一致导致认证 cookie 无法随 WebSocket 握手发送。
  */
 export const WS_ENDPOINT = (() => {
   const configuredWebSocketUrl = normalizeConfiguredUrl(import.meta.env.VITE_WS_ENDPOINT)
   if (configuredWebSocketUrl) return configuredWebSocketUrl
+
+  const webSocketUrlFromApiBaseUrl = getWebSocketUrlFromApiBaseUrl(API_BASE_URL)
+  if (webSocketUrlFromApiBaseUrl) return webSocketUrlFromApiBaseUrl
 
   if (typeof window === 'undefined') return ''
 

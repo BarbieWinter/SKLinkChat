@@ -257,6 +257,7 @@ class ChatRuntimeService:
             session.state = UserState.IDLE
             session.is_typing = False
             await self._session_repository.save_session(session)
+            await self._session_repository.clear_history(session_id)
             await self._durable_chat_repository.end_active_match_for_session(
                 chat_session_id=session_id,
                 end_reason=end_reason,
@@ -281,6 +282,7 @@ class ChatRuntimeService:
                 partner.is_typing = False
                 partner.reconnect_deadline = None
                 await self._session_repository.save_session(partner)
+                await self._session_repository.clear_history(partner.session_id)
             await self._session_repository.append_history(
                 partner.session_id,
                 ChatHistoryEntry(
@@ -410,6 +412,7 @@ class ChatRuntimeService:
         partner.is_typing = False
         partner.reconnect_deadline = None
         await self._session_repository.save_session(partner)
+        await self._session_repository.clear_history(partner.session_id)
         await self._session_repository.append_history(
             partner.session_id,
             ChatHistoryEntry(

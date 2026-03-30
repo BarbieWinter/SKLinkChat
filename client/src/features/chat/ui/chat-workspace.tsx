@@ -190,7 +190,6 @@ export const ChatWorkspace = () => {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isCompactViewport, setCompactViewport] = useState(false)
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
-  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null)
   const previousState = useRef<UserState | undefined>(me?.state)
 
   useEffect(() => {
@@ -208,35 +207,6 @@ export const ChatWorkspace = () => {
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const syncMobileViewportHeight = () => {
-      const compact = window.innerWidth < 640
-      if (!compact) {
-        setMobileViewportHeight(null)
-        return
-      }
-
-      const viewport = window.visualViewport
-      const nextHeight = viewport ? Math.round(viewport.height) : window.innerHeight
-      setMobileViewportHeight(nextHeight)
-    }
-
-    syncMobileViewportHeight()
-
-    const viewport = window.visualViewport
-    window.addEventListener('resize', syncMobileViewportHeight)
-    viewport?.addEventListener('resize', syncMobileViewportHeight)
-    viewport?.addEventListener('scroll', syncMobileViewportHeight)
-
-    return () => {
-      window.removeEventListener('resize', syncMobileViewportHeight)
-      viewport?.removeEventListener('resize', syncMobileViewportHeight)
-      viewport?.removeEventListener('scroll', syncMobileViewportHeight)
-    }
-  }, [])
-
-  useEffect(() => {
     if (me?.state === UserState.Connected && previousState.current !== UserState.Connected) {
       setSidebarCollapsed(true)
       setMobileSheetOpen(false)
@@ -250,10 +220,7 @@ export const ChatWorkspace = () => {
   }, [isCompactViewport, me?.state])
 
   return (
-    <div
-      className="mx-auto my-1.5 flex h-[calc(100%-0.75rem)] w-[calc(100%-0.75rem)] min-h-0 overflow-hidden rounded-[20px] bg-background sm:my-0 sm:h-full sm:w-full sm:rounded-[24px]"
-      style={mobileViewportHeight ? { height: `${mobileViewportHeight - 12}px` } : undefined}
-    >
+    <div className="mx-auto flex h-full w-full min-h-0 overflow-hidden bg-background sm:my-0 sm:rounded-[24px]">
       <AnimatePresence initial={false}>
         {!isSidebarCollapsed && !isCompactViewport && (
           <motion.div

@@ -50,16 +50,16 @@ async def close_session(
     payload = await _extract_close_session_payload(request)
     await container.authorize_chat_session.execute(account_id=account_id, session_id=payload.session_id)
 
-    active_websockets = container.connection_hub.get_all(payload.session_id)
-    await container.mark_disconnected.execute(payload.session_id, force=True)
-    schedule_presence_count_broadcast(request.app, container)
     cancel_pending_partner_disconnect_notice(request.app, payload.session_id)
-    schedule_partner_disconnect_notice(request.app, container, payload.session_id)
 
-    for ws in active_websockets:
-        try:
-            await ws.close()
-        except RuntimeError:
-            pass
+    # Treat the beacon as a hint only. A stale pagehide beacon from an older tab
+    # or a just-refreshed page must never tear down a newer live WebSocket that
+    # has already reconnected with the same session_id.
+    if container.connection_hub.has(payload.session_id):
+        return {"status": "accepted"}
+
+    await container.mark_disconnected.execute(payload.session_id)
+    schedule_presence_count_broadcast(request.app, container)
+    schedule_partner_disconnect_notice(request.app, container, payload.session_id)
 
     return {"status": "accepted"}

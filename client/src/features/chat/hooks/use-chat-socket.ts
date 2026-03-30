@@ -24,14 +24,14 @@ type UseChatSocketOptions = {
   onBootstrapError: () => void
   onDisconnect: () => void
   onSystemMessage: (message: string) => void
-  onIncomingMessage: (payload: { name: string; message: string }) => void
+  onIncomingMessage: (payload: { id: string; name: string; message: string }) => void
   onUserInfo: (payload: unknown) => void
   onMatch: (payload: unknown) => void
   onErrorMessage: (message: string) => void
   onTyping: (typing: boolean) => void
   onPresenceCount: (onlineCount: number) => void
   syncDisplayName: (name: string) => void
-  onSocketClosed: () => void
+  onSocketClosed: (code: number, reason: string) => void
 }
 
 export const useChatSocket = ({
@@ -57,8 +57,8 @@ export const useChatSocket = ({
     sessionId ? getSocketUrl(WS_ENDPOINT, sessionId) : null,
     {
       shouldReconnect: (closeEvent) => !(closeEvent.code === 1008 && closeEvent.reason === 'CHAT_ACCESS_RESTRICTED'),
-      onClose: () => {
-        onSocketClosed()
+      onClose: (event) => {
+        onSocketClosed(event.code, event.reason)
       },
       onMessage: (event) => {
         const data = JSON.parse(event.data) as { type: PayloadType; payload: any }
@@ -70,6 +70,7 @@ export const useChatSocket = ({
             break
           case PayloadType.Message:
             onIncomingMessage({
+              id: data.payload.id,
               name: data.payload.name,
               message: data.payload.message
             })

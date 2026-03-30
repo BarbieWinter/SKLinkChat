@@ -214,10 +214,24 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
     )
     schedule_presence_count_broadcast(websocket.app, container)
     await _send_envelope(websocket, PayloadType.USER_INFO, _serialize_user(session))
+    partner: ChatSession | None = None
     if session.partner_id is not None:
         partner = await container.lookup_partner.execute(sessionId)
         if partner is not None:
             await _send_envelope(websocket, PayloadType.MATCH, _serialize_user(partner))
+
+    # Replay history only while a match is still active. Otherwise a new/idle
+    # reconnect would show stale messages from earlier conversations.
+    if partner is not None:
+        history = await container.session_repository.load_recent_history(sessionId)
+        for entry in history:
+            if entry.payload_type == PayloadType.MESSAGE:
+                sender_name = session.name if entry.from_session_id == sessionId else partner.name
+                await _send_envelope(
+                    websocket,
+                    PayloadType.MESSAGE,
+                    {"id": entry.from_session_id, "name": sender_name, "message": entry.payload},
+                )
 
     try:
         while True:

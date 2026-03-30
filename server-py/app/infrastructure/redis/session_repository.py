@@ -157,6 +157,9 @@ class RedisSessionRepository:
         entries = await self._lrange(self._history_key(session_id), 0, -1)
         return [self._deserialize_history_entry(raw_entry) for raw_entry in entries]
 
+    async def clear_history(self, session_id: str) -> None:
+        await self._delete(self._history_key(session_id))
+
     @staticmethod
     def _deserialize_history_entry(raw_entry: str) -> ChatHistoryEntry:
         payload = json.loads(raw_entry)

@@ -26,6 +26,16 @@ export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOpt
   const pendingClaimsRef = useRef(new Map<string, (owned: boolean) => void>())
 
   useEffect(() => {
+    if (enabled) {
+      return
+    }
+
+    setSessionId('')
+    setStatus('bootstrapping')
+    pendingClaimsRef.current.clear()
+  }, [enabled])
+
+  useEffect(() => {
     if (!channel) {
       return
     }
@@ -78,9 +88,6 @@ export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOpt
 
   useEffect(() => {
     if (!enabled) {
-      setSessionId('')
-      setStatus('ready')
-      clearStoredSessionId()
       return
     }
 
@@ -138,7 +145,7 @@ export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOpt
       cancelled = true
       pendingClaimsRef.current.clear()
     }
-  }, [attempt, channel, enabled, instanceId, onError, sessionId])
+  }, [attempt, channel, enabled, instanceId, onError])
 
   return {
     retry: () => {

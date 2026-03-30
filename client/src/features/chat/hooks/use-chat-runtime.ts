@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from 'react-query'
 
 import { useAppStore } from '@/app/store'
@@ -53,6 +53,7 @@ export const useChatRuntime = (): ChatProviderState => {
   } = useAppStore()
 
   const enabled = authSession.authenticated && authSession.email_verified && !authSession.chat_access_restricted
+  const wasEnabledRef = useRef(false)
   const {
     retry,
     sessionId,
@@ -64,9 +65,18 @@ export const useChatRuntime = (): ChatProviderState => {
 
   useEffect(() => {
     if (enabled) {
+      wasEnabledRef.current = true
       return
     }
 
+    // Only tear down when transitioning from enabled → disabled (logout / restriction).
+    // Skip the initial mount where auth is still loading — otherwise we'd nuke the
+    // stored session ID and lose the ability to reconnect after a page refresh.
+    if (!wasEnabledRef.current) {
+      return
+    }
+
+    wasEnabledRef.current = false
     clear()
     clearChatConnection()
     resetSession()
@@ -95,9 +105,9 @@ export const useChatRuntime = (): ChatProviderState => {
         sender: 'system',
         message: t(messageKey as 'system.strangerDisconnected')
       }),
-    onIncomingMessage: ({ name, message }) =>
+    onIncomingMessage: ({ id, name, message }) =>
       addMessage({
-        sender: name,
+        sender: id === sessionId ? 'me' : name,
         message
       }),
     onUserInfo: (user) => {
@@ -118,8 +128,10 @@ export const useChatRuntime = (): ChatProviderState => {
       queryClient.setQueryData(ONLINE_USER_COUNT_QUERY_KEY, onlineCount)
     },
     syncDisplayName: (name) => setName(name),
-    onSocketClosed: () => {
-      void refreshSession()
+    onSocketClosed: (code, reason) => {
+      if (code === 1008 && reason === 'CHAT_ACCESS_RESTRICTED') {
+        void refreshSession()
+      }
     }
   })
 
