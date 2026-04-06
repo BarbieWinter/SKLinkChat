@@ -20,7 +20,7 @@ const HomePage = () => {
               rotate: { duration: 2, repeat: Infinity, ease: 'linear' },
               scale: { duration: 2, repeat: Infinity, ease: 'easeInOut' }
             }}
-            className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary"
+            className="h-10 w-10 rounded-full border-2 border-primary/20 border-t-primary"
           />
           <motion.div
             initial={{ opacity: 0, y: 10 }}

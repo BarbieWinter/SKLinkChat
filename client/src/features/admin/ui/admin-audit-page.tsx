@@ -72,7 +72,7 @@ export const AdminAuditPage = () => {
   return (
     <section
       data-testid="admin-audit-page"
-      className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5"
+      className="rounded-lg border border-border bg-card p-5"
     >
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
@@ -117,7 +117,7 @@ export const AdminAuditPage = () => {
         {loading ? <p className="text-sm text-muted-foreground">正在加载审计日志...</p> : null}
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
         {!loading && !errorMessage && items.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground">
+          <p className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
             当前筛选条件下没有审计事件。
           </p>
         ) : null}
@@ -125,7 +125,7 @@ export const AdminAuditPage = () => {
           <article
             key={item.id}
             data-testid={`admin-audit-row-${index}`}
-            className="rounded-2xl border border-border/60 bg-background/70 p-4"
+            className="rounded-md border border-border bg-secondary p-4"
           >
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
@@ -139,7 +139,7 @@ export const AdminAuditPage = () => {
                 <span>{item.chat_session_id ?? '无 chat session'}</span>
               </div>
             </div>
-            <pre className="mt-4 overflow-x-auto rounded-2xl bg-muted/50 p-3 text-xs text-foreground">
+            <pre className="mt-4 overflow-x-auto rounded-md bg-muted p-3 text-xs text-foreground">
               {JSON.stringify(item.payload, null, 2)}
             </pre>
           </article>

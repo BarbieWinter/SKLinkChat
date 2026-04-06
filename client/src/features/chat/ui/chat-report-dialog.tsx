@@ -102,7 +102,7 @@ const ChatReportDialog = ({
       <DialogTrigger asChild>
         <button
           type="button"
-          className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium text-destructive transition-all duration-200 hover:bg-destructive/10 hover:scale-105 active:scale-95 ${triggerClassName ?? ''}`}
+          className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-destructive transition-all duration-150 hover:bg-destructive/10 active:scale-95 ${triggerClassName ?? ''}`}
         >
           <Flag className="h-3 w-3" />
           {triggerLabel}
@@ -132,7 +132,7 @@ const ChatReportDialog = ({
                   setReason(option.value)
                   setErrorMessage(null)
                 }}
-                className={`rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
+                className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                   reason === option.value
                     ? 'border-destructive bg-destructive/10 text-destructive'
                     : 'border-border bg-background hover:bg-muted/40'

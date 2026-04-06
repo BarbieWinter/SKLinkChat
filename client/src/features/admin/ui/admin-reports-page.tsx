@@ -37,10 +37,10 @@ const REPORT_REASON_LABELS: Record<AdminReportReason, string> = {
 }
 
 const STATUS_BADGE_CLASSNAMES: Record<string, string> = {
-  open: 'border-amber-200 bg-amber-50 text-amber-700',
-  reviewed: 'border-sky-200 bg-sky-50 text-sky-700',
-  dismissed: 'border-slate-200 bg-slate-100 text-slate-700',
-  actioned: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  open: 'border-amber/30 bg-amber/5 text-amber',
+  reviewed: 'border-primary/30 bg-primary/5 text-primary',
+  dismissed: 'border-border bg-secondary text-muted-foreground',
+  actioned: 'border-terminal/30 bg-terminal/5 text-terminal'
 }
 
 const formatDateTime = (value: string | null) => {
@@ -64,13 +64,13 @@ const StatusBadge = ({ status }: { status: string }) => (
 )
 
 const ReasonBadge = ({ reason }: { reason: AdminReportReason }) => (
-  <Badge variant="outline" className="border-border/70 bg-muted/60 text-foreground">
+  <Badge variant="outline" className="border-border bg-secondary text-foreground">
     {REPORT_REASON_LABELS[reason]}
   </Badge>
 )
 
 const DetailRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
-  <div className="grid gap-1 rounded-2xl border border-border/60 bg-background/80 p-3">
+  <div className="grid gap-1 rounded-md border border-border bg-secondary p-3">
     <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
     <span className="break-all text-sm text-foreground">{value && value.length > 0 ? value : '无'}</span>
   </div>
@@ -297,19 +297,19 @@ export const AdminReportsPage = () => {
   return (
     <section data-testid="admin-reports-page" className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+        <div className="rounded-lg border border-border bg-card p-5">
           <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">待处理举报</p>
           <p className="mt-3 text-3xl font-semibold text-foreground">
             {reports.filter((report) => report.status === 'open').length}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">处理完成后，列表、详情和治理结果区域会一起刷新。</p>
         </div>
-        <div className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+        <div className="rounded-lg border border-border bg-card p-5">
           <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">当前已限制聊天</p>
           <p className="mt-3 text-3xl font-semibold text-foreground">{restrictedAccounts.length}</p>
           <p className="mt-2 text-sm text-muted-foreground">无需再登录对方账号验证，后台直接回显当前限制名单。</p>
         </div>
-        <div className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+        <div className="rounded-lg border border-border bg-card p-5">
           <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">当前查看</p>
           <p className="mt-3 text-xl font-semibold text-foreground">
             {reportDetail ? `举报 #${reportDetail.id}` : '未选择举报'}
@@ -321,18 +321,18 @@ export const AdminReportsPage = () => {
       </div>
 
       {actionSuccessMessage ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-md border border-terminal/20 bg-terminal/5 px-4 py-3 text-sm text-terminal">
           {actionSuccessMessage}
         </div>
       ) : null}
       {actionError ? (
-        <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {actionError}
         </div>
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+        <div className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-foreground">举报列表</h2>
@@ -346,7 +346,7 @@ export const AdminReportsPage = () => {
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as AdminReportStatus | '')}
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
               >
                 <option value="open">待处理</option>
                 <option value="">全部</option>
@@ -361,7 +361,7 @@ export const AdminReportsPage = () => {
               <select
                 value={reasonFilter}
                 onChange={(event) => setReasonFilter(event.target.value as AdminReportReason | '')}
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
               >
                 <option value="">全部原因</option>
                 {Object.entries(REPORT_REASON_LABELS).map(([value, label]) => (
@@ -377,7 +377,7 @@ export const AdminReportsPage = () => {
             {listLoading ? <p className="text-sm text-muted-foreground">正在加载举报列表...</p> : null}
             {listError ? <p className="text-sm text-destructive">{listError}</p> : null}
             {!listLoading && !listError && reports.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                 当前筛选条件下没有举报记录。
               </p>
             ) : null}
@@ -389,7 +389,7 @@ export const AdminReportsPage = () => {
                   type="button"
                   data-testid={`admin-report-row-${report.id}`}
                   onClick={() => setSelectedReportId(report.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition-colors ${
+                  className={`w-full rounded-md border p-4 text-left transition-colors ${
                     active
                       ? 'border-foreground bg-foreground text-background'
                       : 'border-border/60 bg-background/70 hover:border-foreground/40 hover:bg-muted/40'
@@ -444,7 +444,7 @@ export const AdminReportsPage = () => {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+        <div className="rounded-lg border border-border bg-card p-5">
           {!selectedReportSummary && !detailLoading ? (
             <div className="flex h-full min-h-[420px] items-center justify-center rounded-3xl border border-dashed border-border/60 bg-background/60 p-6">
               <p className="text-sm text-muted-foreground">请选择一条举报查看详情。</p>
@@ -470,26 +470,26 @@ export const AdminReportsPage = () => {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">提交于 {formatDateTime(reportDetail.created_at)}</p>
                 </div>
-                <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+                <div className="rounded-md border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
                   <div>chat_match_id：{reportDetail.chat_match_id}</div>
                   <div>reported_session_id：{reportDetail.reported_chat_session_id}</div>
                 </div>
               </div>
 
-              <div className="grid gap-3 rounded-3xl border border-border/60 bg-background/70 p-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-border/60 bg-card/90 p-4">
+              <div className="grid gap-3 rounded-md border border-border bg-secondary p-4 md:grid-cols-3">
+                <div className="rounded-md border border-border bg-card p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">举报状态</p>
                   <div className="mt-3">
                     <StatusBadge status={reportDetail.status} />
                   </div>
                 </div>
-                <div className="rounded-2xl border border-border/60 bg-card/90 p-4">
+                <div className="rounded-md border border-border bg-card p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">账号治理</p>
                   <p className="mt-3 text-sm font-medium text-foreground">
                     {reportDetail.reported_account_chat_access_restricted ? '已限制聊天' : '未限制聊天'}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border/60 bg-card/90 p-4">
+                <div className="rounded-md border border-border bg-card p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">本举报是否触发当前治理</p>
                   <p className="mt-3 text-sm font-medium text-foreground">
                     {reportDetail.governance_triggered_by_this_report
@@ -542,7 +542,7 @@ export const AdminReportsPage = () => {
                 <DetailRow label="审核备注" value={reportDetail.review_note} />
               </div>
 
-              <div className="grid gap-4 rounded-3xl border border-border/60 bg-background/70 p-4">
+              <div className="grid gap-4 rounded-md border border-border bg-secondary p-4">
                 <div>
                   <h3 className="text-lg font-semibold text-foreground">审核举报</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -555,7 +555,7 @@ export const AdminReportsPage = () => {
                   <select
                     value={reviewStatus}
                     onChange={(event) => setReviewStatus(event.target.value as Exclude<AdminReportStatus, 'open'>)}
-                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
                   >
                     <option value="reviewed">reviewed</option>
                     <option value="dismissed">dismissed</option>
@@ -584,7 +584,7 @@ export const AdminReportsPage = () => {
                 </Button>
               </div>
 
-              <div className="grid gap-4 rounded-3xl border border-border/60 bg-background/70 p-4">
+              <div className="grid gap-4 rounded-md border border-border bg-secondary p-4">
                 <div>
                   <h3 className="text-lg font-semibold text-foreground">账号治理</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -628,7 +628,7 @@ export const AdminReportsPage = () => {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-border/60 bg-card/90 p-5 shadow-xl shadow-black/5">
+      <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-foreground">当前已限制聊天账号</h2>
@@ -650,7 +650,7 @@ export const AdminReportsPage = () => {
           {restrictedLoading ? <p className="text-sm text-muted-foreground">正在加载受限账号...</p> : null}
           {restrictedError ? <p className="text-sm text-destructive">{restrictedError}</p> : null}
           {!restrictedLoading && !restrictedError && restrictedAccounts.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground">
+            <p className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
               当前没有被限制聊天访问的账号。
             </p>
           ) : null}
@@ -659,7 +659,7 @@ export const AdminReportsPage = () => {
             <article
               key={account.account_id}
               data-testid={`restricted-account-row-${account.account_id}`}
-              className="rounded-2xl border border-border/60 bg-background/70 p-4"
+              className="rounded-md border border-border bg-secondary p-4"
             >
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="space-y-3">

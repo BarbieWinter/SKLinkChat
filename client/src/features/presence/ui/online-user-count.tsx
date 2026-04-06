@@ -18,45 +18,29 @@ const OnlineUserCount = () => {
   const isUnavailable = query.isError && !hasOnlineCount
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold tracking-tight shadow-sm transition-colors duration-300 ${
-        hasOnlineCount
-          ? 'bg-green-500/10 text-green-600 dark:bg-green-500/15 dark:text-green-400 ring-1 ring-green-500/20'
-          : 'bg-muted/70 text-muted-foreground ring-1 ring-border/50'
-      }`}
+    <div
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
       title={isUnavailable ? t('users.unavailable') : t('users.online')}
     >
-      <div className="relative flex h-2 w-2">
-        {hasOnlineCount && (
-          <motion.span
-            animate={{ scale: [1, 1.8, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute inline-flex h-full w-full rounded-full bg-green-400/60"
-          />
-        )}
-        <span
-          className={`relative inline-flex h-2 w-2 rounded-full shadow-sm ${
-            hasOnlineCount ? 'bg-green-500' : 'bg-muted-foreground/60'
-          }`}
-        />
-      </div>
-      <div className="flex items-center">
-        <AnimatePresence mode="wait">
-          <motion.span
-            key={query.data ?? 'none'}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.2 }}
-          >
-            {hasOnlineCount ? query.data : '--'}
-          </motion.span>
-        </AnimatePresence>
-        <span className="ml-1 opacity-80 uppercase text-[9px] tracking-wider">{t('users.online')}</span>
-      </div>
-    </motion.div>
+      <span
+        className={`inline-flex h-1.5 w-1.5 rounded-full ${
+          hasOnlineCount ? 'bg-terminal' : 'bg-muted-foreground/50'
+        }`}
+      />
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={query.data ?? 'none'}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15 }}
+          className="tabular-nums"
+        >
+          {hasOnlineCount ? query.data : '--'}
+        </motion.span>
+      </AnimatePresence>
+      <span className="opacity-70 uppercase text-[10px] tracking-wider">{t('users.online')}</span>
+    </div>
   )
 }
 

@@ -266,16 +266,11 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
           exit={{ opacity: 0, scale: 0.9 }}
           className="mx-auto flex min-h-full max-w-sm flex-col items-center justify-center text-center"
         >
-          <motion.div
-            animate={{
-              y: [0, -10, 0],
-              rotate: [0, 5, -5, 0]
-            }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            className="mb-5 flex h-16 w-16 items-center justify-center rounded-[28px] bg-gradient-to-br from-primary/20 via-blue-500/20 to-cyan-400/20 text-primary shadow-inner sm:mb-6 sm:h-20 sm:w-20 sm:rounded-[32px]"
+          <div
+            className="mb-5 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary sm:mb-6 sm:h-14 sm:w-14"
           >
-            <Sparkles className="h-8 w-8 sm:h-10 sm:w-10" />
-          </motion.div>
+            <Sparkles className="h-6 w-6 sm:h-7 sm:w-7" />
+          </div>
 
           <h3 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">{t('chat.emptyTitle')}</h3>
           <p className="mt-2 max-w-[28ch] text-[13px] leading-relaxed text-muted-foreground sm:max-w-none sm:text-sm">
@@ -297,28 +292,28 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                   key={i}
                   animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
                   transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                  className="h-2 w-2 rounded-full bg-primary"
+                  className={cn('h-2 w-2 rounded-full', i < 2 ? 'bg-primary' : 'bg-amber')}
                 />
               ))}
             </div>
           )}
 
           {!isSearching && isNotConnected && !isServiceUnavailable && !isBootstrapping && (
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="mt-6 w-full sm:mt-8">
+            <div className="mt-6 w-full sm:mt-8">
               <Button
                 onClick={() => connect?.()}
-                className="h-11 w-full rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-cyan-500 text-[15px] font-bold shadow-lg shadow-primary/20 sm:h-12"
+                className="h-10 w-full rounded-md bg-primary text-primary-foreground text-sm font-medium hover:shadow-[0_0_24px_hsl(187_72%_48%/0.25)]"
               >
                 {t('home.startChat')}
               </Button>
-            </motion.div>
+            </div>
           )}
 
           {isServiceUnavailable && (
             <Button
               onClick={() => retryBootstrap?.()}
               variant="outline"
-              className="mt-8 rounded-2xl border-primary/20"
+              className="mt-8 rounded-md border-border hover:border-primary"
             >
               {t('chat.retryConnection')}
             </Button>
@@ -344,8 +339,9 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
 
             if (isSystem) {
               return (
-                <div key={`sys-${i}`} className="flex justify-center">
-                  <span className="rounded-full bg-muted/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 backdrop-blur-sm ring-1 ring-border/20">
+                <div key={`sys-${i}`} className="flex justify-start px-2">
+                  <span className="text-xs text-terminal/70">
+                    <span className="text-terminal/40 mr-1">{'>_'}</span>
                     {message.message}
                   </span>
                 </div>
@@ -355,19 +351,19 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
             return (
               <div key={`msg-${i}`} className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
                 {!isMe && isStranger && (
-                  <span className="mb-1 ml-1 text-[11px] font-bold text-primary/70 uppercase tracking-tight">
+                  <span className="mb-1 ml-1 text-[11px] font-medium text-amber tracking-wide">
                     {stranger?.name ?? message.sender}
                   </span>
                 )}
                 <div
                   className={cn(
-                    'relative max-w-[88%] px-3.5 py-2.5 shadow-md sm:max-w-[70%] sm:px-4 sm:py-3',
+                    'relative max-w-[88%] px-3.5 py-2.5 sm:max-w-[70%] sm:px-4 sm:py-3',
                     isMe
-                      ? 'rounded-3xl rounded-br-lg bg-gradient-to-br from-primary via-blue-600 to-cyan-500 text-primary-foreground shadow-primary/10'
-                      : 'rounded-3xl rounded-bl-lg bg-card text-foreground ring-1 ring-border/40 backdrop-blur-xl'
+                      ? 'rounded-md bg-primary/8 border border-primary/20 text-foreground'
+                      : 'rounded-md bg-secondary border border-border text-foreground'
                   )}
                 >
-                  <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed sm:text-[15px]">
+                  <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[14px]">
                     {message.message}
                   </p>
                 </div>
@@ -402,10 +398,11 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                   key={`sys-${i}`}
                   index={i}
                   onHeightChange={handleHeightChange}
-                  className="absolute left-0 right-0 flex justify-center"
+                  className="absolute left-0 right-0 flex justify-start px-2"
                   style={{ top: `${item.top}px` }}
                 >
-                  <span className="rounded-full bg-muted/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 backdrop-blur-sm ring-1 ring-border/20">
+                  <span className="text-xs text-terminal/70">
+                    <span className="text-terminal/40 mr-1">{'>_'}</span>
                     {message.message}
                   </span>
                 </MeasuredItem>
@@ -421,20 +418,20 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                 style={{ top: `${item.top}px` }}
               >
                 {!isMe && isStranger && (
-                  <span className="mb-1 ml-1 text-[11px] font-bold text-primary/70 uppercase tracking-tight">
+                  <span className="mb-1 ml-1 text-[11px] font-medium text-amber tracking-wide">
                     {stranger?.name ?? message.sender}
                   </span>
                 )}
                 <div
                   className={cn(
-                    'relative max-w-[88%] px-3.5 py-2.5 shadow-md sm:max-w-[70%] sm:px-4 sm:py-3',
+                    'relative max-w-[88%] px-3.5 py-2.5 sm:max-w-[70%] sm:px-4 sm:py-3',
                     isMe
-                      ? 'rounded-3xl rounded-br-lg bg-gradient-to-br from-primary via-blue-600 to-cyan-500 text-primary-foreground shadow-primary/10'
-                      : 'rounded-3xl rounded-bl-lg bg-card text-foreground ring-1 ring-border/40 backdrop-blur-xl'
+                      ? 'rounded-md bg-primary/8 border border-primary/20 text-foreground'
+                      : 'rounded-md bg-secondary border border-border text-foreground'
                   )}
                   style={item.tightWidth ? { width: `${item.tightWidth}px` } : undefined}
                 >
-                  <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed sm:text-[15px]">
+                  <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[14px]">
                     {message.message}
                   </p>
                 </div>

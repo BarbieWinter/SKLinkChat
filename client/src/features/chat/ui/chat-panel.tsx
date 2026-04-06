@@ -180,13 +180,13 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
       className="flex h-full w-full flex-col bg-background selection:bg-primary/20"
     >
       {/* ── Header ── */}
-      <div className="z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border/40 bg-background/80 px-3 backdrop-blur-xl sm:h-14 sm:px-6">
+      <div className="z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 sm:h-14 sm:px-6">
         <div className="flex items-center gap-3">
           {showSidebarToggle && (
             <button
               type="button"
               onClick={onOpenSidebar}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/50 text-muted-foreground transition-colors active:scale-95 hover:bg-accent hover:text-accent-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors active:scale-95 hover:bg-muted"
             >
               <Menu className="h-4.5 w-4.5" />
             </button>
@@ -201,33 +201,21 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/50 bg-card/45 px-2.5 py-1 shadow-sm backdrop-blur-sm sm:gap-2 sm:px-3"
+              className="flex min-w-0 items-center"
             >
               <span
                 className={cn(
-                  'h-2 w-2 shrink-0 rounded-full transition-colors',
+                  'h-1.5 w-1.5 shrink-0 rounded-full transition-colors',
                   stranger?.isTyping || isSearching
-                    ? 'bg-primary shadow-[0_0_0_3px_rgba(14,165,233,0.12)]'
+                    ? 'bg-primary'
                     : stranger
-                      ? 'bg-emerald-400 shadow-[0_0_0_3px_rgba(74,222,128,0.12)]'
-                      : 'bg-slate-400/70'
+                      ? 'bg-terminal'
+                      : 'bg-muted-foreground/50'
                 )}
               />
-              <span className="truncate text-[13px] font-semibold tracking-tight text-foreground">
-                {headerTitle}
-              </span>
-              <span
-                className={cn(
-                  'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-                  stranger?.isTyping || isSearching
-                    ? 'bg-primary/10 text-primary'
-                    : stranger
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                      : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {statusText}
-              </span>
+              <span className="ml-2 truncate text-sm font-medium text-foreground">{headerTitle}</span>
+              <span className="mx-1.5 text-muted-foreground/40">&middot;</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{statusText}</span>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -237,7 +225,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             <button
               type="button"
               onClick={() => connect?.()}
-              className="flex items-center gap-1 rounded-xl bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors active:scale-95 hover:bg-primary/20"
+              className="flex items-center gap-1 rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors active:scale-95 hover:border-primary hover:text-primary"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t('home.reroll')}</span>
@@ -255,7 +243,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
       {/* ── Composer ── */}
       <div
         className={cn(
-          'z-20 shrink-0 border-t border-border/40 bg-background/95 backdrop-blur-xl',
+          'z-20 shrink-0 border-t border-border/40 bg-background',
           // Only apply safe-area padding when keyboard is NOT open
           !keyboardOpen && 'pb-[env(safe-area-inset-bottom)]'
         )}
@@ -273,11 +261,11 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
               placeholder="输入消息..."
               disabled={isComposerDisabled}
               className={cn(
-                'w-full resize-none rounded-2xl border border-border/50 bg-muted/30 px-3.5 py-3 text-[15px] leading-5 outline-none transition-colors',
+                'w-full resize-none rounded-md border border-border bg-input pl-8 pr-3.5 py-3 text-[15px] leading-5 outline-none transition-colors terminal-prefix',
                 'placeholder:text-muted-foreground/60',
-                'focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/10',
+                'focus:border-primary focus:ring-1 focus:ring-primary/15',
                 'disabled:cursor-not-allowed disabled:opacity-50',
-                'sm:px-4'
+                'sm:pr-4'
               )}
               style={{
                 height: `${MIN_COMPOSER_HEIGHT}px`,
@@ -307,9 +295,9 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             type="submit"
             disabled={isComposerDisabled || isSubmitting || !form.watch('message')?.trim()}
             className={cn(
-              'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-all',
-              'bg-primary text-primary-foreground shadow-md',
-              'disabled:opacity-40 disabled:shadow-none',
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-all',
+              'bg-primary text-primary-foreground',
+              'disabled:opacity-40',
               'active:scale-95'
             )}
           >

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Contact, LogOut, MailCheck, PanelLeftClose, Users, X } from 'lucide-react'
+import { LogOut, PanelLeftClose, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -38,15 +38,12 @@ const ChatWorkspaceSidebar = ({
     <div className="flex flex-col h-full space-y-4 p-4 overflow-y-auto scrollbar-none">
       <div className="flex items-center justify-between">
         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Users className="h-4 w-4" />
-          </div>
-          <span className="text-sm font-bold tracking-tight uppercase text-muted-foreground/70">Workspace</span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">WORKSPACE</span>
         </motion.div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-lg transition-all duration-200 hover:bg-accent active:scale-90"
+          className="h-8 w-8 rounded-md transition-all duration-200 hover:bg-muted active:scale-90"
           onClick={onClose}
         >
           {compact ? <X className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -57,16 +54,11 @@ const ChatWorkspaceSidebar = ({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="rounded-2xl border border-border/50 bg-card/50 p-4 shadow-sm backdrop-blur-sm"
+        className="rounded-md border border-border bg-secondary p-4"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Contact className="h-4 w-4" />
-            </div>
-            <h3 className="text-sm font-semibold">{t('home.profile')}</h3>
-          </div>
-          <Badge className="rounded-full text-[10px] font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors border-none">
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">PROFILE</h3>
+          <Badge className="rounded border-primary/30 bg-primary/5 text-primary text-[10px] uppercase tracking-wider">
             {formatUserState(me?.state)}
           </Badge>
         </div>
@@ -89,7 +81,7 @@ const ChatWorkspaceSidebar = ({
               >
                 <Badge
                   variant="outline"
-                  className="rounded-full text-[11px] border-primary/20 bg-primary/5 text-primary/80"
+                  className="rounded border-primary/20 bg-primary/5 text-primary text-[11px]"
                 >
                   {keyword}
                 </Badge>
@@ -107,7 +99,7 @@ const ChatWorkspaceSidebar = ({
               <Link
                 to="/admin/reports"
                 data-testid="enter-admin-console"
-                className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-bold text-primary transition-all duration-200 hover:bg-primary/20 active:scale-95"
+                className="rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs font-medium text-foreground transition-all duration-200 hover:border-primary hover:text-primary active:scale-95"
               >
                 管理后台
               </Link>
@@ -115,7 +107,7 @@ const ChatWorkspaceSidebar = ({
           </div>
           <button
             type="button"
-            className="group flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive active:scale-95"
+            className="group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive active:scale-95"
             onClick={() => void onLogout()}
           >
             <LogOut className="h-3.5 w-3.5" />
@@ -128,15 +120,10 @@ const ChatWorkspaceSidebar = ({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="rounded-2xl border border-border/50 bg-card/50 p-4 shadow-sm backdrop-blur-sm"
+        className="rounded-md border border-border bg-secondary p-4"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              {stranger ? <Users className="h-4 w-4" /> : <MailCheck className="h-4 w-4" />}
-            </div>
-            <h3 className="text-sm font-semibold">{t('home.currentPartner')}</h3>
-          </div>
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">PARTNER</h3>
           {canReportCurrentPartner && stranger?.id && (
             <ChatReportDialog
               sessionId={sessionId}
@@ -220,15 +207,15 @@ export const ChatWorkspace = () => {
   }, [isCompactViewport, me?.state])
 
   return (
-    <div className="mx-auto flex h-full w-full min-h-0 overflow-hidden bg-background sm:my-0 sm:rounded-[24px]">
+    <div className="mx-auto flex h-full w-full min-h-0 overflow-hidden bg-background sm:my-0 sm:rounded-lg">
       <AnimatePresence initial={false}>
         {!isSidebarCollapsed && !isCompactViewport && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 300, opacity: 1 }}
+            animate={{ width: 280, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="shrink-0 border-r border-border/40 bg-card/30 backdrop-blur-xl"
+            className="shrink-0 border-r border-border bg-card"
           >
             <ChatWorkspaceSidebar compact={false} onClose={() => setSidebarCollapsed(true)} onLogout={logout} />
           </motion.div>
@@ -251,7 +238,7 @@ export const ChatWorkspace = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileSheetOpen(false)}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/70"
             />
             <motion.div
               initial={{ y: '100%' }}
@@ -260,7 +247,7 @@ export const ChatWorkspace = () => {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-hidden"
             >
-              <div className="mx-2 mb-2 h-full flex flex-col rounded-[32px] border border-border/60 bg-background shadow-2xl safe-area-bottom">
+              <div className="h-full flex flex-col rounded-t-lg border border-border bg-background safe-area-bottom">
                 <div className="flex justify-center py-3">
                   <div className="h-1.5 w-12 rounded-full bg-muted-foreground/20" />
                 </div>

@@ -92,7 +92,7 @@ const Layout = () => {
   return (
     <Providers>
       <div
-        className="safe-area-top safe-area-x flex w-screen flex-col overflow-hidden"
+        className="noise-overlay scanline-overlay safe-area-top safe-area-x flex w-screen flex-col overflow-hidden"
         style={{ height: keyboardOpen ? `${window.innerHeight - kbHeight}px` : '100dvh' }}
       >
         <main className="min-h-0 flex-1 w-full overflow-hidden">

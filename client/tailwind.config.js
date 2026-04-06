@@ -12,7 +12,9 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter var']
+        sans: ['"JetBrains Mono Variable"', '"JetBrains Mono"', '"Fira Code"', '"SF Mono"', '"Cascadia Code"', 'monospace'],
+        mono: ['"JetBrains Mono Variable"', '"JetBrains Mono"', '"Fira Code"', '"SF Mono"', '"Cascadia Code"', 'monospace'],
+        pixel: ['Silkscreen', '"Press Start 2P"', 'monospace']
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -47,7 +49,10 @@ module.exports = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))'
-        }
+        },
+        cyber: 'hsl(187 72% 48%)',
+        terminal: 'hsl(142 60% 55%)',
+        amber: 'hsl(38 90% 55%)'
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -62,11 +67,21 @@ module.exports = {
         'accordion-up': {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: 0 }
+        },
+        'glow-pulse': {
+          '0%, 100%': { boxShadow: '0 0 12px hsl(187 72% 48% / 0.15)' },
+          '50%': { boxShadow: '0 0 28px hsl(187 72% 48% / 0.30)' }
+        },
+        'blink-cursor': {
+          '0%, 100%': { opacity: 1 },
+          '50%': { opacity: 0 }
         }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out'
+        'accordion-up': 'accordion-up 0.2s ease-out',
+        'glow': 'glow-pulse 2s ease-in-out infinite',
+        'blink': 'blink-cursor 1s step-end infinite'
       }
     }
   },

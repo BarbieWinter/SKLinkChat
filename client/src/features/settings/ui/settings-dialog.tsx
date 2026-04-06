@@ -2,8 +2,7 @@
  * Profile settings dialog.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { motion } from 'framer-motion'
-import { Settings, Sparkles } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { generateUsername } from 'unique-username-generator'
@@ -64,22 +63,17 @@ const SettingsDialog = () => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground shadow-sm"
+        <button
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           type="button"
           aria-label={t('settings.trigger')}
         >
           <Settings className="h-4 w-4" />
-        </motion.button>
+        </button>
       </DialogTrigger>
-      <DialogContent className="rounded-[28px] border-border/60 bg-background/95 backdrop-blur-xl sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader className="gap-2">
-          <div className="flex items-center gap-2 text-primary">
-            <Sparkles className="h-5 w-5" />
-            <DialogTitle className="text-xl font-bold tracking-tight">{t('settings.title')}</DialogTitle>
-          </div>
+          <DialogTitle>{t('settings.title')}</DialogTitle>
           <DialogDescription className="text-start text-sm leading-relaxed">
             {t('settings.description')}
           </DialogDescription>
@@ -101,7 +95,7 @@ const SettingsDialog = () => {
                     <FormControl>
                       <Input
                         placeholder={t('settings.namePlaceholder')}
-                        className="h-12 rounded-2xl border-border/50 bg-muted/30 focus:bg-background transition-all"
+                        className="h-10 rounded-md border-border bg-input terminal-prefix pl-8 focus:border-primary transition-all"
                         {...field}
                       />
                     </FormControl>
@@ -117,7 +111,7 @@ const SettingsDialog = () => {
                     <FormControl>
                       <Input
                         placeholder={t('settings.keywordsPlaceholder')}
-                        className="h-12 rounded-2xl border-border/50 bg-muted/30 focus:bg-background transition-all"
+                        className="h-10 rounded-md border-border bg-input terminal-prefix pl-8 focus:border-primary transition-all"
                         {...field}
                       />
                     </FormControl>
@@ -132,7 +126,7 @@ const SettingsDialog = () => {
             <DialogFooter>
               <Button
                 type="submit"
-                className="h-11 w-full rounded-2xl bg-gradient-to-r from-primary to-blue-500 font-bold shadow-lg shadow-primary/20"
+                className="h-10 w-full rounded-md bg-primary text-primary-foreground font-medium hover:shadow-[0_0_24px_hsl(187_72%_48%/0.25)]"
               >
                 {t('settings.save')}
               </Button>

@@ -3,6 +3,7 @@
  */
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import '@fontsource-variable/jetbrains-mono'
 import App from '@/app/App'
 import './assets/global.css'
 
