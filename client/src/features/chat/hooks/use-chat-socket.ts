@@ -18,8 +18,6 @@ const createClientMessageId = () => {
 type UseChatSocketOptions = {
   sessionId: string
   meId?: string
-  displayName: string
-  meName?: string
   strangerId?: string
   onBootstrapError: () => void
   onDisconnect: () => void
@@ -30,15 +28,12 @@ type UseChatSocketOptions = {
   onErrorMessage: (message: string) => void
   onTyping: (typing: boolean) => void
   onPresenceCount: (onlineCount: number) => void
-  syncDisplayName: (name: string) => void
   onSocketClosed: (code: number, reason: string) => void
 }
 
 export const useChatSocket = ({
   sessionId,
   meId,
-  displayName,
-  meName,
   strangerId,
   onBootstrapError,
   onDisconnect,
@@ -49,7 +44,6 @@ export const useChatSocket = ({
   onErrorMessage,
   onTyping,
   onPresenceCount,
-  syncDisplayName,
   onSocketClosed
 }: UseChatSocketOptions) => {
   const hasConnectedRef = useRef(false)
@@ -147,19 +141,6 @@ export const useChatSocket = ({
     }
   }, [sessionId, socket.readyState])
 
-  useEffect(() => {
-    if (!meId || !displayName || meName === displayName) {
-      return
-    }
-
-    syncDisplayName(displayName)
-    socket.sendJsonMessage({
-      id: meId,
-      type: PayloadType.UserInfo,
-      payload: { name: displayName }
-    })
-  }, [displayName, meId, meName, socket, syncDisplayName])
-
   return {
     transportStatus,
     emitTyping: (typing: boolean) => {
@@ -200,13 +181,6 @@ export const useChatSocket = ({
         payload: {
           id: meId
         }
-      })
-    },
-    setName: (name: string) => {
-      socket.sendJsonMessage({
-        id: meId,
-        type: PayloadType.UserInfo,
-        payload: { name }
       })
     }
   }

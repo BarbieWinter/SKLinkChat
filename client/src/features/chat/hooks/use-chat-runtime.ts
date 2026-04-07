@@ -21,7 +21,6 @@ import { useToast } from '@/shared/ui/use-toast'
 export type ChatProviderState = {
   sendMessage?: (message: string) => void
   connect?: () => void
-  setName?: (name: string) => void
   stranger?: User
   me?: User
   sessionId: string
@@ -47,8 +46,6 @@ export const useChatRuntime = (): ChatProviderState => {
     me,
     stranger,
     disconnect,
-    setName,
-    displayName,
     resetSession
   } = useAppStore()
 
@@ -88,8 +85,6 @@ export const useChatRuntime = (): ChatProviderState => {
   const socketActions = useChatSocket({
     sessionId,
     meId: me?.id,
-    meName: me?.name,
-    displayName,
     strangerId: stranger?.id,
     onBootstrapError: () =>
       toast({
@@ -129,7 +124,6 @@ export const useChatRuntime = (): ChatProviderState => {
     onPresenceCount: (onlineCount) => {
       queryClient.setQueryData(ONLINE_USER_COUNT_QUERY_KEY, onlineCount)
     },
-    syncDisplayName: (name) => setName(name),
     onSocketClosed: (code, reason) => {
       if (code === 1008 && reason === 'CHAT_ACCESS_RESTRICTED') {
         void refreshSession()
@@ -195,7 +189,6 @@ export const useChatRuntime = (): ChatProviderState => {
         clearChatConnection()
         socketActions.connect()
       },
-      setName: socketActions.setName,
       stranger,
       me,
       sessionId,

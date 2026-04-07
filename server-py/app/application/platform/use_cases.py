@@ -45,11 +45,11 @@ class GetAccountProfileUseCase:
 class UpdateAccountProfileUseCase:
     service: AccountService
 
-    async def execute(self, *, account_id: str, display_name: str, interests: list[str]) -> AccountProfileView:
+    async def execute(self, *, account_id: str, interests: list[str], gender: str) -> AccountProfileView:
         return await self.service.update_profile(
             account_id=account_id,
-            display_name=display_name,
             interests=interests,
+            gender=gender,
         )
 
 

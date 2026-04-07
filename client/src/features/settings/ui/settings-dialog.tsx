@@ -5,12 +5,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Settings } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { generateUsername } from 'unique-username-generator'
 import { z } from 'zod'
 
 import { useAppStore } from '@/app/store'
 import { useAuth } from '@/features/auth/auth-provider'
-import { useChat } from '@/features/chat/chat-provider'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import type { Gender } from '@/shared/types'
 import { Button } from '@/shared/ui/button'
@@ -27,30 +25,23 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } 
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 
-import { getSettingsDialogInitialState } from '@/features/settings/ui/use-settings-dialog-initial-state'
-
 const formSchema = z.object({
-  name: z.string().min(1),
   keywords: z.string().optional(),
   gender: z.enum(['male', 'female', 'unknown'])
 })
 
 const SettingsDialog = () => {
   const { t } = useI18n()
-  const { displayName, keywords, me, setName } = useAppStore()
+  const { displayName, keywords } = useAppStore()
   const [open, setOpen] = useState(false)
-  const { setName: setChatName } = useChat()
   const { authSession, syncProfile } = useAuth()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: getSettingsDialogInitialState({
-      displayName,
-      keywords,
-      gender: authSession.gender,
-      meName: me?.name,
-      generateUsername
-    })
+    defaultValues: {
+      keywords: keywords.join(', '),
+      gender: authSession.gender
+    }
   })
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
@@ -60,14 +51,8 @@ const SettingsDialog = () => {
         .map((keyword) => keyword.trim())
         .filter(Boolean) ?? []
 
-    await syncProfile({
-      displayName: data.name,
-      interests,
-      gender: data.gender as Gender
-    })
+    await syncProfile({ interests, gender: data.gender as Gender })
     setOpen(false)
-    setName(data.name)
-    setChatName?.(data.name)
   }
 
   return (
@@ -97,22 +82,15 @@ const SettingsDialog = () => {
             className="space-y-6 mt-4"
           >
             <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input
-                        placeholder={t('settings.namePlaceholder')}
-                        className="h-10 rounded-md border-border bg-input terminal-prefix pl-8 focus:border-primary transition-all"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="space-y-2">
+                <Label className="px-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">用户名</Label>
+                <Input
+                  value={displayName || authSession.display_name || ''}
+                  disabled
+                  className="h-10 rounded-md border-border bg-input/70 text-muted-foreground"
+                />
+                <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">用户名在注册后固定，不可修改。</p>
+              </div>
               <FormField
                 control={form.control}
                 name="keywords"

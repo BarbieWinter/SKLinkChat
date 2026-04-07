@@ -12,6 +12,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '@/features/auth/auth-provider'
 import { useChat } from '@/features/chat/chat-provider'
+import { getAnonymousPartnerLabel } from '@/features/chat/model/identity'
 import { RetroPixelBubble } from '@/features/chat/ui/retro-pixel-bubble'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { getBubbleHeight, getTightBubbleWidth, prepareBubble } from '@/shared/lib/pretext'
@@ -348,7 +349,9 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
             return (
               <div key={`msg-${i}`} className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
                 {!isMe && isStranger && (
-                  <span className="pixel-chat-label mb-2 ml-1 text-[10px]">{stranger?.name ?? message.sender}</span>
+                  <span className="pixel-chat-label mb-2 ml-1 text-[10px]">
+                    {getAnonymousPartnerLabel(message.gender ?? stranger?.gender)}
+                  </span>
                 )}
                 <RetroPixelBubble
                   text={message.message}
@@ -412,7 +415,9 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                 style={{ top: `${item.top}px` }}
               >
                 {!isMe && isStranger && (
-                  <span className="pixel-chat-label mb-2 ml-1 text-[10px]">{stranger?.name ?? message.sender}</span>
+                  <span className="pixel-chat-label mb-2 ml-1 text-[10px]">
+                    {getAnonymousPartnerLabel(message.gender ?? stranger?.gender)}
+                  </span>
                 )}
                 <RetroPixelBubble
                   text={message.message}

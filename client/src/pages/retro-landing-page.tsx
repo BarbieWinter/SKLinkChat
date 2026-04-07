@@ -16,6 +16,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import ASCIIText from '@/components/ASCIIText'
+import LightRays from '@/components/LightRays'
 import { useAuth } from '@/features/auth/auth-provider'
 
 // ─── Scramble constants ───────────────────────────────────────────────────────
@@ -29,6 +31,17 @@ const WORDS: { text: string; color: string }[] = [
   { text: 'SAFE ZONE',  color: '#a855f7' },
   { text: 'OPEN WORLD', color: '#f59e0b' },
 ]
+
+// ─── Seeded PRNG (LCG) ───────────────────────────────────────────────────────
+// Deterministic replacement for Math.random() in the scatter grid so every
+// browser renders the same initial character pattern.
+function makePrng(seed: number) {
+  let s = seed >>> 0
+  return () => {
+    s = Math.imul(s, 1664525) + 1013904223 >>> 0
+    return s / 0x100000000
+  }
+}
 
 // ─── useScatterCanvas ─────────────────────────────────────────────────────────
 // Tracks mouse via window, canvas is pointer-events: none throughout.
@@ -51,6 +64,10 @@ function useScatterCanvas(
     let intervalId: ReturnType<typeof setInterval>
     let fontReady = false
 
+    // One shared PRNG instance — seeded once, reused for both init and refresh
+    // so the sequence is identical on every browser / every page load.
+    const rng = makePrng(0xdeadbeef)
+
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       W = canvas.offsetWidth
@@ -60,13 +77,13 @@ function useScatterCanvas(
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       cols = Math.ceil(W / SPACING)
       rows = Math.ceil(H / SPACING)
-      cells = Array.from({ length: cols * rows }, () => SC[Math.floor(Math.random() * SC.length)]!)
+      cells = Array.from({ length: cols * rows }, () => SC[Math.floor(rng() * SC.length)]!)
     }
 
     const refreshCells = () => {
       const n = Math.floor(cells.length * 0.04)
       for (let i = 0; i < n; i++) {
-        cells[Math.floor(Math.random() * cells.length)] = SC[Math.floor(Math.random() * SC.length)]!
+        cells[Math.floor(rng() * cells.length)] = SC[Math.floor(rng() * SC.length)]!
       }
     }
 
@@ -406,6 +423,16 @@ export default function RetroLandingPage() {
   const mouseRef   = useRef({ x: -999, y: -999 })
   const [scrolled, setScrolled] = useState(false)
 
+  // Fixed props — never change on resize so the CanvAscii instance is never
+  // re-created mid-session. The setSize() + dynamic camera-Z logic in
+  // ASCIIText.tsx handles any container dimension changes at runtime.
+  const asciiTitleProps = {
+    asciiFontSize: 7,
+    textFontSize: 280,
+    planeBaseHeight: 18,
+    enableWaves: false,
+  }
+
   // Shared mouse tracker at window level → both canvases use pointer-events: none
   useEffect(() => {
     const onMove  = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY } }
@@ -428,6 +455,7 @@ export default function RetroLandingPage() {
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
+
   return (
     <div className="lp-root">
 
@@ -435,8 +463,23 @@ export default function RetroLandingPage() {
       <canvas ref={dotRef}     className="lp-canvas" style={{ zIndex: 0 }} />
       {/* ── Canvas: scatter chars (above dots) ── */}
       <canvas ref={scatterRef} className="lp-canvas" style={{ zIndex: 1 }} />
-      {/* ── Spotlight ── */}
-      <div className="lp-spotlight" />
+      {/* ── LightRays spotlight ── */}
+      <div className="lp-spotlight">
+        <LightRays
+          raysOrigin="top-center"
+          raysColor="#2968ff"
+          raysSpeed={0.65}
+          lightSpread={1.6}
+          rayLength={1.8}
+          pulsating={true}
+          fadeDistance={0.9}
+          saturation={1.4}
+          followMouse={false}
+          mouseInfluence={0}
+          noiseAmount={0}
+          distortion={0}
+        />
+      </div>
 
       {/* ── Navbar ── */}
       <nav className={`lp-nav${scrolled ? ' scrolled' : ''}`}>
@@ -488,7 +531,16 @@ export default function RetroLandingPage() {
         <p className="lp-eyebrow">Anonymous · Encrypted · Real-time</p>
 
         {/* Title */}
-        <h1 className="lp-title">SKLINK</h1>
+        <div className="lp-ascii-title">
+          <ASCIIText
+            text="sklinkchat"
+            asciiFontSize={asciiTitleProps.asciiFontSize}
+            textFontSize={asciiTitleProps.textFontSize}
+            planeBaseHeight={asciiTitleProps.planeBaseHeight}
+            textColor="#fdf9f3"
+            enableWaves={asciiTitleProps.enableWaves}
+          />
+        </div>
 
         {/* Scramble subtitle */}
         <div className="lp-scramble-row" style={{ color: scrambleColor }}>

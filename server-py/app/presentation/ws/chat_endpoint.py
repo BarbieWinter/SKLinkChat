@@ -70,21 +70,11 @@ async def _handle_user_info(
     session_id: str,
     payload: Any,
 ) -> None:
-    if not isinstance(payload, dict):
+    if payload is not None and not isinstance(payload, dict):
         await _send_error(websocket, "Malformed payload")
         return
 
-    name = payload.get("name")
-    if name is not None and not isinstance(name, str):
-        await _send_error(websocket, "Malformed payload")
-        return
-    if name is not None:
-        normalized_name = name.strip()
-        if not normalized_name or len(normalized_name) > _MAX_WEBSOCKET_DISPLAY_NAME_LENGTH:
-            await _send_error(websocket, "Display name is invalid")
-            return
-
-    session = await container.update_profile.execute(session_id, name=name)
+    session = await container.update_profile.execute(session_id, name=None)
     await _broadcast_to_session(container, session_id, PayloadType.USER_INFO, _serialize_user(session))
 
 

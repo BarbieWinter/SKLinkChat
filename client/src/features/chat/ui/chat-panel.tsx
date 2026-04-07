@@ -23,12 +23,14 @@ import { ModeToggle } from '@/app/mode-toggle'
 import { useAppStore } from '@/app/store'
 import { useChat } from '@/features/chat/chat-provider'
 import { useVisualViewport } from '@/features/chat/hooks/use-visual-viewport'
+import { getAnonymousPartnerLabel } from '@/features/chat/model/identity'
 import { VirtualMessageList } from '@/features/chat/ui/virtual-message-list'
 import OnlineUserCount from '@/features/presence/ui/online-user-count'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { cn } from '@/shared/lib/utils'
 import { UserState } from '@/shared/types'
 import { Button } from '@/shared/ui/button'
+import { PixelGenderIcon } from '@/shared/ui/pixel-gender-icon'
 
 const formSchema = z.object({
   message: z.string().trim().min(1)
@@ -166,7 +168,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
   const isComposerDisabled =
     availability !== 'ready' || transportStatus !== 'connected' || !stranger?.id || me?.state !== UserState.Connected
 
-  const headerTitle = stranger ? stranger.name : isSearching ? t('home.searching') : t('chat.notConnected')
+  const headerTitle = stranger ? getAnonymousPartnerLabel(stranger.gender) : isSearching ? t('home.searching') : t('chat.notConnected')
   const statusText = stranger?.isTyping
     ? t('chat.strangerTyping')
     : isReconnecting
@@ -207,6 +209,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
                   stranger?.isTyping || isSearching ? 'bg-primary' : stranger ? 'bg-amber' : 'bg-muted-foreground/40'
                 )}
               />
+              {stranger && <PixelGenderIcon gender={stranger.gender ?? 'unknown'} size={16} className="ml-2 shrink-0" />}
               <span className="pixel-chat-title ml-2 truncate text-[12px] text-foreground sm:text-[13px]">
                 {headerTitle}
               </span>

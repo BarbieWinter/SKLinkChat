@@ -82,7 +82,7 @@ const ChatReportDialog = ({
       })
       toast({
         title: '举报已提交',
-        description: `已记录你对 ${partnerName} 的举报。`
+        description: `已记录你对${partnerName}的举报。`
       })
       setOpen(false)
     } catch (error) {

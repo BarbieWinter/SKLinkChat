@@ -95,7 +95,7 @@ export const getAccountProfile = () =>
     method: 'GET'
   })
 
-export const updateAccountProfile = (payload: { display_name: string; interests: string[]; gender: Gender }) =>
+export const updateAccountSettings = (payload: { interests: string[]; gender: Gender }) =>
   requestJson<{ display_name: string; interests: string[]; gender: Gender }>('/api/account/profile', {
     method: 'PATCH',
     body: JSON.stringify(payload)

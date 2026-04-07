@@ -9,7 +9,6 @@ router = APIRouter()
 
 
 class UpdateAccountProfileRequest(BaseModel):
-    display_name: str = Field(..., min_length=1, max_length=80)
     interests: list[str] = Field(default_factory=list)
     gender: str = Field(default="unknown")
 
@@ -28,7 +27,6 @@ async def update_account_profile(
 ) -> dict[str, object]:
     profile = await container.update_account_profile.execute(
         account_id=account_id,
-        display_name=payload.display_name,
         interests=payload.interests,
         gender=payload.gender,
     )

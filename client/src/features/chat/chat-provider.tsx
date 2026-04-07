@@ -12,7 +12,6 @@ type ChatProviderProps = {
 const initialState: ChatProviderState = {
   sendMessage: undefined,
   connect: undefined,
-  setName: undefined,
   stranger: undefined,
   me: undefined,
   sessionId: '',

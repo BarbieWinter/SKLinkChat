@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { useAppStore } from '@/app/store'
 import { useAuth } from '@/features/auth/auth-provider'
 import { useChat } from '@/features/chat/chat-provider'
+import { getAnonymousPartnerLabel } from '@/features/chat/model/identity'
 import ChatPanel from '@/features/chat/ui/chat-panel'
 import ChatReportDialog from '@/features/chat/ui/chat-report-dialog'
 import SettingsDialog from '@/features/settings/ui/settings-dialog'
@@ -129,7 +130,7 @@ const ChatWorkspaceSidebar = ({
             <ChatReportDialog
               sessionId={sessionId}
               reportedSessionId={stranger.id}
-              partnerName={stranger.name}
+              partnerName={getAnonymousPartnerLabel(stranger.gender)}
               partnerShortId={stranger.shortId}
               triggerClassName="h-7 rounded-full border border-destructive/20 bg-destructive/5 px-2.5 py-0 text-[11px] font-bold text-destructive hover:bg-destructive/10 transition-colors"
             />
@@ -143,8 +144,12 @@ const ChatWorkspaceSidebar = ({
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
-              className="mt-4 space-y-1.5"
+              className="mt-4 space-y-2"
             >
+              <div className="flex items-center gap-2">
+                <PixelGenderIcon gender={stranger.gender ?? 'unknown'} size={20} />
+                <p className="text-sm font-bold text-foreground">{getAnonymousPartnerLabel(stranger.gender)}</p>
+              </div>
               <p className="text-xs font-medium leading-5 text-muted-foreground">
                 如果对方有出现违规行为请点击举报，我们会严格处理
               </p>

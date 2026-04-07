@@ -76,9 +76,9 @@ def check_email_domain(email_normalized: str) -> None:
 def normalize_display_name(display_name: str) -> str:
     normalized = display_name.strip()
     if not normalized:
-        raise AppError(message="Display name is required", code="DISPLAY_NAME_REQUIRED", status_code=422)
+        raise AppError(message="Username is required", code="DISPLAY_NAME_REQUIRED", status_code=422)
     if len(normalized) > 80:
-        raise AppError(message="Display name is too long", code="DISPLAY_NAME_TOO_LONG", status_code=422)
+        raise AppError(message="Username is too long", code="DISPLAY_NAME_TOO_LONG", status_code=422)
     return normalized
 
 
@@ -207,21 +207,39 @@ class AuthService:
                 account_id=existing_account.id,
                 password_hash=hash_password(password),
             )
-            await self._account_repository.update_profile(
-                account_id=existing_account.id,
-                display_name=display_name,
-                interests=interests,
-            )
+            try:
+                await self._account_repository.update_profile(
+                    account_id=existing_account.id,
+                    display_name=display_name,
+                    interests=interests,
+                )
+            except ValueError as error:
+                if str(error) == "display_name_conflict":
+                    raise AppError(
+                        message="Username is already taken",
+                        code="DISPLAY_NAME_ALREADY_EXISTS",
+                        status_code=409,
+                    ) from error
+                raise
             account = existing_account
         else:
-            account = await self._account_repository.create(
-                email=email,
-                email_normalized=email_normalized,
-                password_hash=hash_password(password),
-                display_name=display_name,
-                interests=interests,
-                gender="unknown",
-            )
+            try:
+                account = await self._account_repository.create(
+                    email=email,
+                    email_normalized=email_normalized,
+                    password_hash=hash_password(password),
+                    display_name=display_name,
+                    interests=interests,
+                    gender="unknown",
+                )
+            except ValueError as error:
+                if str(error) == "display_name_conflict":
+                    raise AppError(
+                        message="Username is already taken",
+                        code="DISPLAY_NAME_ALREADY_EXISTS",
+                        status_code=409,
+                    ) from error
+                raise
             await self._risk_event_recorder.record(
                 email_normalized=email_normalized,
                 outcome="registered",

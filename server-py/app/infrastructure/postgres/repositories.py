@@ -67,6 +67,8 @@ class AccountRepository:
                     await session.rollback()
                     if _is_short_id_conflict(error):
                         continue
+                    if _is_display_name_conflict(error):
+                        raise ValueError("display_name_conflict") from error
                     raise
                 for interest in interests:
                     session.add(AccountInterest(account_id=account.id, interest=interest))
@@ -79,7 +81,7 @@ class AccountRepository:
         self,
         *,
         account_id: str,
-        display_name: str,
+        display_name: str | None = None,
         interests: Sequence[str],
         gender: str | None = None,
     ) -> Account:
@@ -88,14 +90,21 @@ class AccountRepository:
             if account is None:
                 raise LookupError("account not found")
 
-            account.display_name = display_name
+            if display_name is not None:
+                account.display_name = display_name
             if gender is not None:
                 account.gender = gender
             account.updated_at = utc_now()
             await session.execute(delete(AccountInterest).where(AccountInterest.account_id == account_id))
             for interest in interests:
                 session.add(AccountInterest(account_id=account_id, interest=interest))
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                if _is_display_name_conflict(error):
+                    raise ValueError("display_name_conflict") from error
+                raise
             await session.refresh(account)
             return account
 
@@ -178,6 +187,11 @@ def _generate_short_id() -> str:
 def _is_short_id_conflict(error: IntegrityError) -> bool:
     constraint_name = getattr(getattr(getattr(error, "orig", None), "diag", None), "constraint_name", None)
     return constraint_name == "ux_accounts_short_id"
+
+
+def _is_display_name_conflict(error: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(getattr(error, "orig", None), "diag", None), "constraint_name", None)
+    return constraint_name == "uq_accounts_display_name"
 
 
 class AuthSessionRepository:

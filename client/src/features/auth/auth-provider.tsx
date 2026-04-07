@@ -10,7 +10,7 @@ import {
   logoutAccount,
   registerAccount,
   resendVerificationCode,
-  updateAccountProfile,
+  updateAccountSettings,
   verifyEmailCode
 } from '@/features/auth/api/auth-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
@@ -34,7 +34,7 @@ type AuthContextValue = {
   logout: () => Promise<void>
   verifyCode: (email: string, code: string) => Promise<void>
   resendCode: (payload: { email: string }) => Promise<void>
-  syncProfile: (payload: { displayName: string; interests: string[]; gender: Gender }) => Promise<void>
+  syncProfile: (payload: { interests: string[]; gender: Gender }) => Promise<void>
   refreshSession: () => Promise<void>
   setPendingVerificationEmail: (email: string | null) => void
 }
@@ -150,12 +150,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       resendCode: async ({ email }) => {
         await resendVerificationCode({ email })
       },
-      syncProfile: async ({ displayName, interests, gender }) => {
-        const nextProfile = await updateAccountProfile({
-          display_name: displayName,
-          interests,
-          gender
-        })
+      syncProfile: async ({ interests, gender }) => {
+        const nextProfile = await updateAccountSettings({ interests, gender })
         setDisplayName(nextProfile.display_name)
         saveSettings(nextProfile.interests)
         setAuthSession((currentSession) => ({

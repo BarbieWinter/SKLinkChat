@@ -673,10 +673,7 @@
 
 /* ── Landing Page ───────────────────────────────────────────────────────── */
 
-@keyframes lp-spotlight-pulse {
-  0%, 100% { opacity: 0.72; }
-  50%       { opacity: 1.0; }
-}
+/* lp-spotlight-pulse removed — handled by LightRays pulsating prop */
 
 @keyframes lp-grid-march {
   from { background-position: 0 0; }
@@ -698,6 +695,13 @@
   50%, 100% { opacity: 0; }
 }
 
+@keyframes lp-title-scan {
+  0% { transform: translateY(-115%); opacity: 0; }
+  8% { opacity: 1; }
+  22% { transform: translateY(115%); opacity: 0.9; }
+  100% { transform: translateY(115%); opacity: 0; }
+}
+
 /* Root */
 .lp-root {
   position: relative;
@@ -710,36 +714,12 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Spotlight ── */
+/* ── LightRays spotlight wrapper ── */
 .lp-spotlight {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 420px;
+  inset: 0;          /* stretches to all four edges, no percentage-height issue */
   pointer-events: none;
   z-index: 2;
-  animation: lp-spotlight-pulse 3.5s ease-in-out infinite;
-}
-
-/* Wide diffuse halo */
-.lp-spotlight::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 75% 50% at 50% -5%, rgba(34,211,238,0.22) 0%, transparent 68%),
-    radial-gradient(ellipse 40% 30% at 50% -2%, rgba(6,182,212,0.18) 0%, transparent 55%);
-}
-
-/* Narrow beam core */
-.lp-spotlight::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 12% 65% at 50% 0%, rgba(34,211,238,0.65) 0%, rgba(6,182,212,0.15) 40%, transparent 100%);
-  mix-blend-mode: screen;
 }
 
 /* ── Canvas layers ── */
@@ -941,17 +921,19 @@
   background: rgba(34, 211, 238, 0.3);
 }
 
-.lp-title {
-  font-size: clamp(4rem, 12vw, 8.5rem);
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #ffffff;
-  line-height: 0.95;
-  text-shadow:
-    0 0 60px rgba(34,211,238,0.18),
-    0 0 120px rgba(34,211,238,0.08);
-  margin-bottom: 0.5rem;
+.lp-ascii-title {
+  position: relative;
+  width: min(90vw, 78rem);
+  aspect-ratio: 5.8 / 1;
+  min-height: 8rem;
+  max-height: 18rem;
+  margin-bottom: 1rem;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.lp-ascii-title > * {
+  inset: 0;
 }
 
 /* Scramble row */
@@ -1053,6 +1035,13 @@
   .lp-nav { padding: 1.25rem 1.5rem; }
   .lp-hero { padding: 2rem 1.5rem 10rem; }
   .lp-eyebrow { display: none; }
+  .lp-ascii-title {
+    width: min(95vw, 36rem);
+    aspect-ratio: 5.8 / 1;
+    min-height: 5rem;
+    max-height: 9rem;
+    margin-bottom: 0.75rem;
+  }
 }
 
 /* ── Bottom 3D grid ── */
@@ -1083,6 +1072,11 @@
   mask-image: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
   -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
 }
+
+/* ── Auth page ── */
+
+@keyframes auth-orbit-cw  { to { transform: rotate( 360deg); } }
+@keyframes auth-orbit-ccw { to { transform: rotate(-360deg); } }
 
 /* ── Terminal input prefix ── */
 .terminal-prefix {

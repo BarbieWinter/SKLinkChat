@@ -38,6 +38,7 @@ class TimestampMixin:
 class Account(Base, TimestampMixin):
     __tablename__ = "accounts"
     __table_args__ = (
+        UniqueConstraint("display_name", name="uq_accounts_display_name"),
         Index("ux_accounts_short_id", "short_id", unique=True),
         CheckConstraint(
             "((chat_access_restricted_at IS NULL "

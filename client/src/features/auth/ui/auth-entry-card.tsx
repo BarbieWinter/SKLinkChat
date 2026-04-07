@@ -1,50 +1,290 @@
+/**
+ * Auth entry card — orbit-centered redesign.
+ *
+ * Full-screen layout: Matrix rain canvas as background, large orbit rings
+ * centered on screen, login/register form floating at the orbit center with
+ * glowing text effects. GeeTest captcha integrated inline.
+ */
 import { AnimatePresence, motion } from 'framer-motion'
-import { KeyRound, LockKeyhole, MailCheck, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { generateUsername } from 'unique-username-generator'
 
 import { type GeeTestCaptchaPayload, requestPasswordReset, resetPassword } from '@/features/auth/api/auth-client'
 import { useAuth } from '@/features/auth/auth-provider'
 import { GeeTestField, type GeeTestFieldHandle } from '@/features/auth/geetest-field'
 import { GEETEST_LOGIN_CAPTCHA_ID, GEETEST_REGISTER_CAPTCHA_ID } from '@/shared/config/runtime'
 import { useI18n } from '@/shared/i18n/use-i18n'
-import { cn } from '@/shared/lib/utils'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
 import { useToast } from '@/shared/ui/use-toast'
+
+// ─── Validation helpers ───────────────────────────────────────────────────────
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-const parseInterestInput = (value: string) =>
-  value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
+const parseInterestInput = (v: string) =>
+  v.split(',').map((s) => s.trim()).filter(Boolean)
 
-const validateEmail = (value: string): string | null => {
-  const trimmed = value.trim()
-  if (!trimmed) return '请输入邮箱地址'
-  if (!EMAIL_RE.test(trimmed)) return '邮箱格式不正确'
-  return null
+const validateEmail       = (v: string) => !v.trim() ? '请输入邮箱地址' : !EMAIL_RE.test(v.trim()) ? '邮箱格式不正确' : null
+const validatePassword    = (v: string) => !v ? '请输入密码' : v.length < 8 ? '密码至少 8 位' : null
+const validateDisplayName = (v: string) => !v.trim() ? '请输入用户名' : v.trim().length > 80 ? '用户名不能超过 80 个字符' : null
+
+const getInitialMode = (): 'register' | 'login' | 'forgot' | 'reset' | 'verify' => {
+  if (typeof window === 'undefined') return 'register'
+  return new URLSearchParams(window.location.search).has('reset_token') ? 'reset' : 'register'
 }
 
-const validatePassword = (value: string): string | null => {
-  if (!value) return '请输入密码'
-  if (value.length < 8) return '密码至少 8 位'
-  return null
+// ─── Matrix rain canvas ───────────────────────────────────────────────────────
+
+const MATRIX_CHARS =
+  'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン' +
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-*:./!?#'
+
+function useMatrixRain(ref: React.RefObject<HTMLCanvasElement | null>) {
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const FS = 13
+    let W = 0, H = 0, cols = 0
+    let drops: number[] = []
+    let rafId = 0
+    let last = 0
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      W = canvas.offsetWidth
+      H = canvas.offsetHeight
+      canvas.width  = W * dpr
+      canvas.height = H * dpr
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      cols  = Math.floor(W / FS)
+      drops = Array.from({ length: cols }, () => Math.random() * -(H / FS))
+    }
+
+    const draw = (t: number) => {
+      rafId = requestAnimationFrame(draw)
+      if (t - last < 55) return   // ~18 fps
+      last = t
+
+      ctx.fillStyle = 'rgba(5,8,12,0.055)'
+      ctx.fillRect(0, 0, W, H)
+
+      ctx.font = `${FS}px 'Departure Mono', monospace`
+      ctx.textAlign = 'center'
+
+      for (let i = 0; i < cols; i++) {
+        const ch = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]!
+        const x  = i * FS + FS * 0.5
+        const y  = drops[i]! * FS
+
+        ctx.fillStyle = '#a8ffbf'
+        ctx.fillText(ch, x, y)
+
+        if (y > H && Math.random() > 0.974) drops[i] = 0
+        drops[i]! += 0.55
+      }
+    }
+
+    resize()
+    rafId = requestAnimationFrame(draw)
+    window.addEventListener('resize', resize)
+    return () => { cancelAnimationFrame(rafId); window.removeEventListener('resize', resize) }
+  }, [ref])
 }
 
-const getInitialAuthMode = (): 'register' | 'login' | 'forgot' | 'reset' | 'verify' => {
-  if (typeof window === 'undefined') {
-    return 'register'
+// ─── Orbit rings (enlarged, full-screen backdrop) ─────────────────────────────
+
+const ORBIT_SIZE = 580
+const OX = ORBIT_SIZE / 2  // 290
+const OY = ORBIT_SIZE / 2  // 290
+
+function buildMarkers(r: number, count: number, size: number): [number, number][] {
+  return Array.from({ length: count }, (_, i) => {
+    const a = (i / count) * Math.PI * 2
+    return [OX + r * Math.sin(a) - size / 2, OY - r * Math.cos(a) - size / 2]
+  })
+}
+
+function OrbitRings() {
+  const inner  = buildMarkers(108, 10, 4)
+  const middle = buildMarkers(186, 7,  5)
+  const outer  = buildMarkers(264, 5,  7)
+
+  const TO = `${OX}px ${OY}px`
+
+  return (
+    <div style={{ position: 'relative', width: ORBIT_SIZE, height: ORBIT_SIZE, pointerEvents: 'none' }}>
+      {/* Static ring borders */}
+      <svg
+        viewBox={`0 0 ${ORBIT_SIZE} ${ORBIT_SIZE}`}
+        width={ORBIT_SIZE}
+        height={ORBIT_SIZE}
+        style={{ position: 'absolute', inset: 0 }}
+      >
+        {/* Extra outermost faint ring */}
+        <circle cx={OX} cy={OY} r="285" fill="none" stroke="rgba(34,211,238,0.05)" strokeWidth="1" strokeDasharray="1 30" />
+        <circle cx={OX} cy={OY} r="264" fill="none" stroke="rgba(34,211,238,0.09)" strokeWidth="1" strokeDasharray="1 22" />
+        <circle cx={OX} cy={OY} r="186" fill="none" stroke="rgba(34,211,238,0.13)" strokeWidth="1" strokeDasharray="2 16" />
+        <circle cx={OX} cy={OY} r="108" fill="none" stroke="rgba(34,211,238,0.20)" strokeWidth="1" strokeDasharray="3 10" />
+        {/* Inner glow ring */}
+        <circle cx={OX} cy={OY} r="108" fill="none" stroke="rgba(34,211,238,0.06)" strokeWidth="8" />
+      </svg>
+
+      {/* Inner ring markers — CW 8s */}
+      <div style={{ position: 'absolute', inset: 0, animation: 'auth-orbit-cw 8s linear infinite', transformOrigin: TO }}>
+        {inner.map(([x, y], i) => (
+          <div key={i} style={{
+            position: 'absolute', left: x, top: y, width: 4, height: 4,
+            background: '#22d3ee',
+            boxShadow: '0 0 6px rgba(34,211,238,0.8)',
+          }} />
+        ))}
+      </div>
+
+      {/* Middle ring markers — CCW 15s */}
+      <div style={{ position: 'absolute', inset: 0, animation: 'auth-orbit-ccw 15s linear infinite', transformOrigin: TO }}>
+        {middle.map(([x, y], i) => (
+          <div key={i} style={{
+            position: 'absolute', left: x, top: y, width: 5, height: 5,
+            borderRadius: '50%',
+            background: 'rgba(134,239,172,0.75)',
+            boxShadow: '0 0 5px rgba(134,239,172,0.5)',
+          }} />
+        ))}
+      </div>
+
+      {/* Outer ring markers — CW 28s, diamond */}
+      <div style={{ position: 'absolute', inset: 0, animation: 'auth-orbit-cw 28s linear infinite', transformOrigin: TO }}>
+        {outer.map(([x, y], i) => (
+          <div key={i} style={{
+            position: 'absolute', left: x, top: y, width: 7, height: 7,
+            background: 'rgba(255,255,255,0.45)',
+            boxShadow: '0 0 4px rgba(255,255,255,0.3)',
+            transform: 'rotate(45deg)',
+          }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Pixel input / button components ─────────────────────────────────────────
+
+const PX_INPUT_BASE: React.CSSProperties = {
+  fontFamily: "'Departure Mono', 'JetBrains Mono Variable', monospace",
+  background: 'rgba(3,6,14,0.72)',
+  border: '1px solid rgba(34,211,238,0.22)',
+  borderRadius: 0,
+  color: '#d4d8e0',
+  padding: '0.7rem 0.9rem',
+  fontSize: '0.7rem',
+  letterSpacing: '0.05em',
+  width: '100%',
+  outline: 'none',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
+}
+
+const PX_INPUT_ERR: React.CSSProperties = {
+  ...PX_INPUT_BASE,
+  borderColor: 'rgba(239,68,68,0.6)',
+}
+
+function PixelInput({
+  value, onChange, onBlur, placeholder, type = 'text',
+  maxLength, inputMode, autoComplete, hasError = false,
+}: {
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onBlur?: () => void
+  placeholder: string
+  type?: string
+  maxLength?: number
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
+  autoComplete?: string
+  hasError?: boolean
+}) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <input
+      value={value}
+      onChange={onChange}
+      onBlur={() => { setFocused(false); onBlur?.() }}
+      onFocus={() => setFocused(true)}
+      placeholder={placeholder}
+      type={type}
+      maxLength={maxLength}
+      inputMode={inputMode}
+      autoComplete={autoComplete}
+      style={{
+        ...(hasError ? PX_INPUT_ERR : PX_INPUT_BASE),
+        ...(focused ? {
+          borderColor: 'rgba(34,211,238,0.6)',
+          boxShadow: '0 0 0 1px rgba(34,211,238,0.15), 0 0 16px rgba(34,211,238,0.10), inset 0 0 8px rgba(34,211,238,0.04)',
+        } : {}),
+      }}
+    />
+  )
+}
+
+function PxBtn({
+  onClick, disabled = false, children, variant = 'primary',
+}: {
+  onClick?: () => void
+  disabled?: boolean
+  children: React.ReactNode
+  variant?: 'primary' | 'ghost'
+}) {
+  const [hov, setHov] = useState(false)
+  const base: React.CSSProperties = {
+    fontFamily: "'Departure Mono', 'JetBrains Mono Variable', monospace",
+    fontSize: '0.66rem',
+    letterSpacing: '0.22em',
+    textTransform: 'uppercase',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    border: 'none',
+    borderRadius: 0,
+    padding: '0.82rem 1.5rem',
+    width: '100%',
+    transition: 'all 0.12s',
+    opacity: disabled ? 0.4 : 1,
   }
-
-  const params = new URLSearchParams(window.location.search)
-  return params.has('reset_token') ? 'reset' : 'register'
+  const styles: Record<string, React.CSSProperties> = {
+    primary: {
+      ...base,
+      background: hov && !disabled ? 'rgba(34,211,238,0.18)' : 'rgba(34,211,238,0.09)',
+      border: `1px solid ${hov && !disabled ? 'rgba(34,211,238,0.7)' : 'rgba(34,211,238,0.38)'}`,
+      color: '#22d3ee',
+      textShadow: hov && !disabled ? '0 0 12px rgba(34,211,238,0.7)' : '0 0 6px rgba(34,211,238,0.3)',
+      boxShadow: hov && !disabled ? '0 0 18px rgba(34,211,238,0.12), inset 0 0 10px rgba(34,211,238,0.05)' : 'none',
+    },
+    ghost: {
+      ...base,
+      background: 'transparent',
+      border: '1px solid rgba(212,216,224,0.15)',
+      color: 'rgba(212,216,224,0.5)',
+    },
+  }
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={styles[variant]}
+    >
+      {children}
+    </button>
+  )
 }
 
-const authInputClassName =
-  'h-14 rounded-2xl border border-slate-800/90 bg-slate-950/80 px-5 text-[16px] leading-6 text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-[15px] placeholder:text-slate-400/65 transition-all duration-200 focus-visible:border-sky-400/55 focus-visible:bg-slate-950/92 focus-visible:ring-2 focus-visible:ring-sky-400/12 focus-visible:ring-offset-0'
+const ERR: React.CSSProperties = {
+  fontFamily: "'Departure Mono', monospace",
+  fontSize: '0.58rem',
+  color: 'rgba(239,68,68,0.85)',
+  marginTop: '0.28rem',
+  letterSpacing: '0.06em',
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export const AuthEntryCard = () => {
   const { t } = useI18n()
@@ -52,36 +292,35 @@ export const AuthEntryCard = () => {
   const { login, register, verifyCode, resendCode, pendingVerificationEmail, setPendingVerificationEmail } = useAuth()
 
   const [authMode, setAuthMode] = useState<'register' | 'login' | 'forgot' | 'reset' | 'verify'>(() =>
-    pendingVerificationEmail ? 'verify' : getInitialAuthMode()
+    pendingVerificationEmail ? 'verify' : getInitialMode()
   )
   const [captchaPayload, setCaptchaPayload] = useState<GeeTestCaptchaPayload | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [forgotEmail, setForgotEmail] = useState('')
-  const [resetForm, setResetForm] = useState({ password: '', confirm: '' })
-  const [registerForm, setRegisterForm] = useState({
-    email: '',
-    password: '',
-    displayName: generateUsername(),
-    interests: ''
-  })
-  const [loginForm, setLoginForm] = useState({
-    email: '',
-    password: ''
-  })
-  const [verifyCode_, setVerifyCode_] = useState('')
+  const [submitting, setSubmitting]         = useState(false)
+  const [captchaError, setCaptchaError]     = useState<string | null>(null)
+  const [touched, setTouched]               = useState<Record<string, boolean>>({})
+  const [forgotEmail, setForgotEmail]       = useState('')
+  const [resetForm, setResetForm]           = useState({ password: '', confirm: '' })
+  const [registerForm, setRegisterForm]     = useState({ email: '', password: '', displayName: '', interests: '' })
+  const [loginForm, setLoginForm]           = useState({ email: '', password: '' })
+  const [verifyCode_, setVerifyCode_]       = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
+
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const geetestRef = useRef<GeeTestFieldHandle | null>(null)
-  const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [captchaError, setCaptchaError] = useState<string | null>(null)
+  const geetestRef  = useRef<GeeTestFieldHandle | null>(null)
+  const matrixRef   = useRef<HTMLCanvasElement>(null)
+
   const activeCaptchaId = authMode === 'login' ? GEETEST_LOGIN_CAPTCHA_ID : GEETEST_REGISTER_CAPTCHA_ID
 
-  const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }))
-  const switchAuthMode = (nextMode: typeof authMode) => {
+  useMatrixRain(matrixRef)
+  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current) }, [])
+
+  const markTouched = (f: string) => setTouched(p => ({ ...p, [f]: true }))
+
+  const switchMode = (m: typeof authMode) => {
     setTouched({})
     setCaptchaPayload(null)
     setCaptchaError(null)
-    setAuthMode(nextMode)
+    setAuthMode(m)
   }
 
   const resetCaptcha = useCallback(() => {
@@ -89,830 +328,477 @@ export const AuthEntryCard = () => {
     geetestRef.current?.reset()
   }, [])
 
-  const requireCaptchaPayload = () => {
+  const requireCaptcha = () => {
     if (captchaPayload) return true
-    const description = captchaError ?? '请先完成人机校验。'
-    toast({
-      title: t('common.error'),
-      description,
-      variant: 'destructive'
-    })
+    toast({ title: t('common.error'), description: captchaError ?? '请先完成人机校验。', variant: 'destructive' })
     return false
   }
 
   const handleCaptchaFailure = (code?: string, fallback = '人机校验失败，请重试。') => {
-    let description = fallback
-    if (code === 'GEETEST_VALIDATION_FAILED') {
-      description = '人机校验未通过，请重新完成验证。'
-    } else if (code === 'GEETEST_UNAVAILABLE') {
-      description = '人机校验服务暂时不可用，请稍后重试。'
-    } else if (code === 'GEETEST_NOT_CONFIGURED') {
-      description = '极验配置缺失，当前无法提交。'
-    } else if (code === 'GEETEST_FIELDS_REQUIRED') {
-      description = '请先完成人机校验。'
-    }
-    setCaptchaError(description)
-
-    toast({
-      title: t('common.error'),
-      description,
-      variant: 'destructive'
-    })
+    let desc = fallback
+    if (code === 'GEETEST_VALIDATION_FAILED') desc = '人机校验未通过，请重新完成验证。'
+    else if (code === 'GEETEST_UNAVAILABLE')  desc = '人机校验服务暂时不可用，请稍后重试。'
+    else if (code === 'GEETEST_NOT_CONFIGURED') desc = '极验配置缺失，当前无法提交。'
+    else if (code === 'GEETEST_FIELDS_REQUIRED') desc = '请先完成人机校验。'
+    setCaptchaError(desc)
+    toast({ title: t('common.error'), description: desc, variant: 'destructive' })
     resetCaptcha()
   }
 
-  const startResendCooldown = useCallback(() => {
+  const startCooldown = useCallback(() => {
     setResendCooldown(60)
     if (cooldownRef.current) clearInterval(cooldownRef.current)
     cooldownRef.current = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) {
-          if (cooldownRef.current) clearInterval(cooldownRef.current)
-          return 0
-        }
-        return prev - 1
-      })
+      setResendCooldown(p => { if (p <= 1) { if (cooldownRef.current) clearInterval(cooldownRef.current); return 0 } return p - 1 })
     }, 1000)
   }, [])
 
-  useEffect(() => {
-    return () => {
-      if (cooldownRef.current) clearInterval(cooldownRef.current)
-    }
-  }, [])
-
   const handleRegister = async () => {
-    const emailError = validateEmail(registerForm.email)
-    const passwordError = validatePassword(registerForm.password)
-    if (emailError || passwordError) {
-      setTouched((current) => ({ ...current, 'reg-email': true, 'reg-password': true }))
+    const eErr = validateEmail(registerForm.email)
+    const pErr = validatePassword(registerForm.password)
+    const nErr = validateDisplayName(registerForm.displayName)
+    if (eErr || pErr || nErr) {
+      setTouched(p => ({ ...p, 'reg-email': true, 'reg-password': true, 'reg-name': true }))
       return
     }
-
-    if (!requireCaptchaPayload()) {
-      return
-    }
-
+    if (!requireCaptcha()) return
     setSubmitting(true)
     try {
       await register({
-        email: registerForm.email.trim(),
-        password: registerForm.password,
+        email: registerForm.email.trim(), password: registerForm.password,
         displayName: registerForm.displayName.trim(),
         interests: parseInterestInput(registerForm.interests),
-        captcha: captchaPayload as GeeTestCaptchaPayload
+        captcha: captchaPayload as GeeTestCaptchaPayload,
       })
-      startResendCooldown()
-      setVerifyCode_('')
-      switchAuthMode('verify')
-      toast({
-        title: '验证码已发送',
-        description: '请查收邮箱中的 6 位验证码。'
-      })
-    } catch (error) {
-      const code = (error as Error & { code?: string }).code
-      if (code?.startsWith('GEETEST_')) {
-        handleCaptchaFailure(code)
-        return
-      }
+      startCooldown(); setVerifyCode_(''); switchMode('verify')
+      toast({ title: '验证码已发送', description: '请查收邮箱中的 6 位验证码。' })
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code
+      if (code?.startsWith('GEETEST_')) { handleCaptchaFailure(code); return }
       if (code === 'EMAIL_ALREADY_EXISTS') {
-        toast({
-          title: '该邮箱已注册',
-          description: '请切换到登录页面直接登录。'
-        })
-        setLoginForm((current) => ({ ...current, email: registerForm.email.trim() }))
-        switchAuthMode('login')
+        toast({ title: '该邮箱已注册', description: '请切换到登录页面直接登录。' })
+        setLoginForm(p => ({ ...p, email: registerForm.email.trim() }))
+        switchMode('login')
+      } else if (code === 'DISPLAY_NAME_ALREADY_EXISTS') {
+        toast({ title: '用户名已被占用', description: '请更换一个唯一用户名。', variant: 'destructive' })
       } else {
-        toast({
-          title: t('common.error'),
-          description: error instanceof Error ? error.message : '注册失败。',
-          variant: 'destructive'
-        })
+        toast({ title: t('common.error'), description: err instanceof Error ? err.message : '注册失败。', variant: 'destructive' })
       }
-    } finally {
-      resetCaptcha()
-      setSubmitting(false)
-    }
+    } finally { resetCaptcha(); setSubmitting(false) }
   }
 
   const handleLogin = async () => {
-    if (validateEmail(loginForm.email)) {
-      setTouched((current) => ({ ...current, 'login-email': true }))
-      return
-    }
-
-    if (!requireCaptchaPayload()) {
-      return
-    }
-
+    if (validateEmail(loginForm.email)) { setTouched(p => ({ ...p, 'login-email': true })); return }
+    if (!requireCaptcha()) return
     setSubmitting(true)
     try {
-      const result = await login({
-        email: loginForm.email.trim(),
-        password: loginForm.password,
-        captcha: captchaPayload as GeeTestCaptchaPayload
-      })
+      const result = await login({ email: loginForm.email.trim(), password: loginForm.password, captcha: captchaPayload as GeeTestCaptchaPayload })
       if (result === 'verification_required') {
-        startResendCooldown()
-        setVerifyCode_('')
-        switchAuthMode('verify')
-        toast({
-          title: '验证码已发送',
-          description: '该账号尚未验证邮箱，验证码已发送。'
-        })
+        startCooldown(); setVerifyCode_(''); switchMode('verify')
+        toast({ title: '验证码已发送', description: '该账号尚未验证邮箱，验证码已发送。' })
       }
-    } catch (error) {
-      const code = (error as Error & { code?: string }).code
-      if (code?.startsWith('GEETEST_')) {
-        handleCaptchaFailure(code)
-        return
-      }
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code
+      if (code?.startsWith('GEETEST_')) { handleCaptchaFailure(code); return }
       toast({
         title: t('common.error'),
-        description:
-          code === 'INVALID_CREDENTIALS' ? '邮箱或密码错误' : error instanceof Error ? error.message : '登录失败。',
-        variant: 'destructive'
+        description: code === 'INVALID_CREDENTIALS' ? '邮箱或密码错误' : err instanceof Error ? err.message : '登录失败。',
+        variant: 'destructive',
       })
-    } finally {
-      resetCaptcha()
-      setSubmitting(false)
-    }
+    } finally { resetCaptcha(); setSubmitting(false) }
   }
 
-  const handleVerifyCode = async () => {
+  const handleVerify = async () => {
     if (!pendingVerificationEmail || verifyCode_.length !== 6) return
-
     setSubmitting(true)
     try {
       await verifyCode(pendingVerificationEmail, verifyCode_)
       toast({ title: '验证成功', description: '邮箱验证完成，欢迎使用。' })
-    } catch (error) {
-      const code = (error as Error & { code?: string }).code
-      let description = error instanceof Error ? error.message : '验证失败。'
-      if (code === 'VERIFICATION_MAX_ATTEMPTS') {
-        description = '错误次数过多，请重新获取验证码。'
-      } else if (code === 'NO_PENDING_VERIFICATION') {
-        description = '验证码已失效，请重新获取。'
-      }
-      toast({ title: t('common.error'), description, variant: 'destructive' })
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code
+      let desc = err instanceof Error ? err.message : '验证失败。'
+      if (code === 'VERIFICATION_MAX_ATTEMPTS') desc = '错误次数过多，请重新获取验证码。'
+      else if (code === 'NO_PENDING_VERIFICATION') desc = '验证码已失效，请重新获取。'
+      toast({ title: t('common.error'), description: desc, variant: 'destructive' })
+    } finally { setSubmitting(false) }
   }
 
-  const handleResendCode = async () => {
+  const handleResend = async () => {
     if (!pendingVerificationEmail || resendCooldown > 0) return
-
     try {
       await resendCode({ email: pendingVerificationEmail })
-      startResendCooldown()
-      setVerifyCode_('')
+      startCooldown(); setVerifyCode_('')
       toast({ title: '已发送', description: '新的验证码已发送。' })
-    } catch (error) {
-      toast({
-        title: t('common.error'),
-        description: error instanceof Error ? error.message : '发送失败。',
-        variant: 'destructive'
-      })
+    } catch (err) {
+      toast({ title: t('common.error'), description: err instanceof Error ? err.message : '发送失败。', variant: 'destructive' })
     }
   }
 
-  const handleForgotPassword = async () => {
-    if (validateEmail(forgotEmail)) {
-      setTouched((current) => ({ ...current, 'forgot-email': true }))
-      return
-    }
-
+  const handleForgot = async () => {
+    if (validateEmail(forgotEmail)) { setTouched(p => ({ ...p, 'forgot-email': true })); return }
     setSubmitting(true)
-    try {
-      await requestPasswordReset(forgotEmail.trim())
-      toast({
-        title: '邮件已发送',
-        description: '如该邮箱已注册，重置密码链接已发送到你的邮箱。'
-      })
-    } catch {
-      toast({
-        title: '邮件已发送',
-        description: '如该邮箱已注册，重置密码链接已发送到你的邮箱。'
-      })
-    } finally {
-      setSubmitting(false)
-    }
+    try { await requestPasswordReset(forgotEmail.trim()) } catch { /* always show success */ }
+    toast({ title: '邮件已发送', description: '如该邮箱已注册，重置密码链接已发送到你的邮箱。' })
+    setSubmitting(false)
   }
 
-  const handleResetPassword = async () => {
-    const passwordError = validatePassword(resetForm.password)
-    if (passwordError) {
-      setTouched((current) => ({ ...current, 'reset-password': true }))
-      return
-    }
-
-    if (resetForm.password !== resetForm.confirm) {
-      setTouched((current) => ({ ...current, 'reset-confirm': true }))
-      return
-    }
-
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get('reset_token')
-    if (!token) {
-      return
-    }
-
+  const handleReset = async () => {
+    if (validatePassword(resetForm.password)) { setTouched(p => ({ ...p, 'reset-password': true })); return }
+    if (resetForm.password !== resetForm.confirm) { setTouched(p => ({ ...p, 'reset-confirm': true })); return }
+    const token = new URLSearchParams(window.location.search).get('reset_token')
+    if (!token) return
     setSubmitting(true)
     try {
       await resetPassword(token, resetForm.password)
-      toast({
-        title: '密码已重置',
-        description: '请使用新密码登录。'
-      })
-      switchAuthMode('login')
+      toast({ title: '密码已重置', description: '请使用新密码登录。' })
+      switchMode('login')
       window.history.replaceState({}, '', '/')
-    } catch (error) {
-      toast({
-        title: t('common.error'),
-        description: error instanceof Error ? error.message : '重置密码失败。',
-        variant: 'destructive'
-      })
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err) {
+      toast({ title: t('common.error'), description: err instanceof Error ? err.message : '重置密码失败。', variant: 'destructive' })
+    } finally { setSubmitting(false) }
   }
 
-  const authTitle =
-    authMode === 'register'
-      ? '注册账号'
-      : authMode === 'login'
-        ? '登录账号'
-        : authMode === 'verify'
-          ? '验证邮箱'
-          : authMode === 'forgot'
-            ? '找回密码'
-            : '设置新密码'
+  // ── Render ──────────────────────────────────────────────────────────────────
 
-  const authSubtitle =
-    authMode === 'verify'
-      ? '请输入邮箱中收到的 6 位验证码'
-      : authMode === 'forgot'
-        ? '输入注册邮箱，我们将发送重置链接。'
-        : authMode === 'reset'
-          ? '请输入你的新密码。'
-          : authMode === 'login'
-            ? '登录即可开始聊天'
-            : '完成注册与邮箱验证后即可开始聊天。'
+  const modeLabel = authMode === 'register' ? '注册账号'
+    : authMode === 'login' ? '登录账号'
+    : authMode === 'verify' ? '邮箱验证'
+    : authMode === 'forgot' ? '找回密码'
+    : '设置新密码'
+
+  const CARD: React.CSSProperties = {
+    background: 'rgba(4,7,16,0.86)',
+    border: '1px solid rgba(34,211,238,0.22)',
+    borderRadius: 0,
+    padding: '1.75rem 1.6rem',
+    width: '100%',
+    maxWidth: 370,
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.1rem',
+    position: 'relative',
+    boxShadow: '0 0 60px rgba(34,211,238,0.05), 0 0 120px rgba(34,211,238,0.03)',
+  }
+
+  const LABEL: React.CSSProperties = {
+    fontFamily: "'Departure Mono', monospace",
+    fontSize: '0.55rem',
+    letterSpacing: '0.28em',
+    textTransform: 'uppercase',
+    color: 'rgba(34,211,238,0.35)',
+    marginBottom: '0.5rem',
+  }
+
+  const TITLE: React.CSSProperties = {
+    fontFamily: "'Departure Mono', monospace",
+    fontSize: '1.05rem',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: '#22d3ee',
+    textShadow: '0 0 24px rgba(34,211,238,0.55), 0 0 48px rgba(34,211,238,0.22)',
+    marginBottom: '1.4rem',
+    textAlign: 'center',
+  }
+
+  const GAP: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.55rem' }
 
   return (
-    <div className="relative flex h-full min-h-0 items-start justify-center overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
-      {/* Dynamic Background */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <motion.div
-          animate={{
-            x: [0, 50, -20, 0],
-            y: [0, -30, 40, 0],
-            scale: [1, 1.1, 0.9, 1]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-          className="absolute -left-16 top-8 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl"
-        />
-        <motion.div
-          animate={{
-            x: [0, -40, 30, 0],
-            y: [0, 50, -20, 0],
-            scale: [1, 1.2, 0.8, 1]
-          }}
-          transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
-          className="absolute right-[-3rem] top-1/4 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl"
-        />
-        <motion.div
-          animate={{
-            x: [0, 30, -50, 0],
-            y: [0, 40, -30, 0],
-            scale: [1, 0.9, 1.1, 1]
-          }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'linear', delay: 2 }}
-          className="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-primary/15 blur-3xl"
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.88),rgba(255,255,255,0.58))] dark:bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.14),transparent_34%),linear-gradient(135deg,rgba(9,14,26,0.92),rgba(7,11,20,0.7))]" />
+    <div style={{
+      position: 'relative',
+      width: '100%',
+      height: '100dvh',
+      background: '#050810',
+      overflow: 'hidden',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      {/* Matrix rain canvas */}
+      <canvas
+        ref={matrixRef}
+        style={{
+          position: 'absolute', inset: 0,
+          width: '100%', height: '100%',
+          pointerEvents: 'none', zIndex: 0,
+          opacity: 0.32,
+        }}
+      />
 
-        {/* Animated Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.4 }}
-          transition={{ duration: 2 }}
-          className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.09)_1px,transparent_1px)] bg-[size:32px_32px]"
-        />
+      {/* Dark vignette — darkens edges, leaves center bright */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: 'radial-gradient(ellipse 75% 75% at 50% 50%, transparent 25%, rgba(5,8,16,0.82) 100%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* Orbit rings — large, centered behind form */}
+      <div style={{
+        position: 'absolute',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 2,
+        pointerEvents: 'none',
+      }}>
+        <OrbitRings />
       </div>
 
-      <div className="relative grid w-full max-w-5xl gap-5 lg:grid-cols-[1.08fr_0.92fr]">
-        {/* Info Section */}
-        <motion.section
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="hidden self-start rounded-[32px] border border-sky-200/50 bg-slate-950 px-8 py-8 text-slate-50 shadow-2xl shadow-slate-950/25 lg:flex lg:min-h-[640px] lg:flex-col lg:gap-8"
-        >
-          <div className="space-y-6">
+      {/* Center radial glow */}
+      <div style={{
+        position: 'absolute',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 260, height: 260,
+        background: 'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(34,211,238,0.07) 0%, transparent 70%)',
+        borderRadius: '50%',
+        zIndex: 2,
+        pointerEvents: 'none',
+      }} />
+
+      {/* Form overlay — sits on top of orbits at center */}
+      <div style={{
+        position: 'relative',
+        zIndex: 3,
+        width: '100%',
+        maxWidth: 420,
+        padding: '0 1rem',
+        overflowY: 'auto',
+        maxHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}>
+        <div style={CARD}>
+          {/* Corner pixel decorations */}
+          <div style={{ position: 'absolute', top: -1,    left: -1,    width: 10, height: 10, borderTop: '2px solid rgba(34,211,238,0.7)', borderLeft: '2px solid rgba(34,211,238,0.7)' }} />
+          <div style={{ position: 'absolute', top: -1,    right: -1,   width: 10, height: 10, borderTop: '2px solid rgba(34,211,238,0.7)', borderRight: '2px solid rgba(34,211,238,0.7)' }} />
+          <div style={{ position: 'absolute', bottom: -1, left: -1,    width: 10, height: 10, borderBottom: '2px solid rgba(34,211,238,0.7)', borderLeft: '2px solid rgba(34,211,238,0.7)' }} />
+          <div style={{ position: 'absolute', bottom: -1, right: -1,   width: 10, height: 10, borderBottom: '2px solid rgba(34,211,238,0.7)', borderRight: '2px solid rgba(34,211,238,0.7)' }} />
+
+          {/* Brand label */}
+          <div style={LABEL}>// SKLINKCHAT</div>
+
+          {/* Mode title with glow */}
+          <AnimatePresence mode="wait">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-sky-100"
+              key={modeLabel}
+              initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }}
+              style={TITLE}
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              Secure onboarding
+              {modeLabel}
             </motion.div>
+          </AnimatePresence>
 
-            <div className="space-y-3">
-              <motion.h2
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="max-w-md text-3xl font-semibold tracking-tight text-white xl:text-[2.6rem]"
-              >
-                SKLinkChat
-              </motion.h2>
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="max-w-md text-sm leading-7 text-slate-300 xl:text-[15px]"
-              >
-                一个让你轻松匿名开口的随机聊天空间，适合想找人倾诉、结识陌生人，或只是随手聊一会儿的时刻。
-              </motion.p>
-            </div>
-
-            <div className="grid gap-3">
-              {[
-                {
-                  icon: MessageCircle,
-                  title: '匿名开聊',
-                  description: '不需要公开真实身份，进入页面后就能轻量开始一段对话。'
-                },
-                {
-                  icon: Sparkles,
-                  title: '即时连接',
-                  description: '完成登录后即可开始匹配，把等待和复杂步骤压到最低。'
-                },
-                {
-                  icon: ShieldCheck,
-                  title: '隐私优先',
-                  description: '把表达留给当下，把压力留在门外，让聊天回到轻松本身。'
-                }
-              ].map(({ icon: Icon, title, description }, index) => (
-                <motion.div
-                  key={title}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.45 + index * 0.06, duration: 0.35, ease: 'easeOut' }}
-                  whileHover={{
-                    scale: 1.02,
-                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                    transition: { duration: 0.12, ease: 'easeOut' }
-                  }}
-                  className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-400/18 text-sky-100">
-                      <Icon className="h-[18px] w-[18px]" />
-                    </div>
-                    <div>
-                      <p className="text-base font-medium text-white">{title}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-300">{description}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.66, duration: 0.3, ease: 'easeOut' }}
-              className="rounded-[26px] border border-white/10 bg-white/6 p-5 backdrop-blur-sm"
-            >
-              <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-slate-300">适合这些时刻</p>
-              <div className="mt-4 flex flex-wrap gap-2.5">
-                {['想找人倾诉', '随机认识新朋友', '深夜想聊一会', '碎片时间随手开聊'].map((item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-white/10 bg-white/8 px-3.5 py-2 text-[13px] text-slate-100"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        </motion.section>
-
-        {/* Form Section */}
-        <motion.section
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="relative flex flex-col rounded-[28px] border border-slate-800/70 bg-slate-950/70 p-5 text-slate-50 shadow-2xl shadow-slate-950/30 backdrop-blur-xl sm:p-7 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto"
-        >
-          {/* Mobile Info Banner */}
-          <div className="mb-7 rounded-[24px] border border-slate-800/80 bg-slate-900/85 p-4 text-slate-100 lg:hidden">
-            <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.12em] text-sky-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              Secure onboarding
-            </div>
-            <p className="mt-3 text-[22px] font-semibold leading-[1.25] tracking-[0.01em]">SKLinkChat</p>
-            <p className="mt-2 text-[14px] leading-[1.65] text-slate-300">
-              匿名、安全、即时的陌生人聊天平台，守护每个用户的隐私。
-            </p>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <motion.div
-              key={authMode}
-              initial={{ scale: 0.8, opacity: 0, rotate: -15 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400/16 via-cyan-300/12 to-slate-800 text-sky-200 shadow-inner shadow-white/5"
-            >
-              {authMode === 'register' && <MessageCircle className="h-5 w-5" />}
-              {authMode === 'login' && <LockKeyhole className="h-5 w-5" />}
-              {authMode === 'verify' && <MailCheck className="h-5 w-5" />}
-              {(authMode === 'forgot' || authMode === 'reset') && <KeyRound className="h-5 w-5" />}
-            </motion.div>
-            <div className="min-w-0">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={authTitle}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <h1 className="text-[20px] font-semibold leading-[1.25] tracking-[0.01em] text-slate-50 sm:text-[22px]">
-                    {authTitle}
-                  </h1>
-                  <p className="mt-1.5 text-[14px] leading-[1.65] text-slate-300">{authSubtitle}</p>
-                  {authMode === 'verify' && pendingVerificationEmail && (
-                    <p className="mt-1 text-[14px] leading-6 text-slate-400">{pendingVerificationEmail}</p>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-
+          {/* Tab bar — register / login */}
           {(authMode === 'register' || authMode === 'login') && (
-            <div className="relative mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-800/80 bg-slate-900/75 p-1.5">
-              <div
-                className="absolute inset-y-1.5 left-1.5 right-1.5 w-[calc(50%-1.5px)] pointer-events-none transition-transform duration-300 ease-out"
-                style={{ transform: `translateX(${authMode === 'login' ? '100%' : '0'})` }}
-              >
-                <div className="h-full w-full rounded-2xl bg-slate-800 shadow-sm shadow-black/20" />
-              </div>
-              <button
-                type="button"
-                className={cn(
-                  'relative z-10 h-11 rounded-2xl px-3 text-[15px] font-medium transition-colors',
-                  authMode === 'register' ? 'text-slate-50' : 'text-slate-400 hover:text-slate-50'
-                )}
-                onClick={() => switchAuthMode('register')}
-              >
-                注册
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  'relative z-10 h-11 rounded-2xl px-3 text-[15px] font-medium transition-colors',
-                  authMode === 'login' ? 'text-slate-50' : 'text-slate-400 hover:text-slate-50'
-                )}
-                onClick={() => switchAuthMode('login')}
-              >
-                登录
-              </button>
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr',
+              border: '1px solid rgba(34,211,238,0.18)',
+              marginBottom: '1.2rem',
+            }}>
+              {(['register', 'login'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => switchMode(m)}
+                  style={{
+                    fontFamily: "'Departure Mono', monospace",
+                    fontSize: '0.6rem',
+                    letterSpacing: '0.2em',
+                    textTransform: 'uppercase',
+                    padding: '0.62rem',
+                    border: 'none',
+                    borderRadius: 0,
+                    cursor: 'pointer',
+                    transition: 'all 0.14s',
+                    background: authMode === m ? 'rgba(34,211,238,0.08)' : 'transparent',
+                    color: authMode === m ? '#22d3ee' : 'rgba(212,216,224,0.32)',
+                    textShadow: authMode === m ? '0 0 10px rgba(34,211,238,0.5)' : 'none',
+                    borderBottom: authMode === m ? '1px solid rgba(34,211,238,0.7)' : '1px solid transparent',
+                  }}
+                >
+                  {m === 'register' ? '注 册' : '登 录'}
+                </button>
+              ))}
             </div>
           )}
 
-          <div className="flex-1">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={authMode}
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="mt-5 space-y-3"
-              >
-                {captchaError && (authMode === 'register' || authMode === 'login') && (
-                  <p className="text-[13px] leading-6 text-destructive">{captchaError}</p>
-                )}
+          {/* Back links */}
+          {(authMode === 'forgot' || authMode === 'reset') && (
+            <button
+              onClick={() => { switchMode('login'); if (authMode === 'reset') window.history.replaceState({}, '', '/') }}
+              style={{ fontFamily: "'Departure Mono', monospace", fontSize: '0.58rem', letterSpacing: '0.1em',
+                color: 'rgba(34,211,238,0.55)', background: 'none', border: 'none', cursor: 'pointer',
+                marginBottom: '1rem', textAlign: 'left', padding: 0 }}
+            >
+              ← 返回登录
+            </button>
+          )}
+          {authMode === 'verify' && (
+            <button
+              onClick={() => { setPendingVerificationEmail(null); switchMode('register') }}
+              style={{ fontFamily: "'Departure Mono', monospace", fontSize: '0.58rem', letterSpacing: '0.1em',
+                color: 'rgba(34,211,238,0.55)', background: 'none', border: 'none', cursor: 'pointer',
+                marginBottom: '1rem', textAlign: 'left', padding: 0 }}
+            >
+              ← 返回注册
+            </button>
+          )}
 
-                {authMode === 'forgot' && (
-                  <button
-                    type="button"
-                    className="text-[14px] text-primary hover:underline"
-                    onClick={() => switchAuthMode('login')}
-                  >
-                    &larr; 返回登录
+          {/* Forms */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={authMode}
+              initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.18 }}
+              style={GAP}
+            >
+              {/* REGISTER */}
+              {authMode === 'register' && (<>
+                <div>
+                  <PixelInput value={registerForm.email}
+                    onChange={e => setRegisterForm(p => ({ ...p, email: e.target.value }))}
+                    onBlur={() => markTouched('reg-email')}
+                    placeholder="邮箱地址"
+                    hasError={!!(touched['reg-email'] && validateEmail(registerForm.email))} />
+                  {touched['reg-email'] && validateEmail(registerForm.email) && <p style={ERR}>{validateEmail(registerForm.email)}</p>}
+                </div>
+                <div>
+                  <PixelInput value={registerForm.password} type="password"
+                    onChange={e => setRegisterForm(p => ({ ...p, password: e.target.value }))}
+                    onBlur={() => markTouched('reg-password')}
+                    placeholder="密码（至少 8 位）"
+                    hasError={!!(touched['reg-password'] && validatePassword(registerForm.password))} />
+                  {touched['reg-password'] && validatePassword(registerForm.password) && <p style={ERR}>{validatePassword(registerForm.password)}</p>}
+                </div>
+                <div>
+                  <PixelInput value={registerForm.displayName}
+                    onChange={e => setRegisterForm(p => ({ ...p, displayName: e.target.value }))}
+                    onBlur={() => markTouched('reg-name')}
+                    placeholder="用户名（唯一，不可重复）"
+                    hasError={!!(touched['reg-name'] && validateDisplayName(registerForm.displayName))} />
+                  {touched['reg-name'] && validateDisplayName(registerForm.displayName) && <p style={ERR}>{validateDisplayName(registerForm.displayName)}</p>}
+                </div>
+                <PixelInput value={registerForm.interests}
+                  onChange={e => setRegisterForm(p => ({ ...p, interests: e.target.value }))}
+                  placeholder="兴趣标签（逗号分隔，可选）" />
+                <GeeTestField ref={geetestRef} captchaId={activeCaptchaId}
+                  onValidateChange={p => { setCaptchaError(null); setCaptchaPayload(p) }}
+                  onError={setCaptchaError} />
+                {captchaError && <p style={ERR}>{captchaError}</p>}
+                <div style={{ marginTop: '0.35rem' }}>
+                  <PxBtn onClick={handleRegister} disabled={submitting}>
+                    {submitting ? '处理中...' : '注册并发送验证码'}
+                  </PxBtn>
+                </div>
+              </>)}
+
+              {/* LOGIN */}
+              {authMode === 'login' && (<>
+                <div>
+                  <PixelInput value={loginForm.email}
+                    onChange={e => setLoginForm(p => ({ ...p, email: e.target.value }))}
+                    onBlur={() => markTouched('login-email')}
+                    placeholder="邮箱地址"
+                    hasError={!!(touched['login-email'] && validateEmail(loginForm.email))} />
+                  {touched['login-email'] && validateEmail(loginForm.email) && <p style={ERR}>{validateEmail(loginForm.email)}</p>}
+                </div>
+                <PixelInput value={loginForm.password} type="password"
+                  onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))}
+                  placeholder="密码" />
+                <GeeTestField ref={geetestRef} captchaId={activeCaptchaId}
+                  onValidateChange={p => { setCaptchaError(null); setCaptchaPayload(p) }}
+                  onError={setCaptchaError} />
+                {captchaError && <p style={ERR}>{captchaError}</p>}
+                <div style={{ marginTop: '0.35rem' }}>
+                  <PxBtn onClick={handleLogin} disabled={submitting}>
+                    {submitting ? '处理中...' : '登 录'}
+                  </PxBtn>
+                </div>
+                <div style={{ textAlign: 'center', marginTop: '0.2rem' }}>
+                  <button onClick={() => { switchMode('forgot'); setForgotEmail(loginForm.email) }}
+                    style={{ fontFamily: "'Departure Mono', monospace", fontSize: '0.56rem', letterSpacing: '0.1em',
+                      color: 'rgba(212,216,224,0.28)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    忘记密码？
                   </button>
-                )}
+                </div>
+              </>)}
 
-                {authMode === 'reset' && (
-                  <button
-                    type="button"
-                    className="text-[14px] text-primary hover:underline"
-                    onClick={() => {
-                      switchAuthMode('login')
-                      window.history.replaceState({}, '', '/')
-                    }}
-                  >
-                    &larr; 返回登录
+              {/* VERIFY */}
+              {authMode === 'verify' && (<>
+                <div style={{
+                  fontFamily: "'Departure Mono', monospace", fontSize: '0.6rem', letterSpacing: '0.07em',
+                  color: 'rgba(212,216,224,0.5)', lineHeight: 1.7,
+                  border: '1px solid rgba(34,211,238,0.12)', padding: '0.72rem',
+                  marginBottom: '0.2rem',
+                }}>
+                  {pendingVerificationEmail && <span style={{ color: 'rgba(34,211,238,0.7)', display: 'block', marginBottom: '0.3rem' }}>{pendingVerificationEmail}</span>}
+                  请输入 6 位验证码（15 分钟内有效）
+                </div>
+                <PixelInput value={verifyCode_}
+                  onChange={e => setVerifyCode_(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="请输入 6 位验证码"
+                  maxLength={6} inputMode="numeric" autoComplete="one-time-code" />
+                <div style={{ marginTop: '0.35rem' }}>
+                  <PxBtn onClick={handleVerify} disabled={submitting || verifyCode_.length !== 6}>
+                    {submitting ? '验证中...' : '验 证'}
+                  </PxBtn>
+                </div>
+                <div style={{ textAlign: 'center', marginTop: '0.2rem' }}>
+                  <button onClick={handleResend} disabled={resendCooldown > 0}
+                    style={{ fontFamily: "'Departure Mono', monospace", fontSize: '0.56rem', letterSpacing: '0.08em',
+                      color: resendCooldown > 0 ? 'rgba(212,216,224,0.2)' : 'rgba(34,211,238,0.48)',
+                      background: 'none', border: 'none', cursor: resendCooldown > 0 ? 'default' : 'pointer', padding: 0 }}>
+                    {resendCooldown > 0 ? `${resendCooldown}s 后可重新发送` : '重新发送验证码'}
                   </button>
-                )}
+                </div>
+              </>)}
 
-                {authMode === 'verify' && (
-                  <button
-                    type="button"
-                    className="text-[14px] text-primary hover:underline"
-                    onClick={() => {
-                      setPendingVerificationEmail(null)
-                      switchAuthMode('register')
-                    }}
-                  >
-                    &larr; 返回注册
-                  </button>
-                )}
+              {/* FORGOT */}
+              {authMode === 'forgot' && (<>
+                <div>
+                  <PixelInput value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    onBlur={() => markTouched('forgot-email')}
+                    placeholder="注册时使用的邮箱地址"
+                    hasError={!!(touched['forgot-email'] && validateEmail(forgotEmail))} />
+                  {touched['forgot-email'] && validateEmail(forgotEmail) && <p style={ERR}>{validateEmail(forgotEmail)}</p>}
+                </div>
+                <div style={{ marginTop: '0.35rem' }}>
+                  <PxBtn onClick={handleForgot} disabled={submitting}>
+                    {submitting ? '发送中...' : '发送重置链接'}
+                  </PxBtn>
+                </div>
+              </>)}
 
-                {authMode === 'register' && (
-                  <div className="space-y-3">
-                    <div>
-                      <Input
-                        value={registerForm.email}
-                        onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
-                        onBlur={() => markTouched('reg-email')}
-                        placeholder="邮箱地址"
-                        className={cn(
-                          authInputClassName,
-                          touched['reg-email'] &&
-                            validateEmail(registerForm.email) &&
-                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
-                        )}
-                      />
-                      {touched['reg-email'] && validateEmail(registerForm.email) && (
-                        <p className="mt-1 text-xs text-destructive">{validateEmail(registerForm.email)}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Input
-                        type="password"
-                        value={registerForm.password}
-                        onChange={(event) =>
-                          setRegisterForm((current) => ({ ...current, password: event.target.value }))
-                        }
-                        onBlur={() => markTouched('reg-password')}
-                        placeholder="密码（至少 8 位）"
-                        className={cn(
-                          authInputClassName,
-                          touched['reg-password'] &&
-                            validatePassword(registerForm.password) &&
-                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
-                        )}
-                      />
-                      {touched['reg-password'] && validatePassword(registerForm.password) && (
-                        <p className="mt-1 text-xs text-destructive">{validatePassword(registerForm.password)}</p>
-                      )}
-                    </div>
-                    <Input
-                      value={registerForm.displayName}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({ ...current, displayName: event.target.value }))
-                      }
-                      placeholder="聊天展示名"
-                      className={authInputClassName}
-                    />
-                    <Input
-                      value={registerForm.interests}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({ ...current, interests: event.target.value }))
-                      }
-                      placeholder="兴趣标签（逗号分隔，可选）"
-                      className={authInputClassName}
-                    />
-                    <GeeTestField
-                      ref={geetestRef}
-                      captchaId={activeCaptchaId}
-                      onValidateChange={(payload) => {
-                        setCaptchaError(null)
-                        setCaptchaPayload(payload)
-                      }}
-                      onError={setCaptchaError}
-                    />
-                    {captchaError && <p className="text-[13px] leading-6 text-destructive">{captchaError}</p>}
-                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleRegister}
-                        disabled={submitting}
-                        className="h-14 w-full rounded-2xl bg-gradient-to-r from-primary via-sky-500 to-cyan-500 text-[16px] font-semibold shadow-md shadow-sky-500/10 transition-all hover:shadow-sky-500/15 active:opacity-90"
-                      >
-                        注册并发送验证码
-                      </Button>
-                    </motion.div>
-                  </div>
-                )}
-
-                {authMode === 'login' && (
-                  <div className="space-y-3">
-                    <div>
-                      <Input
-                        value={loginForm.email}
-                        onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
-                        onBlur={() => markTouched('login-email')}
-                        placeholder="邮箱地址"
-                        className={cn(
-                          authInputClassName,
-                          touched['login-email'] &&
-                            validateEmail(loginForm.email) &&
-                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
-                        )}
-                      />
-                      {touched['login-email'] && validateEmail(loginForm.email) && (
-                        <p className="mt-1 text-xs text-destructive">{validateEmail(loginForm.email)}</p>
-                      )}
-                    </div>
-                    <Input
-                      type="password"
-                      value={loginForm.password}
-                      onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
-                      placeholder="密码"
-                      className={authInputClassName}
-                    />
-                    <GeeTestField
-                      ref={geetestRef}
-                      captchaId={activeCaptchaId}
-                      onValidateChange={(payload) => {
-                        setCaptchaError(null)
-                        setCaptchaPayload(payload)
-                      }}
-                      onError={setCaptchaError}
-                    />
-                    {captchaError && <p className="text-[13px] leading-6 text-destructive">{captchaError}</p>}
-                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleLogin}
-                        disabled={submitting}
-                        className="h-14 w-full rounded-2xl text-[16px] font-semibold shadow-sm transition-all"
-                      >
-                        登录
-                      </Button>
-                    </motion.div>
-                    <div className="text-center">
-                      <button
-                        type="button"
-                        className="text-[14px] text-muted-foreground transition-colors hover:text-primary hover:underline"
-                        onClick={() => {
-                          switchAuthMode('forgot')
-                          setForgotEmail(loginForm.email)
-                        }}
-                      >
-                        忘记密码？
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {authMode === 'verify' && (
-                  <div className="space-y-3">
-                    <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-4 text-[14px] leading-[1.65] text-slate-300">
-                      请输入邮箱中收到的 6 位验证码
-                      <br />
-                      验证码 15 分钟内有效，错误过多需重新获取
-                    </div>
-                    <motion.div
-                      initial={{ scale: 0.95, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                    >
-                      <Input
-                        value={verifyCode_}
-                        onChange={(event) => {
-                          const val = event.target.value.replace(/\D/g, '').slice(0, 6)
-                          setVerifyCode_(val)
-                        }}
-                        placeholder="请输入 6 位验证码"
-                        className={cn(
-                          authInputClassName,
-                          'text-center tracking-[0.02em] placeholder:tracking-[0.02em]'
-                        )}
-                        maxLength={6}
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                      />
-                    </motion.div>
-                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleVerifyCode}
-                        disabled={submitting || verifyCode_.length !== 6}
-                        className="h-14 w-full rounded-2xl bg-gradient-to-r from-primary via-sky-500 to-cyan-500 text-[16px] font-semibold shadow-md shadow-sky-500/10 transition-all"
-                      >
-                        验证
-                      </Button>
-                    </motion.div>
-                    <div className="text-center">
-                      <button
-                        type="button"
-                        className={cn(
-                          'text-[13px] transition-colors',
-                          resendCooldown > 0
-                            ? 'cursor-not-allowed text-muted-foreground/50'
-                            : 'text-muted-foreground hover:text-primary hover:underline'
-                        )}
-                        onClick={handleResendCode}
-                        disabled={resendCooldown > 0}
-                      >
-                        {resendCooldown > 0 ? `${resendCooldown}s 后可重新发送` : '重新发送验证码'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {authMode === 'forgot' && (
-                  <div className="space-y-3">
-                    <div>
-                      <Input
-                        value={forgotEmail}
-                        onChange={(event) => setForgotEmail(event.target.value)}
-                        onBlur={() => markTouched('forgot-email')}
-                        placeholder="注册时使用的邮箱地址"
-                        className={cn(
-                          authInputClassName,
-                          touched['forgot-email'] &&
-                            validateEmail(forgotEmail) &&
-                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
-                        )}
-                      />
-                      {touched['forgot-email'] && validateEmail(forgotEmail) && (
-                        <p className="mt-1 text-xs text-destructive">{validateEmail(forgotEmail)}</p>
-                      )}
-                    </div>
-                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleForgotPassword}
-                        disabled={submitting}
-                        className="h-14 w-full rounded-2xl text-[16px] font-semibold shadow-sm transition-all"
-                      >
-                        发送重置链接
-                      </Button>
-                    </motion.div>
-                  </div>
-                )}
-
-                {authMode === 'reset' && (
-                  <div className="space-y-3">
-                    <div>
-                      <Input
-                        type="password"
-                        value={resetForm.password}
-                        onChange={(event) => setResetForm((current) => ({ ...current, password: event.target.value }))}
-                        onBlur={() => markTouched('reset-password')}
-                        placeholder="新密码（至少 8 位）"
-                        className={cn(
-                          authInputClassName,
-                          touched['reset-password'] &&
-                            validatePassword(resetForm.password) &&
-                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
-                        )}
-                      />
-                      {touched['reset-password'] && validatePassword(resetForm.password) && (
-                        <p className="mt-1 text-xs text-destructive">{validatePassword(resetForm.password)}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Input
-                        type="password"
-                        value={resetForm.confirm}
-                        onChange={(event) => setResetForm((current) => ({ ...current, confirm: event.target.value }))}
-                        onBlur={() => markTouched('reset-confirm')}
-                        placeholder="确认新密码"
-                        className={cn(
-                          authInputClassName,
-                          touched['reset-confirm'] &&
-                            resetForm.password !== resetForm.confirm &&
-                            'border-destructive/80 focus-visible:border-destructive focus-visible:ring-destructive/15'
-                        )}
-                      />
-                      {touched['reset-confirm'] && resetForm.password !== resetForm.confirm && (
-                        <p className="mt-1 text-xs text-destructive">两次密码不一致</p>
-                      )}
-                    </div>
-                    <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleResetPassword}
-                        disabled={submitting}
-                        className="h-14 w-full rounded-2xl text-[16px] font-semibold shadow-sm transition-all"
-                      >
-                        重置密码
-                      </Button>
-                    </motion.div>
-                  </div>
-                )}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </motion.section>
+              {/* RESET */}
+              {authMode === 'reset' && (<>
+                <div>
+                  <PixelInput value={resetForm.password} type="password"
+                    onChange={e => setResetForm(p => ({ ...p, password: e.target.value }))}
+                    onBlur={() => markTouched('reset-password')}
+                    placeholder="新密码（至少 8 位）"
+                    hasError={!!(touched['reset-password'] && validatePassword(resetForm.password))} />
+                  {touched['reset-password'] && validatePassword(resetForm.password) && <p style={ERR}>{validatePassword(resetForm.password)}</p>}
+                </div>
+                <div>
+                  <PixelInput value={resetForm.confirm} type="password"
+                    onChange={e => setResetForm(p => ({ ...p, confirm: e.target.value }))}
+                    onBlur={() => markTouched('reset-confirm')}
+                    placeholder="确认新密码"
+                    hasError={!!(touched['reset-confirm'] && resetForm.password !== resetForm.confirm)} />
+                  {touched['reset-confirm'] && resetForm.password !== resetForm.confirm && <p style={ERR}>两次密码不一致</p>}
+                </div>
+                <div style={{ marginTop: '0.35rem' }}>
+                  <PxBtn onClick={handleReset} disabled={submitting}>
+                    {submitting ? '重置中...' : '确认重置密码'}
+                  </PxBtn>
+                </div>
+              </>)}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   )

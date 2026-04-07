@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.auth.service import normalize_display_name, normalize_gender, normalize_interests
+from app.application.auth.service import normalize_gender, normalize_interests
 from app.infrastructure.postgres.repositories import AccountRepository
 from app.shared.errors import AppError
 
@@ -29,13 +29,11 @@ class AccountService:
         self,
         *,
         account_id: str,
-        display_name: str,
         interests: list[str],
         gender: str,
     ) -> AccountProfileView:
         account = await self._account_repository.update_profile(
             account_id=account_id,
-            display_name=normalize_display_name(display_name),
             interests=normalize_interests(interests),
             gender=normalize_gender(gender),
         )
