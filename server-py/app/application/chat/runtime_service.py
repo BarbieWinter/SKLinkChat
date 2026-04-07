@@ -84,15 +84,18 @@ class ChatRuntimeService:
         self,
         session_id: str,
         name: str | None = None,
+        gender: str | None = None,
         short_id: str | None = None,
     ) -> ChatSession:
         async with self._lock:
             session = await self._session_repository.load_or_create_session(session_id)
             if name is not None:
                 session.name = await self._normalize_name(name, session_id=session_id, fallback=session.name)
+            if gender is not None:
+                session.gender = gender
             if short_id is not None:
                 session.short_id = short_id
-            if name is not None or short_id is not None:
+            if name is not None or gender is not None or short_id is not None:
                 await self._session_repository.save_session(session)
             return session
 

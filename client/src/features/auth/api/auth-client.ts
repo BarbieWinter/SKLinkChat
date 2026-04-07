@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/shared/config/runtime'
+import type { Gender } from '@/shared/types'
 
 export type AuthSessionPayload = {
   authenticated: boolean
@@ -6,6 +7,7 @@ export type AuthSessionPayload = {
   display_name: string | null
   short_id: string | null
   interests: string[]
+  gender: Gender
   is_admin: boolean
   chat_access_restricted: boolean
 }
@@ -89,12 +91,12 @@ export const resendVerificationCode = (payload: { email: string }) =>
   })
 
 export const getAccountProfile = () =>
-  requestJson<{ display_name: string; interests: string[] }>('/api/account/profile', {
+  requestJson<{ display_name: string; interests: string[]; gender: Gender }>('/api/account/profile', {
     method: 'GET'
   })
 
-export const updateAccountProfile = (payload: { display_name: string; interests: string[] }) =>
-  requestJson<{ display_name: string; interests: string[] }>('/api/account/profile', {
+export const updateAccountProfile = (payload: { display_name: string; interests: string[]; gender: Gender }) =>
+  requestJson<{ display_name: string; interests: string[]; gender: Gender }>('/api/account/profile', {
     method: 'PATCH',
     body: JSON.stringify(payload)
   })

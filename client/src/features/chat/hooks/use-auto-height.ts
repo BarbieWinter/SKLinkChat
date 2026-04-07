@@ -9,11 +9,7 @@ const MIN_HEIGHT = 44 // min-h-[44px] from chat-panel
 const MAX_HEIGHT_SM = 112 // max-h-28 = 7rem = 112px
 const MAX_HEIGHT_LG = 128 // sm:max-h-32 = 8rem = 128px
 
-export function useAutoHeight(
-  text: string,
-  textareaWidth: number,
-  isSmallScreen: boolean,
-): number {
+export function useAutoHeight(text: string, textareaWidth: number, isSmallScreen: boolean): number {
   return useMemo(() => {
     if (textareaWidth <= 0) return MIN_HEIGHT
     // Add vertical padding: py-3 = 12px per side = 24px total

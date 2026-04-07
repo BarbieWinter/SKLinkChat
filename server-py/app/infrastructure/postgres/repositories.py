@@ -48,6 +48,7 @@ class AccountRepository:
         password_hash: str,
         display_name: str,
         interests: Sequence[str],
+        gender: str = "unknown",
     ) -> Account:
         for _attempt in range(20):
             async with self._session_factory() as session:
@@ -57,6 +58,7 @@ class AccountRepository:
                     password_hash=password_hash,
                     display_name=display_name,
                     short_id=_generate_short_id(),
+                    gender=gender,
                 )
                 session.add(account)
                 try:
@@ -73,13 +75,22 @@ class AccountRepository:
                 return account
         raise RuntimeError("unable to allocate unique account short_id")
 
-    async def update_profile(self, *, account_id: str, display_name: str, interests: Sequence[str]) -> Account:
+    async def update_profile(
+        self,
+        *,
+        account_id: str,
+        display_name: str,
+        interests: Sequence[str],
+        gender: str | None = None,
+    ) -> Account:
         async with self._session_factory() as session:
             account = await self._get_by_id(session, account_id)
             if account is None:
                 raise LookupError("account not found")
 
             account.display_name = display_name
+            if gender is not None:
+                account.gender = gender
             account.updated_at = utc_now()
             await session.execute(delete(AccountInterest).where(AccountInterest.account_id == account_id))
             for interest in interests:

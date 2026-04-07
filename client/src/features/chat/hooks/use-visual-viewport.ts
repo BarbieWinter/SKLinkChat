@@ -26,7 +26,7 @@ export function useVisualViewport(): VisualViewportState {
   const [state, setState] = useState<VisualViewportState>(() => ({
     height: typeof window !== 'undefined' ? window.innerHeight : 0,
     keyboardOpen: false,
-    keyboardHeight: 0,
+    keyboardHeight: 0
   }))
 
   // Store the "full" height (no keyboard) so we can detect shrinkage.

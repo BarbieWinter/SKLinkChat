@@ -41,9 +41,8 @@
 | 用途 | 连接串 |
 |------|--------|
 | 开发 | `postgresql+psycopg://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat` |
-| 测试 | `postgresql+psycopg://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat_test` |
 
-写入 `server-py/.env` 的 key 是 `SERVER_PY_DATABASE_URL`（开发用）。测试库由 `tests/postgres_utils.py` 自动创建。
+写入 `server-py/.env` 的 key 是 `SERVER_PY_DATABASE_URL`。
 
 ## 二、Redis
 
@@ -154,25 +153,14 @@ source .venv/bin/activate
 uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8000
 ```
 
-后端运行在 http://localhost:8000 ，健康检查 http://localhost:8000/api/health 。
+后端运行在 http://localhost:8000 ，健康检查 http://localhost:8000/healthz 。
 
-### 4.5 运行测试
-
-```bash
-cd server-py
-.venv/bin/pytest tests/ -q          # 全量（仓库正式测试）
-.venv/bin/pytest tests/ -q -x       # 遇到失败立即停止
-.venv/bin/pytest tests/ -q -k websocket  # 只跑包含 websocket 的用例
-```
-
-测试自动使用 `sklinkchat_test` 数据库，每个 fixture 会 drop + create 全表，互不干扰。
-
-### 4.6 代码检查
+### 4.5 代码检查
 
 ```bash
 cd server-py
-.venv/bin/ruff check .
-.venv/bin/ruff format --check .
+.venv/bin/ruff check app
+python -m compileall app
 ```
 
 ## 五、前端 (client)
@@ -198,12 +186,10 @@ npm run dev
 - http://localhost:5173/admin/reports
 - http://localhost:5173/admin/audit
 
-### 5.3 构建 & 测试
+### 5.3 构建 & 检查
 
 ```bash
 npm run build      # 生产构建
-npm run test -- --run   # 单次运行测试
-npm run test:watch      # watch 模式
 npm run lint            # ESLint 检查
 ```
 

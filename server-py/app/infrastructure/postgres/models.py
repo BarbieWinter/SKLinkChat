@@ -48,6 +48,7 @@ class Account(Base, TimestampMixin):
             "AND trim(chat_access_restriction_reason) <> ''))",
             name="ck_accounts_chat_access_restriction_consistency",
         ),
+        CheckConstraint("gender IN ('male', 'female', 'unknown')", name="ck_accounts_gender"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -56,6 +57,7 @@ class Account(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     display_name: Mapped[str] = mapped_column(String(80), nullable=False)
     short_id: Mapped[str] = mapped_column(String(6), nullable=False)
+    gender: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown", server_default="unknown")
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     chat_access_restricted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

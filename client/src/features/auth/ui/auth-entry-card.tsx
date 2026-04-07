@@ -425,9 +425,9 @@ export const AuthEntryCard = () => {
               <motion.h2
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="max-w-md text-3xl font-semibold tracking-tight text-white xl:text-[2.6rem]"
-            >
+                transition={{ delay: 0.4 }}
+                className="max-w-md text-3xl font-semibold tracking-tight text-white xl:text-[2.6rem]"
+              >
                 SKLinkChat
               </motion.h2>
               <motion.p
@@ -502,8 +502,7 @@ export const AuthEntryCard = () => {
               </div>
             </motion.div>
           </div>
-
-	        </motion.section>
+        </motion.section>
 
         {/* Form Section */}
         <motion.section

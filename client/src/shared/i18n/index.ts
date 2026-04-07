@@ -41,6 +41,11 @@ type TranslationKey =
   | 'settings.namePlaceholder'
   | 'settings.keywordsPlaceholder'
   | 'settings.keywordsHint'
+  | 'settings.genderLabel'
+  | 'settings.genderHint'
+  | 'settings.genderUnknown'
+  | 'settings.genderMale'
+  | 'settings.genderFemale'
   | 'settings.save'
   | 'users.online'
   | 'users.unavailable'
@@ -98,6 +103,11 @@ const translations: Record<AppLanguage, Record<TranslationKey, string>> = {
     'settings.namePlaceholder': '你希望别人怎么称呼你？',
     'settings.keywordsPlaceholder': '想聊的话题（用逗号分隔）',
     'settings.keywordsHint': '如果什么都愿意聊，可以留空。',
+    'settings.genderLabel': '性别标识',
+    'settings.genderHint': '用于资料区展示像素小人标识，未设置时显示中性灰色。',
+    'settings.genderUnknown': '未设置',
+    'settings.genderMale': '男生',
+    'settings.genderFemale': '女生',
     'settings.save': '保存更改',
     'users.online': '在线用户',
     'users.unavailable': '在线人数暂不可用',

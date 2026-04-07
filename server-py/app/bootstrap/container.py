@@ -37,6 +37,7 @@ from app.application.platform.use_cases import (
 from app.application.retention.service import RetentionService
 from app.infrastructure.email_sender import build_email_sender
 from app.infrastructure.feature_flags import NoOpFeatureFlagEvaluator
+from app.infrastructure.geetest_verifier import build_geetest_verifier
 from app.infrastructure.jobs.inline_job_dispatcher import InlineJobDispatcher
 from app.infrastructure.moderation_gateway import NoOpModerationGateway
 from app.infrastructure.observability.database_audit_sink import DatabaseAuditSink
@@ -58,7 +59,6 @@ from app.infrastructure.redis.presence_repository import RedisPresenceRepository
 from app.infrastructure.redis.readiness_probe import RedisReadinessProbe
 from app.infrastructure.redis.redis_event_bus import RedisEventBus
 from app.infrastructure.redis.session_repository import RedisSessionRepository
-from app.infrastructure.geetest_verifier import build_geetest_verifier
 from app.shared.config import Settings
 
 

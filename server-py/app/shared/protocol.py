@@ -27,6 +27,7 @@ class ProtocolEnvelope(TypedDict):
 class ChatUser(TypedDict, total=False):
     id: str
     name: str
+    gender: str
     short_id: str
     state: UserState
     is_typing: bool

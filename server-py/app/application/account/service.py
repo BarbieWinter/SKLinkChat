@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.auth.service import normalize_display_name, normalize_interests
+from app.application.auth.service import normalize_display_name, normalize_gender, normalize_interests
 from app.infrastructure.postgres.repositories import AccountRepository
 from app.shared.errors import AppError
 
@@ -11,6 +11,7 @@ from app.shared.errors import AppError
 class AccountProfileView:
     display_name: str
     interests: list[str]
+    gender: str
 
 
 class AccountService:
@@ -22,13 +23,21 @@ class AccountService:
         if account is None:
             raise AppError(message="Authentication required", code="UNAUTHENTICATED", status_code=401)
         interests = await self._account_repository.list_interests(account.id)
-        return AccountProfileView(display_name=account.display_name, interests=interests)
+        return AccountProfileView(display_name=account.display_name, interests=interests, gender=account.gender)
 
-    async def update_profile(self, *, account_id: str, display_name: str, interests: list[str]) -> AccountProfileView:
+    async def update_profile(
+        self,
+        *,
+        account_id: str,
+        display_name: str,
+        interests: list[str],
+        gender: str,
+    ) -> AccountProfileView:
         account = await self._account_repository.update_profile(
             account_id=account_id,
             display_name=normalize_display_name(display_name),
             interests=normalize_interests(interests),
+            gender=normalize_gender(gender),
         )
         interests = await self._account_repository.list_interests(account.id)
-        return AccountProfileView(display_name=account.display_name, interests=interests)
+        return AccountProfileView(display_name=account.display_name, interests=interests, gender=account.gender)

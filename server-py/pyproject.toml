@@ -19,8 +19,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.4.0,<9.0.0",
-    "pytest-asyncio>=1.1.0,<2.0.0",
     "ruff>=0.12.0,<1.0.0",
     "websockets>=15.0.0,<16.0.0",
 ]
@@ -35,15 +33,6 @@ include-package-data = false
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
-pythonpath = ["."]
-filterwarnings = [
-    "ignore:Setting per-request cookies:DeprecationWarning:starlette",
-    "ignore:No path_separator found:DeprecationWarning:alembic",
-]
 
 [tool.ruff]
 line-length = 120

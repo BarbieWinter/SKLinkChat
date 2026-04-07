@@ -4,13 +4,7 @@
  * Uses @chenglou/pretext to measure text dimensions without DOM reflow,
  * enabling tight bubble widths and precomputed heights for virtualization.
  */
-import {
-  layout,
-  prepare,
-  prepareWithSegments,
-  walkLineRanges,
-  type PreparedTextWithSegments,
-} from '@chenglou/pretext'
+import { layout, prepare, prepareWithSegments, walkLineRanges, type PreparedTextWithSegments } from '@chenglou/pretext'
 
 // ── Font & layout constants (synced with Tailwind / chat-panel CSS) ──
 
@@ -69,7 +63,7 @@ export function prepareBubble(text: string, isSmall = true): PreparedTextWithSeg
 export function measureBubble(
   prepared: PreparedTextWithSegments,
   containerWidth: number,
-  isSmall = true,
+  isSmall = true
 ): BubbleMeasurement {
   const lineHeight = getBubbleLineHeight(isSmall)
   const contentMaxWidth = Math.max(1, containerWidth - BUBBLE_PADDING_H * 2)
@@ -81,7 +75,7 @@ export function measureBubble(
   return {
     width: Math.ceil(maxLineWidth) + BUBBLE_PADDING_H * 2,
     height: result.height + BUBBLE_PADDING_V * 2,
-    lineCount: result.lineCount,
+    lineCount: result.lineCount
   }
 }
 
@@ -93,7 +87,7 @@ export function measureBubble(
 export function getTightBubbleWidth(
   prepared: PreparedTextWithSegments,
   containerMaxWidth: number,
-  isSmall = true,
+  isSmall = true
 ): number {
   const lineHeight = getBubbleLineHeight(isSmall)
   const contentMaxWidth = Math.max(1, containerMaxWidth - BUBBLE_PADDING_H * 2)
@@ -126,11 +120,7 @@ export function getTightBubbleWidth(
  * Get the full bubble height at a given container width.
  * Used for virtual scrolling height pre-calculation.
  */
-export function getBubbleHeight(
-  prepared: PreparedTextWithSegments,
-  containerMaxWidth: number,
-  isSmall = true,
-): number {
+export function getBubbleHeight(prepared: PreparedTextWithSegments, containerMaxWidth: number, isSmall = true): number {
   const lineHeight = getBubbleLineHeight(isSmall)
   const contentMaxWidth = Math.max(1, containerMaxWidth - BUBBLE_PADDING_H * 2)
   return layout(prepared, contentMaxWidth, lineHeight).height + BUBBLE_PADDING_V * 2

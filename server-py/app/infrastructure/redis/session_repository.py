@@ -84,6 +84,7 @@ class RedisSessionRepository:
         return ChatSession(
             session_id=payload["session_id"],
             name=payload["name"],
+            gender=payload.get("gender", "unknown"),
             short_id=payload.get("short_id"),
             state=UserState(payload["state"]),
             partner_id=payload.get("partner_id"),
@@ -96,6 +97,7 @@ class RedisSessionRepository:
         payload = {
             "session_id": session.session_id,
             "name": session.name,
+            "gender": session.gender,
             "short_id": session.short_id,
             "state": session.state.value,
             "partner_id": session.partner_id,

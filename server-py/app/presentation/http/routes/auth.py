@@ -5,8 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app.application.platform.services import GeeTestCaptchaPayload
 from app.application.auth.service import AuthTokenBundle, RegistrationResult
+from app.application.platform.services import GeeTestCaptchaPayload
 from app.bootstrap.container import ApplicationContainer
 from app.presentation.http.dependencies import CurrentAuthDep, get_container
 
@@ -81,6 +81,7 @@ def _session_dict(session_view) -> dict[str, object]:
         "display_name": session_view.display_name,
         "short_id": session_view.short_id,
         "interests": session_view.interests or [],
+        "gender": session_view.gender,
         "is_admin": session_view.is_admin,
         "chat_access_restricted": session_view.chat_access_restricted,
     }

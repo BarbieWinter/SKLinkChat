@@ -13,6 +13,7 @@ import { useI18n } from '@/shared/i18n/use-i18n'
 import { UserState } from '@/shared/types'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { PixelGenderIcon } from '@/shared/ui/pixel-gender-icon'
 
 const ChatWorkspaceSidebar = ({
   compact,
@@ -64,7 +65,10 @@ const ChatWorkspaceSidebar = ({
         </div>
 
         <div className="mt-4 flex flex-col">
-          <p className="text-base font-bold text-foreground">{me?.name ?? authSession.display_name ?? '-'}</p>
+          <div className="flex items-center gap-2">
+            <PixelGenderIcon gender={authSession.gender} size={20} />
+            <p className="text-base font-bold text-foreground">{me?.name ?? authSession.display_name ?? '-'}</p>
+          </div>
           <p className="text-xs text-muted-foreground font-medium">
             {authSession.short_id ? `ID: ${authSession.short_id}` : 'ID: -'}
           </p>
@@ -79,10 +83,7 @@ const ChatWorkspaceSidebar = ({
                 transition={{ delay: 0.2 + idx * 0.05 }}
                 key={keyword}
               >
-                <Badge
-                  variant="outline"
-                  className="rounded border-primary/20 bg-primary/5 text-primary text-[11px]"
-                >
+                <Badge variant="outline" className="rounded border-primary/20 bg-primary/5 text-primary text-[11px]">
                   {keyword}
                 </Badge>
               </motion.div>

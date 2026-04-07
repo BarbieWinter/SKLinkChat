@@ -14,6 +14,7 @@ import {
   verifyEmailCode
 } from '@/features/auth/api/auth-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
+import type { Gender } from '@/shared/types'
 
 type AuthStatus = 'loading' | 'ready'
 type LoginResult = 'authenticated' | 'verification_required'
@@ -33,7 +34,7 @@ type AuthContextValue = {
   logout: () => Promise<void>
   verifyCode: (email: string, code: string) => Promise<void>
   resendCode: (payload: { email: string }) => Promise<void>
-  syncProfile: (payload: { displayName: string; interests: string[] }) => Promise<void>
+  syncProfile: (payload: { displayName: string; interests: string[]; gender: Gender }) => Promise<void>
   refreshSession: () => Promise<void>
   setPendingVerificationEmail: (email: string | null) => void
 }
@@ -44,6 +45,7 @@ const EMPTY_AUTH_SESSION: AuthSessionPayload = {
   display_name: null,
   short_id: null,
   interests: [],
+  gender: 'unknown',
   is_admin: false,
   chat_access_restricted: false
 }
@@ -63,11 +65,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
 
-  const applySession = useCallback((nextSession: AuthSessionPayload) => {
-    setAuthSession(nextSession)
-    setDisplayName(nextSession.display_name ?? '')
-    saveSettings(nextSession.interests ?? [])
-  }, [saveSettings, setDisplayName])
+  const applySession = useCallback(
+    (nextSession: AuthSessionPayload) => {
+      setAuthSession(nextSession)
+      setDisplayName(nextSession.display_name ?? '')
+      saveSettings(nextSession.interests ?? [])
+    },
+    [saveSettings, setDisplayName]
+  )
 
   const refreshSession = useCallback(async () => {
     try {
@@ -145,17 +150,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       resendCode: async ({ email }) => {
         await resendVerificationCode({ email })
       },
-      syncProfile: async ({ displayName, interests }) => {
+      syncProfile: async ({ displayName, interests, gender }) => {
         const nextProfile = await updateAccountProfile({
           display_name: displayName,
-          interests
+          interests,
+          gender
         })
         setDisplayName(nextProfile.display_name)
         saveSettings(nextProfile.interests)
         setAuthSession((currentSession) => ({
           ...currentSession,
           display_name: nextProfile.display_name,
-          interests: nextProfile.interests
+          interests: nextProfile.interests,
+          gender: nextProfile.gender
         }))
       },
       refreshSession,

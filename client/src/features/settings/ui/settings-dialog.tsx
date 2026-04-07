@@ -12,6 +12,7 @@ import { useAppStore } from '@/app/store'
 import { useAuth } from '@/features/auth/auth-provider'
 import { useChat } from '@/features/chat/chat-provider'
 import { useI18n } from '@/shared/i18n/use-i18n'
+import type { Gender } from '@/shared/types'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -24,12 +25,14 @@ import {
 } from '@/shared/ui/dialog'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/shared/ui/form'
 import { Input } from '@/shared/ui/input'
+import { Label } from '@/shared/ui/label'
 
 import { getSettingsDialogInitialState } from '@/features/settings/ui/use-settings-dialog-initial-state'
 
 const formSchema = z.object({
   name: z.string().min(1),
-  keywords: z.string().optional()
+  keywords: z.string().optional(),
+  gender: z.enum(['male', 'female', 'unknown'])
 })
 
 const SettingsDialog = () => {
@@ -37,11 +40,17 @@ const SettingsDialog = () => {
   const { displayName, keywords, me, setName } = useAppStore()
   const [open, setOpen] = useState(false)
   const { setName: setChatName } = useChat()
-  const { syncProfile } = useAuth()
+  const { authSession, syncProfile } = useAuth()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: getSettingsDialogInitialState({ displayName, keywords, meName: me?.name, generateUsername })
+    defaultValues: getSettingsDialogInitialState({
+      displayName,
+      keywords,
+      gender: authSession.gender,
+      meName: me?.name,
+      generateUsername
+    })
   })
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
@@ -53,7 +62,8 @@ const SettingsDialog = () => {
 
     await syncProfile({
       displayName: data.name,
-      interests
+      interests,
+      gender: data.gender as Gender
     })
     setOpen(false)
     setName(data.name)
@@ -117,6 +127,31 @@ const SettingsDialog = () => {
                     </FormControl>
                     <FormDescription className="px-1 text-[11px] leading-relaxed">
                       {t('settings.keywordsHint')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="gender"
+                render={({ field }) => (
+                  <FormItem>
+                    <Label className="px-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                      {t('settings.genderLabel')}
+                    </Label>
+                    <FormControl>
+                      <select
+                        className="h-10 w-full rounded-md border border-border bg-input px-4 text-sm text-foreground outline-none transition-all focus:border-primary"
+                        {...field}
+                      >
+                        <option value="unknown">{t('settings.genderUnknown')}</option>
+                        <option value="male">{t('settings.genderMale')}</option>
+                        <option value="female">{t('settings.genderFemale')}</option>
+                      </select>
+                    </FormControl>
+                    <FormDescription className="px-1 text-[11px] leading-relaxed">
+                      {t('settings.genderHint')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

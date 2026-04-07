@@ -3,10 +3,14 @@
  */
 export interface Message {
   sender: string
+  senderId?: string
+  gender?: Gender
   message: string
   /** Pretext prepared handle for layout measurement (set at addMessage time) */
   _prepared?: import('@chenglou/pretext').PreparedTextWithSegments
 }
+
+export type Gender = 'male' | 'female' | 'unknown'
 
 export interface User {
   id: string
@@ -14,6 +18,7 @@ export interface User {
   shortId?: string
   state: UserState
   isTyping?: boolean
+  gender?: Gender
 }
 
 export interface PresenceCountPayload {

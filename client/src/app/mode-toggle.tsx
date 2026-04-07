@@ -5,17 +5,22 @@ import { Moon, Sun } from 'lucide-react'
 
 import { useTheme } from '@/app/theme-provider'
 import { useI18n } from '@/shared/i18n/use-i18n'
+import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 
-export function ModeToggle() {
+type ModeToggleProps = {
+  className?: string
+}
+
+export function ModeToggle({ className }: ModeToggleProps) {
   const { t } = useI18n()
   const { setTheme } = useTheme()
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md">
+        <Button variant="ghost" size="icon" className={cn('h-8 w-8 rounded-md', className)}>
           <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">{t('theme.toggle')}</span>

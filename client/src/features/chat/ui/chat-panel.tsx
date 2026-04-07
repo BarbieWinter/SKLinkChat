@@ -59,7 +59,7 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
     emitTyping: setTyping,
     bootstrapStatus,
     transportStatus,
-    availability,
+    availability
   } = useChat()
 
   const [meTyping, setMeTyping] = useState(false)
@@ -176,22 +176,20 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
         : formatUserState(me?.state)
 
   return (
-    <div
-      className="flex h-full w-full flex-col bg-background selection:bg-primary/20"
-    >
+    <div className="pixel-chat-shell flex h-full w-full flex-col selection:bg-primary/20">
       {/* ── Header ── */}
-      <div className="z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 sm:h-14 sm:px-6">
+      <div className="pixel-chat-header z-20 flex h-14 shrink-0 items-center gap-2 border-b-[3px] border-[#1a1a1a] px-3 sm:px-6">
         <div className="flex items-center gap-3">
           {showSidebarToggle && (
             <button
               type="button"
               onClick={onOpenSidebar}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors active:scale-95 hover:bg-muted"
+              className="pixel-toolbar-button flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors"
             >
               <Menu className="h-4.5 w-4.5" />
             </button>
           )}
-          <OnlineUserCount />
+          <OnlineUserCount className="pixel-toolbar-chip px-2.5 py-1.5" />
         </div>
 
         <div className="mx-2 flex min-w-0 flex-1 items-center justify-center sm:mx-4">
@@ -205,17 +203,17 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             >
               <span
                 className={cn(
-                  'h-1.5 w-1.5 shrink-0 rounded-full transition-colors',
-                  stranger?.isTyping || isSearching
-                    ? 'bg-primary'
-                    : stranger
-                      ? 'bg-terminal'
-                      : 'bg-muted-foreground/50'
+                  'h-2.5 w-2.5 shrink-0 border-2 border-[#1a1a1a] transition-colors',
+                  stranger?.isTyping || isSearching ? 'bg-primary' : stranger ? 'bg-amber' : 'bg-muted-foreground/40'
                 )}
               />
-              <span className="ml-2 truncate text-sm font-medium text-foreground">{headerTitle}</span>
-              <span className="mx-1.5 text-muted-foreground/40">&middot;</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{statusText}</span>
+              <span className="pixel-chat-title ml-2 truncate text-[12px] text-foreground sm:text-[13px]">
+                {headerTitle}
+              </span>
+              <span className="mx-2 text-[#8b5b70]">/</span>
+              <span className="pixel-chat-status shrink-0 text-[10px] text-muted-foreground sm:text-[11px]">
+                {statusText}
+              </span>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -225,25 +223,25 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             <button
               type="button"
               onClick={() => connect?.()}
-              className="flex items-center gap-1 rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors active:scale-95 hover:border-primary hover:text-primary"
+              className="pixel-toolbar-button flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground transition-colors"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t('home.reroll')}</span>
             </button>
           )}
-          <ModeToggle />
+          <ModeToggle className="pixel-toolbar-button" />
         </div>
       </div>
 
       {/* ── Messages Area ── */}
-      <div className="relative flex-1 min-h-0 overflow-hidden" ref={measureContainer}>
+      <div className="pixel-chat-stage relative flex-1 min-h-0 overflow-hidden" ref={measureContainer}>
         <VirtualMessageList messages={messages} containerWidth={containerWidth} />
       </div>
 
       {/* ── Composer ── */}
       <div
         className={cn(
-          'z-20 shrink-0 border-t border-border/40 bg-background',
+          'pixel-chat-composer z-20 shrink-0 border-t-[3px] border-[#1a1a1a]',
           // Only apply safe-area padding when keyboard is NOT open
           !keyboardOpen && 'pb-[env(safe-area-inset-bottom)]'
         )}
@@ -261,16 +259,15 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
               placeholder="输入消息..."
               disabled={isComposerDisabled}
               className={cn(
-                'w-full resize-none rounded-md border border-border bg-input pl-8 pr-3.5 py-3 text-[15px] leading-5 outline-none transition-colors terminal-prefix',
-                'placeholder:text-muted-foreground/60',
-                'focus:border-primary focus:ring-1 focus:ring-primary/15',
+                'pixel-chat-input terminal-prefix w-full resize-none pl-8 pr-3.5 py-3 text-[14px] leading-5 outline-none transition-colors sm:text-[15px]',
+                'focus:border-primary focus:ring-0',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 'sm:pr-4'
               )}
               style={{
                 height: `${MIN_COMPOSER_HEIGHT}px`,
                 maxHeight: `${MAX_COMPOSER_HEIGHT}px`,
-                overflowY: 'hidden',
+                overflowY: 'hidden'
               }}
               value={form.watch('message')}
               onChange={(e) => {
@@ -295,16 +292,12 @@ const ChatPanel = ({ onOpenSidebar, showSidebarToggle }: ChatPanelProps) => {
             type="submit"
             disabled={isComposerDisabled || isSubmitting || !form.watch('message')?.trim()}
             className={cn(
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-all',
-              'bg-primary text-primary-foreground',
+              'pixel-send-button flex h-11 w-11 shrink-0 items-center justify-center transition-all',
               'disabled:opacity-40',
-              'active:scale-95'
+              'active:scale-100'
             )}
           >
-            {isSubmitting
-              ? <Loader2 className="h-5 w-5 animate-spin" />
-              : <Send className="h-5 w-5" />
-            }
+            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
           </Button>
         </form>
       </div>

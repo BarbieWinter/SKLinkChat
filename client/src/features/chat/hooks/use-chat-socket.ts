@@ -5,7 +5,7 @@ import useWebSocket, { ReadyState } from 'react-use-websocket'
 import { getSocketUrl, toUser } from '@/features/chat/services/protocol'
 import { ChatTransportStatus } from '@/features/chat/model/runtime'
 import { WS_ENDPOINT } from '@/shared/config/runtime'
-import { PayloadType, PresenceCountPayload, UserState } from '@/shared/types'
+import { Gender, PayloadType, PresenceCountPayload, UserState } from '@/shared/types'
 
 const createClientMessageId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -24,7 +24,7 @@ type UseChatSocketOptions = {
   onBootstrapError: () => void
   onDisconnect: () => void
   onSystemMessage: (message: string) => void
-  onIncomingMessage: (payload: { id: string; name: string; message: string }) => void
+  onIncomingMessage: (payload: { id: string; name: string; message: string; gender?: Gender }) => void
   onUserInfo: (payload: unknown) => void
   onMatch: (payload: unknown) => void
   onErrorMessage: (message: string) => void
@@ -72,7 +72,8 @@ export const useChatSocket = ({
             onIncomingMessage({
               id: data.payload.id,
               name: data.payload.name,
-              message: data.payload.message
+              message: data.payload.message,
+              gender: data.payload.gender
             })
             break
           case PayloadType.UserInfo: {

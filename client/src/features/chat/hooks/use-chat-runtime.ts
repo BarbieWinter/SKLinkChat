@@ -105,9 +105,11 @@ export const useChatRuntime = (): ChatProviderState => {
         sender: 'system',
         message: t(messageKey as 'system.strangerDisconnected')
       }),
-    onIncomingMessage: ({ id, name, message }) =>
+    onIncomingMessage: ({ id, name, message, gender }) =>
       addMessage({
         sender: id === sessionId ? 'me' : name,
+        senderId: id,
+        gender,
         message
       }),
     onUserInfo: (user) => {
@@ -148,6 +150,8 @@ export const useChatRuntime = (): ChatProviderState => {
         socketActions.sendMessage(message)
         addMessage({
           sender: 'me',
+          senderId: sessionId,
+          gender: me?.gender ?? authSession.gender,
           message
         })
       },
@@ -206,6 +210,7 @@ export const useChatRuntime = (): ChatProviderState => {
       bootstrapStatus,
       clearChatConnection,
       me,
+      authSession.gender,
       retry,
       sessionId,
       socketActions,

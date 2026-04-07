@@ -22,6 +22,7 @@ def _serialize_user(session: ChatSession) -> dict[str, Any]:
     return {
         "id": session.session_id,
         "name": session.name,
+        "gender": session.gender,
         "short_id": session.short_id,
         "state": session.state.value,
     }
@@ -155,6 +156,7 @@ async def _handle_message(
     sender = message_result.sender
     partner = message_result.partner
     message_payload = {"id": sender.session_id, "name": sender.name, "message": message_result.normalized_message}
+    message_payload["gender"] = sender.gender
 
     # Deliver to all partner tabs
     await _broadcast_to_session(container, partner.session_id, PayloadType.MESSAGE, message_payload)
@@ -210,6 +212,7 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
         sessionId,
         websocket,
         display_name=authorized_session.display_name,
+        gender=authorized_session.gender,
         short_id=authorized_session.short_id,
     )
     schedule_presence_count_broadcast(websocket.app, container)
@@ -227,10 +230,16 @@ async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
         for entry in history:
             if entry.payload_type == PayloadType.MESSAGE:
                 sender_name = session.name if entry.from_session_id == sessionId else partner.name
+                sender_gender = session.gender if entry.from_session_id == sessionId else partner.gender
                 await _send_envelope(
                     websocket,
                     PayloadType.MESSAGE,
-                    {"id": entry.from_session_id, "name": sender_name, "message": entry.payload},
+                    {
+                        "id": entry.from_session_id,
+                        "name": sender_name,
+                        "gender": sender_gender,
+                        "message": entry.payload,
+                    },
                 )
 
     try:

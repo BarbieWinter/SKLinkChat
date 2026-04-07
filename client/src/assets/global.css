@@ -5,6 +5,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Departure Mono';
+  src:
+    local('Departure Mono'),
+    url('/fonts/DepartureMono-Regular.otf') format('opentype');
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --background: 210 20% 97%;
@@ -215,6 +223,865 @@
     pointer-events: none;
     z-index: 9998;
   }
+}
+
+/* Pixel chat language */
+.pixel-font {
+  font-family: 'JetBrains Mono Variable', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+
+.pixel-frame {
+  border: 3px solid #1a1a1a;
+  border-radius: 0;
+  box-shadow: 4px 4px 0 #1a1a1a;
+}
+
+.pixel-chat-shell {
+  background:
+    radial-gradient(circle at top, rgb(255 255 255 / 0.45), transparent 34%),
+    linear-gradient(180deg, #f7bfd2 0%, #f3abc5 48%, #ef92b5 100%);
+}
+
+.pixel-chat-stage {
+  background:
+    linear-gradient(180deg, rgb(255 233 242 / 0.75), rgb(247 182 209 / 0.9)),
+    repeating-linear-gradient(0deg, transparent 0 18px, rgb(255 255 255 / 0.26) 18px 19px);
+}
+
+.pixel-chat-header,
+.pixel-chat-composer {
+  background: rgb(255 242 248 / 0.92);
+  backdrop-filter: blur(4px);
+}
+
+.pixel-toolbar-chip,
+.pixel-toolbar-button,
+.pixel-empty-card,
+.pixel-system-message,
+.pixel-chat-input,
+.pixel-send-button {
+  font-family: 'JetBrains Mono Variable', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.pixel-toolbar-chip {
+  border: 2px solid #1a1a1a;
+  border-radius: 0;
+  background: rgb(255 248 251 / 0.92);
+  box-shadow: 3px 3px 0 #1a1a1a;
+  color: #3d2430;
+}
+
+.pixel-toolbar-button {
+  border: 2px solid #1a1a1a;
+  border-radius: 0;
+  background: #fff7fb;
+  box-shadow: 3px 3px 0 #1a1a1a;
+  color: #1a1a1a;
+}
+
+.pixel-toolbar-button:hover,
+.pixel-send-button:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 #1a1a1a;
+}
+
+.pixel-toolbar-button:active,
+.pixel-send-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.pixel-chat-title {
+  font-family: 'JetBrains Mono Variable', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pixel-chat-status,
+.pixel-chat-label {
+  font-family: 'JetBrains Mono Variable', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pixel-chat-label {
+  color: #6e4154;
+}
+
+.pixel-empty-card {
+  border: 3px solid #1a1a1a;
+  border-radius: 0;
+  background: rgb(255 248 251 / 0.92);
+  box-shadow: 6px 6px 0 #1a1a1a;
+}
+
+.pixel-empty-icon {
+  border: 3px solid #1a1a1a;
+  border-radius: 0;
+  background: #f5a0b8;
+  box-shadow: 4px 4px 0 #1a1a1a;
+  color: #1a1a1a;
+}
+
+.pixel-empty-dot {
+  border: 2px solid #1a1a1a;
+  border-radius: 0;
+}
+
+.pixel-system-message {
+  border: 2px solid #1a1a1a;
+  border-radius: 0;
+  background: rgb(255 248 251 / 0.9);
+  box-shadow: 3px 3px 0 #1a1a1a;
+  color: #6a4354;
+  padding: 0.35rem 0.7rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Retro Pixel Chat Bubble ────────────────────────────────────────────── */
+
+.retro-pixel-bubble {
+  --fill: #fce7f3;      /* female / default pink */
+  --outline: #1a1a1a;
+  
+  position: relative;
+  /* background is not set here to allow transparent areas for chamfers */
+  margin-bottom: 12px;  /* Space for the tail */
+  z-index: 1;
+}
+
+/* 1. The Black Outer Boundary (chamfered) */
+.retro-pixel-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--outline);
+  z-index: -2;
+  /* Perfectly orthogonal 2-step outer chamfer */
+  clip-path: polygon(
+    4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px,
+    100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px),
+    calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px),
+    0 calc(100% - 4px), 0 4px, 2px 4px, 2px 2px, 4px 2px
+  );
+}
+
+/* 2. The Inner Surface (Fill) */
+.retro-pixel-bubble-surface {
+  position: relative;
+  z-index: 1; /* Above ::before and tail */
+  background: var(--fill);
+  
+  /* The margin creates the 2px uniform black border! */
+  margin: 2px; 
+  
+  /* Perfectly orthogonal inner chamfer (parallel to outer) */
+  clip-path: polygon(
+    2px 0, calc(100% - 2px) 0, calc(100% - 2px) 2px, 100% 2px, 
+    100% calc(100% - 2px), calc(100% - 2px) calc(100% - 2px), calc(100% - 2px) 100%, 2px 100%, 
+    2px calc(100% - 2px), 0 calc(100% - 2px), 0 2px, 2px 2px
+  );
+  
+  padding: 14px 24px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Gender colour variants */
+.retro-pixel-bubble-female  { --fill: #fce7f3; }
+.retro-pixel-bubble-male    { --fill: #dbeafe; }
+.retro-pixel-bubble-unknown { --fill: #f3f4f6; }
+
+/* 3. The Tails */
+.retro-pixel-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 2px;
+  height: 2px;
+  background: transparent;
+  z-index: -1; /* Above ::before border, below surface */
+}
+
+/* Received Tail (points down-left) */
+.retro-pixel-bubble-received::after {
+  left: 16px;
+  box-shadow:
+    /* R0 (Replaces the bottom 2px border with an opening) */
+    0 0 0 0 var(--outline),
+    2px 0 0 0 var(--fill),
+    4px 0 0 0 var(--fill),
+    6px 0 0 0 var(--fill),
+    8px 0 0 0 var(--fill),
+    10px 0 0 0 var(--outline),
+    /* R1 */
+    0 2px 0 0 var(--outline),
+    2px 2px 0 0 var(--fill),
+    4px 2px 0 0 var(--fill),
+    6px 2px 0 0 var(--fill),
+    8px 2px 0 0 var(--outline),
+    /* R2 */
+    0 4px 0 0 var(--outline),
+    2px 4px 0 0 var(--fill),
+    4px 4px 0 0 var(--fill),
+    6px 4px 0 0 var(--outline),
+    /* R3 */
+    0 6px 0 0 var(--outline),
+    2px 6px 0 0 var(--fill),
+    4px 6px 0 0 var(--outline),
+    /* R4 (Tip) */
+    2px 8px 0 0 var(--outline);
+}
+
+/* Sent Tail (points down-right) */
+.retro-pixel-bubble-sent::after {
+  right: 16px;
+  box-shadow:
+    /* R0 */
+    0 0 0 0 var(--outline),
+    -2px 0 0 0 var(--fill),
+    -4px 0 0 0 var(--fill),
+    -6px 0 0 0 var(--fill),
+    -8px 0 0 0 var(--fill),
+    -10px 0 0 0 var(--outline),
+    /* R1 */
+    0 2px 0 0 var(--outline),
+    -2px 2px 0 0 var(--fill),
+    -4px 2px 0 0 var(--fill),
+    -6px 2px 0 0 var(--fill),
+    -8px 2px 0 0 var(--outline),
+    /* R2 */
+    0 4px 0 0 var(--outline),
+    -2px 4px 0 0 var(--fill),
+    -4px 4px 0 0 var(--fill),
+    -6px 4px 0 0 var(--outline),
+    /* R3 */
+    0 6px 0 0 var(--outline),
+    -2px 6px 0 0 var(--fill),
+    -4px 6px 0 0 var(--outline),
+    /* R4 (Tip) */
+    -2px 8px 0 0 var(--outline);
+}
+
+/* ── Text ── */
+.retro-pixel-bubble-text {
+  margin: 0;
+  color: #111111;
+  font-family: 'Departure Mono', 'JetBrains Mono Variable', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: clamp(0.9rem, 1vw + 0.55rem, 1.3rem);
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-rendering: geometricPrecision;
+}
+
+.retro-pixel-bubble-text-uppercase {
+  text-transform: uppercase;
+}
+
+/* ── Message variant (chat messages: left-aligned, natural case) ── */
+.retro-pixel-bubble-message .retro-pixel-bubble-surface {
+  min-height: 0;
+  justify-content: flex-start;
+  padding: 12px 20px 14px;
+}
+
+.retro-pixel-bubble-message .retro-pixel-bubble-text {
+  width: 100%;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  text-align: left;
+  text-transform: none;
+}
+
+/* ── Dark mode ── */
+.dark .retro-pixel-bubble {
+  --outline: #0a0a0a;
+}
+
+.dark .retro-pixel-bubble-female  { --fill: #f9a8d4; }
+.dark .retro-pixel-bubble-male    { --fill: #93c5fd; }
+.dark .retro-pixel-bubble-unknown { --fill: #9ca3af; }
+
+.pixel-bubble {
+  --bubble-outline: #1a1a1a;
+  --bubble-fill: #f6a0c4;
+  --bubble-shadow-x: 5px;
+  --bubble-shadow-y: 5px;
+  position: relative;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: var(--bubble-outline);
+  color: var(--bubble-outline);
+  image-rendering: pixelated;
+  font-family: 'JetBrains Mono Variable', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.06em;
+  filter: drop-shadow(var(--bubble-shadow-x) var(--bubble-shadow-y) 0 var(--bubble-outline));
+  clip-path: polygon(
+    16px 0,
+    calc(100% - 16px) 0,
+    100% 16px,
+    100% calc(100% - 16px),
+    calc(100% - 16px) 100%,
+    22px 100%,
+    22px calc(100% - 8px),
+    10px calc(100% - 8px),
+    10px calc(100% - 16px),
+    0 calc(100% - 16px),
+    0 16px
+  );
+}
+
+.pixel-bubble::before,
+.pixel-bubble::after {
+  content: '';
+  position: absolute;
+}
+
+.pixel-bubble::before {
+  left: 26px;
+  bottom: -18px;
+  width: 28px;
+  height: 20px;
+  background: var(--bubble-outline);
+  clip-path: polygon(0 0, 100% 0, 100% 28%, 70% 28%, 70% 56%, 46% 56%, 46% 82%, 20% 82%, 20% 100%, 0 100%);
+}
+
+.pixel-bubble::after {
+  left: 30px;
+  bottom: -14px;
+  width: 20px;
+  height: 16px;
+  background: var(--bubble-fill);
+  clip-path: polygon(0 0, 100% 0, 100% 24%, 66% 24%, 66% 56%, 40% 56%, 40% 86%, 12% 86%, 12% 100%, 0 100%);
+}
+
+.pixel-bubble-surface {
+  position: relative;
+  z-index: 1;
+  min-height: 52px;
+  background: var(--bubble-fill);
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    16px 100%,
+    16px calc(100% - 6px),
+    6px calc(100% - 6px),
+    6px calc(100% - 12px),
+    0 calc(100% - 12px),
+    0 12px
+  );
+}
+
+.pixel-bubble-me,
+.pixel-bubble-peer {
+  --bubble-fill: #f6a0c4;
+}
+
+.pixel-chat-input {
+  border: 3px solid #1a1a1a;
+  border-radius: 0;
+  background: #fff7fb;
+  box-shadow: 4px 4px 0 #1a1a1a;
+  color: #1a1a1a;
+  caret-color: #1a1a1a;
+  letter-spacing: 0.03em;
+}
+
+.pixel-chat-input::placeholder {
+  color: #86576c;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pixel-send-button {
+  border: 3px solid #1a1a1a;
+  border-radius: 0;
+  background: #f5a0b8;
+  box-shadow: 4px 4px 0 #1a1a1a;
+  color: #1a1a1a;
+}
+
+.dark .pixel-frame,
+.dark .pixel-toolbar-chip,
+.dark .pixel-toolbar-button,
+.dark .pixel-empty-card,
+.dark .pixel-system-message,
+.dark .pixel-chat-input,
+.dark .pixel-send-button,
+.dark .pixel-bubble {
+  border-color: #140d12;
+}
+
+.dark .pixel-chat-shell {
+  background:
+    radial-gradient(circle at top, rgb(255 223 235 / 0.18), transparent 36%),
+    linear-gradient(180deg, #4f2237 0%, #3f182c 52%, #31101f 100%);
+}
+
+.dark .pixel-chat-stage {
+  background:
+    linear-gradient(180deg, rgb(96 35 62 / 0.84), rgb(66 23 42 / 0.92)),
+    repeating-linear-gradient(0deg, transparent 0 18px, rgb(255 215 230 / 0.07) 18px 19px);
+}
+
+.dark .pixel-chat-header,
+.dark .pixel-chat-composer {
+  background: rgb(52 18 33 / 0.9);
+}
+
+.dark .pixel-toolbar-chip,
+.dark .pixel-toolbar-button,
+.dark .pixel-empty-card,
+.dark .pixel-system-message,
+.dark .pixel-chat-input {
+  background: #3a1628;
+  color: #fbe5ef;
+}
+
+.dark .pixel-chat-label,
+.dark .pixel-chat-status {
+  color: #f3b8cf;
+}
+
+.dark .pixel-empty-icon,
+.dark .pixel-send-button {
+  background: #d86b92;
+  color: #1a1a1a;
+}
+
+.dark .pixel-bubble {
+  --bubble-outline: #140d12;
+  --bubble-fill: #ec93ba;
+}
+
+.dark .pixel-chat-input::placeholder {
+  color: #d9a8bc;
+}
+
+/* ── Landing Page ───────────────────────────────────────────────────────── */
+
+@keyframes lp-spotlight-pulse {
+  0%, 100% { opacity: 0.72; }
+  50%       { opacity: 1.0; }
+}
+
+@keyframes lp-grid-march {
+  from { background-position: 0 0; }
+  to   { background-position: 0 50px; }
+}
+
+@keyframes lp-float-a {
+  0%, 100% { transform: translateY(-50%) translateY(0px); }
+  50%       { transform: translateY(-50%) translateY(-20px); }
+}
+
+@keyframes lp-float-b {
+  0%, 100% { transform: translateY(-50%) translateY(-8px); }
+  50%       { transform: translateY(-50%) translateY(12px); }
+}
+
+@keyframes lp-cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Root */
+.lp-root {
+  position: relative;
+  min-height: 100svh;
+  width: 100%;
+  overflow: hidden;
+  background: #07090f;
+  color: #d4d8e0;
+  font-family: 'Departure Mono', 'JetBrains Mono Variable', 'SFMono-Regular', Menlo, Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Spotlight ── */
+.lp-spotlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 420px;
+  pointer-events: none;
+  z-index: 2;
+  animation: lp-spotlight-pulse 3.5s ease-in-out infinite;
+}
+
+/* Wide diffuse halo */
+.lp-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 75% 50% at 50% -5%, rgba(34,211,238,0.22) 0%, transparent 68%),
+    radial-gradient(ellipse 40% 30% at 50% -2%, rgba(6,182,212,0.18) 0%, transparent 55%);
+}
+
+/* Narrow beam core */
+.lp-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 12% 65% at 50% 0%, rgba(34,211,238,0.65) 0%, rgba(6,182,212,0.15) 40%, transparent 100%);
+  mix-blend-mode: screen;
+}
+
+/* ── Canvas layers ── */
+.lp-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Navbar ── */
+.lp-nav {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2.5rem;
+  transition: background 0.35s ease, backdrop-filter 0.35s ease, border-color 0.35s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.lp-nav.scrolled {
+  background: rgba(7, 9, 15, 0.82);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom-color: rgba(34, 211, 238, 0.12);
+}
+
+.lp-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lp-logo-mark {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(34, 211, 238, 0.7);
+  background: rgba(34, 211, 238, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(34,211,238,0.15), inset 0 0 8px rgba(34,211,238,0.06);
+  flex-shrink: 0;
+}
+
+.lp-logo-text {
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(212, 216, 224, 0.9);
+}
+
+.lp-nav-links {
+  display: flex;
+  gap: 2.5rem;
+}
+
+.lp-nav-link {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(212, 216, 224, 0.38);
+  text-decoration: none;
+  transition: color 0.2s;
+  position: relative;
+}
+
+.lp-nav-link::before {
+  content: '//';
+  position: absolute;
+  left: -1.1em;
+  color: rgba(34, 211, 238, 0);
+  transition: color 0.2s;
+  font-size: 0.6em;
+  top: 0.05em;
+}
+
+.lp-nav-link:hover {
+  color: rgba(212, 216, 224, 0.85);
+}
+
+.lp-nav-link:hover::before {
+  color: rgba(34, 211, 238, 0.6);
+}
+
+/* ── Buttons ── */
+.lp-btn {
+  font-family: 'Departure Mono', 'JetBrains Mono Variable', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 0;
+  transition: transform 0.08s cubic-bezier(0.4,0,0.2,1), box-shadow 0.08s cubic-bezier(0.4,0,0.2,1), background 0.12s;
+  white-space: nowrap;
+}
+
+.lp-btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  color: rgba(34, 211, 238, 0.75);
+  padding: 0.55rem 1.2rem;
+}
+
+.lp-btn-ghost:hover {
+  border-color: rgba(34, 211, 238, 0.65);
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.05);
+}
+
+.lp-btn-fill {
+  background: rgba(34, 211, 238, 0.9);
+  border: 1px solid #22d3ee;
+  color: #07090f;
+  padding: 0.55rem 1.35rem;
+  font-weight: 400;
+  box-shadow: 0 0 0 0 rgba(34,211,238,0.3);
+}
+
+.lp-btn-fill:hover {
+  background: #22d3ee;
+  box-shadow: 0 0 18px rgba(34,211,238,0.25);
+}
+
+.lp-btn-cta {
+  background: transparent;
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  color: rgba(34, 211, 238, 0.85);
+  padding: 1rem 3rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 0;
+  font-family: 'Departure Mono', 'JetBrains Mono Variable', 'SFMono-Regular', Menlo, Consolas, monospace;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+  overflow: hidden;
+}
+
+.lp-btn-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(34,211,238,0.06) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.4s ease;
+}
+
+.lp-btn-cta:hover {
+  border-color: rgba(34, 211, 238, 0.85);
+  color: #22d3ee;
+  box-shadow:
+    0 0 20px rgba(34,211,238,0.15),
+    inset 0 0 20px rgba(34,211,238,0.04);
+}
+
+.lp-btn-cta:hover::before {
+  transform: translateX(100%);
+}
+
+/* ── Hero ── */
+.lp-hero {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: calc(100svh - 76px);
+  padding: 4rem 2rem 12rem;
+}
+
+.lp-eyebrow {
+  font-size: 0.6rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(34, 211, 238, 0.55);
+  margin-bottom: 2.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.lp-eyebrow::before,
+.lp-eyebrow::after {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 1px;
+  background: rgba(34, 211, 238, 0.3);
+}
+
+.lp-title {
+  font-size: clamp(4rem, 12vw, 8.5rem);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffffff;
+  line-height: 0.95;
+  text-shadow:
+    0 0 60px rgba(34,211,238,0.18),
+    0 0 120px rgba(34,211,238,0.08);
+  margin-bottom: 0.5rem;
+}
+
+/* Scramble row */
+.lp-scramble-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0;
+  height: clamp(2.4rem, 6vw, 4.2rem);
+  margin-top: 0.6rem;
+  overflow: visible;
+}
+
+.lp-scramble-text {
+  font-size: clamp(1.5rem, 5vw, 3.5rem);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+  display: inline-flex;
+}
+
+.lp-scramble-char {
+  display: inline-block;
+  transition: color 0.08s;
+  min-width: 0.56em;
+  text-align: center;
+}
+
+.lp-scramble-char.settled {
+  /* accent color applied inline */
+}
+
+.lp-scramble-char.scrambling {
+  color: rgba(212, 216, 224, 0.28);
+}
+
+.lp-cursor {
+  display: inline-block;
+  width: 2px;
+  height: clamp(1.5rem, 4.5vw, 3rem);
+  background: currentColor;
+  margin-left: 3px;
+  vertical-align: middle;
+  animation: lp-cursor-blink 1s step-end infinite;
+}
+
+.lp-tagline {
+  margin-top: 2.5rem;
+  font-size: clamp(0.58rem, 1.3vw, 0.72rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(212, 216, 224, 0.28);
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.lp-tagline-sep {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  background: rgba(34, 211, 238, 0.35);
+  border-radius: 50%;
+}
+
+/* ── Pixel characters ── */
+.lp-char-left {
+  position: absolute;
+  left: clamp(2rem, 7vw, 10rem);
+  top: 50%;
+  transform: translateY(-50%);
+  animation: lp-float-a 5s ease-in-out infinite;
+  z-index: 5;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 12px rgba(34,211,238,0.28)) drop-shadow(0 0 24px rgba(34,211,238,0.12));
+  opacity: 0.88;
+}
+
+.lp-char-right {
+  position: absolute;
+  right: clamp(2rem, 7vw, 10rem);
+  top: 50%;
+  transform: translateY(-50%);
+  animation: lp-float-b 5s ease-in-out infinite;
+  z-index: 5;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 12px rgba(244,114,182,0.28)) drop-shadow(0 0 24px rgba(244,114,182,0.12));
+  opacity: 0.88;
+}
+
+@media (max-width: 1024px) {
+  .lp-char-left,
+  .lp-char-right { display: none; }
+}
+
+@media (max-width: 600px) {
+  .lp-nav-links { display: none !important; }
+  .lp-nav { padding: 1.25rem 1.5rem; }
+  .lp-hero { padding: 2rem 1.5rem 10rem; }
+  .lp-eyebrow { display: none; }
+}
+
+/* ── Bottom 3D grid ── */
+.lp-grid-wrap {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 34vh;
+  perspective: 800px;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.lp-grid-plane {
+  position: absolute;
+  width: 240%;
+  height: 240%;
+  bottom: -65%;
+  left: -70%;
+  background-image:
+    linear-gradient(to right, rgba(34,211,238,0.18) 1px, transparent 1px),
+    linear-gradient(to top,   rgba(34,211,238,0.30) 1px, transparent 1px);
+  background-size: 52px 52px;
+  transform: rotateX(78deg);
+  animation: lp-grid-march 1.8s linear infinite;
+  mask-image: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
 }
 
 /* ── Terminal input prefix ── */

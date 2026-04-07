@@ -1,6 +1,9 @@
+import type { Gender } from '@/shared/types'
+
 type InitialStateOptions = {
   displayName: string
   keywords: string[]
+  gender: Gender
   meName?: string
   generateUsername: () => string
 }
@@ -8,9 +11,11 @@ type InitialStateOptions = {
 export const getSettingsDialogInitialState = ({
   displayName,
   keywords,
+  gender,
   meName,
   generateUsername
 }: InitialStateOptions) => ({
   name: displayName || meName || generateUsername(),
-  keywords: keywords.join(', ')
+  keywords: keywords.join(', '),
+  gender
 })

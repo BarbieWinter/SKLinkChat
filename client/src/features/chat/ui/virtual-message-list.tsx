@@ -10,11 +10,13 @@ import { motion } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useAuth } from '@/features/auth/auth-provider'
 import { useChat } from '@/features/chat/chat-provider'
+import { RetroPixelBubble } from '@/features/chat/ui/retro-pixel-bubble'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { getBubbleHeight, getTightBubbleWidth, prepareBubble } from '@/shared/lib/pretext'
 import { cn } from '@/shared/lib/utils'
-import { Message, UserState } from '@/shared/types'
+import { Gender, Message, UserState } from '@/shared/types'
 import { Button } from '@/shared/ui/button'
 
 /** Extra pixels to render above/below the viewport */
@@ -23,10 +25,11 @@ const OVERSCAN = 200
 const GAP_SM = 12
 const GAP_LG = 16
 /** Height for system messages */
-const SYSTEM_MSG_HEIGHT = 32
+const SYSTEM_MSG_HEIGHT = 40
 /** Height for the sender name label above stranger messages */
 const SENDER_LABEL_HEIGHT = 20
-const BUBBLE_PADDING_V = 20 // py-2.5 => 10px * 2
+const BUBBLE_PADDING_V = 24 // py-3 => 12px * 2
+const BUBBLE_TAIL_HEIGHT = 18
 const LINE_HEIGHT_SM = 23
 const LINE_HEIGHT_LG = 24
 
@@ -40,6 +43,9 @@ type ItemLayout = {
   height: number
   tightWidth: number | undefined
 }
+
+const resolveBubbleGender = (messageGender: Gender | undefined, fallbackGender: Gender | undefined): Gender =>
+  messageGender ?? fallbackGender ?? 'female'
 
 // ── MeasuredItem: wraps each virtual item and reports actual DOM height ──
 
@@ -56,7 +62,7 @@ const MeasuredItem = memo(function MeasuredItem({
   children,
   onHeightChange,
   className,
-  style,
+  style
 }: MeasuredItemProps) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -82,6 +88,7 @@ const MeasuredItem = memo(function MeasuredItem({
 
 export function VirtualMessageList({ messages, containerWidth }: VirtualMessageListProps) {
   const { t } = useI18n()
+  const { authSession } = useAuth()
   const { stranger, me, connect, bootstrapStatus, transportStatus, availability, retryBootstrap } = useChat()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
@@ -93,16 +100,13 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
   const measuredHeightsRef = useRef(new Map<number, number>())
   const [correctionTick, setCorrectionTick] = useState(0)
 
-  const handleHeightChange = useCallback(
-    (index: number, height: number) => {
-      const prev = measuredHeightsRef.current.get(index)
-      // Only trigger re-layout if height actually changed (> 1px tolerance)
-      if (prev !== undefined && Math.abs(prev - height) < 1) return
-      measuredHeightsRef.current.set(index, height)
-      setCorrectionTick((t) => t + 1)
-    },
-    [],
-  )
+  const handleHeightChange = useCallback((index: number, height: number) => {
+    const prev = measuredHeightsRef.current.get(index)
+    // Only trigger re-layout if height actually changed (> 1px tolerance)
+    if (prev !== undefined && Math.abs(prev - height) < 1) return
+    measuredHeightsRef.current.set(index, height)
+    setCorrectionTick((t) => t + 1)
+  }, [])
 
   // Cap layout width on desktop so bubbles don't float in a vast empty space
   const MAX_CONTENT_WIDTH = 768 // max-w-3xl
@@ -116,7 +120,7 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
     void correctionTick
     if (layoutWidth <= 0) return { items: [] as ItemLayout[], totalHeight: 0 }
 
-    const bubbleMaxWidth = layoutWidth * (isSmall ? 0.88 : 0.70)
+    const bubbleMaxWidth = layoutWidth * (isSmall ? 0.88 : 0.7)
     const measured = measuredHeightsRef.current
     const result: ItemLayout[] = []
     let y = 0
@@ -159,13 +163,12 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
         if (!isMe) height += SENDER_LABEL_HEIGHT
         const measuredBubbleHeight = getBubbleHeight(prepared, bubbleMaxWidth, isSmall)
         const minBubbleHeightFromExplicitBreaks = explicitLineCount * lineHeight + BUBBLE_PADDING_V
-        height += Math.max(measuredBubbleHeight, minBubbleHeightFromExplicitBreaks)
-        tightWidth =
-          explicitLineCount > 1 ? undefined : getTightBubbleWidth(prepared, bubbleMaxWidth, isSmall)
+        height += Math.max(measuredBubbleHeight, minBubbleHeightFromExplicitBreaks) + BUBBLE_TAIL_HEIGHT
+        tightWidth = explicitLineCount > 1 ? undefined : getTightBubbleWidth(prepared, bubbleMaxWidth, isSmall)
       } else {
         if (!isMe) height += SENDER_LABEL_HEIGHT
         const estimatedLines = Math.ceil(msg.message.length / 30)
-        height += estimatedLines * lineHeight + BUBBLE_PADDING_V
+        height += estimatedLines * lineHeight + BUBBLE_PADDING_V + BUBBLE_TAIL_HEIGHT
       }
 
       result.push({ top: y, height, tightWidth })
@@ -249,12 +252,13 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
   const isServiceUnavailable = availability === 'error'
   const isReconnecting = transportStatus === 'reconnecting'
   const isNotConnected = !stranger && me?.state !== UserState.Searching
-  const useVirtualList = true
+  const useVirtualList = false
 
   // Clear measured heights when messages change (e.g. new chat session)
   useEffect(() => {
     measuredHeightsRef.current.clear()
-  }, [messages.length === 0])
+    prevItemsRef.current = []
+  }, [messages.length])
 
   // Empty state
   if (messages.length === 0) {
@@ -264,16 +268,16 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="mx-auto flex min-h-full max-w-sm flex-col items-center justify-center text-center"
+          className="pixel-empty-card mx-auto flex min-h-[18rem] w-full max-w-md flex-col items-center justify-center px-6 py-8 text-center"
         >
-          <div
-            className="mb-5 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary sm:mb-6 sm:h-14 sm:w-14"
-          >
+          <div className="pixel-empty-icon mb-5 flex h-12 w-12 items-center justify-center sm:mb-6 sm:h-14 sm:w-14">
             <Sparkles className="h-6 w-6 sm:h-7 sm:w-7" />
           </div>
 
-          <h3 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">{t('chat.emptyTitle')}</h3>
-          <p className="mt-2 max-w-[28ch] text-[13px] leading-relaxed text-muted-foreground sm:max-w-none sm:text-sm">
+          <RetroPixelBubble text="FOCUS ON THE GOOD" gender="female" className="mb-6 w-full max-w-[30rem]" />
+
+          <h3 className="pixel-chat-title text-lg text-foreground sm:text-xl">{t('chat.emptyTitle')}</h3>
+          <p className="pixel-font mt-3 max-w-[28ch] text-[12px] leading-relaxed text-muted-foreground sm:max-w-none sm:text-[13px]">
             {isServiceUnavailable
               ? t('chat.serviceUnavailable')
               : isReconnecting
@@ -292,7 +296,7 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                   key={i}
                   animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
                   transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                  className={cn('h-2 w-2 rounded-full', i < 2 ? 'bg-primary' : 'bg-amber')}
+                  className={cn('pixel-empty-dot h-2.5 w-2.5', i < 2 ? 'bg-primary' : 'bg-amber')}
                 />
               ))}
             </div>
@@ -300,21 +304,14 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
 
           {!isSearching && isNotConnected && !isServiceUnavailable && !isBootstrapping && (
             <div className="mt-6 w-full sm:mt-8">
-              <Button
-                onClick={() => connect?.()}
-                className="h-10 w-full rounded-md bg-primary text-primary-foreground text-sm font-medium hover:shadow-[0_0_24px_hsl(187_72%_48%/0.25)]"
-              >
+              <Button onClick={() => connect?.()} className="pixel-toolbar-button h-10 w-full text-sm font-medium">
                 {t('home.startChat')}
               </Button>
             </div>
           )}
 
           {isServiceUnavailable && (
-            <Button
-              onClick={() => retryBootstrap?.()}
-              variant="outline"
-              className="mt-8 rounded-md border-border hover:border-primary"
-            >
+            <Button onClick={() => retryBootstrap?.()} variant="outline" className="pixel-toolbar-button mt-8">
               {t('chat.retryConnection')}
             </Button>
           )}
@@ -340,8 +337,8 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
             if (isSystem) {
               return (
                 <div key={`sys-${i}`} className="flex justify-start px-2">
-                  <span className="text-xs text-terminal/70">
-                    <span className="text-terminal/40 mr-1">{'>_'}</span>
+                  <span className="pixel-system-message">
+                    <span className="mr-1 opacity-60">{'>_'}</span>
                     {message.message}
                   </span>
                 </div>
@@ -351,22 +348,19 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
             return (
               <div key={`msg-${i}`} className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
                 {!isMe && isStranger && (
-                  <span className="mb-1 ml-1 text-[11px] font-medium text-amber tracking-wide">
-                    {stranger?.name ?? message.sender}
-                  </span>
+                  <span className="pixel-chat-label mb-2 ml-1 text-[10px]">{stranger?.name ?? message.sender}</span>
                 )}
-                <div
-                  className={cn(
-                    'relative max-w-[88%] px-3.5 py-2.5 sm:max-w-[70%] sm:px-4 sm:py-3',
-                    isMe
-                      ? 'rounded-md bg-primary/8 border border-primary/20 text-foreground'
-                      : 'rounded-md bg-secondary border border-border text-foreground'
+                <RetroPixelBubble
+                  text={message.message}
+                  centerText={false}
+                  uppercase={false}
+                  variant={isMe ? 'sent' : 'received'}
+                  gender={resolveBubbleGender(
+                    message.gender,
+                    isMe ? (me?.gender ?? authSession.gender) : stranger?.gender
                   )}
-                >
-                  <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[14px]">
-                    {message.message}
-                  </p>
-                </div>
+                  className="max-w-[88%] sm:max-w-[70%]"
+                />
               </div>
             )
           })}
@@ -401,8 +395,8 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                   className="absolute left-0 right-0 flex justify-start px-2"
                   style={{ top: `${item.top}px` }}
                 >
-                  <span className="text-xs text-terminal/70">
-                    <span className="text-terminal/40 mr-1">{'>_'}</span>
+                  <span className="pixel-system-message">
+                    <span className="mr-1 opacity-60">{'>_'}</span>
                     {message.message}
                   </span>
                 </MeasuredItem>
@@ -418,23 +412,20 @@ export function VirtualMessageList({ messages, containerWidth }: VirtualMessageL
                 style={{ top: `${item.top}px` }}
               >
                 {!isMe && isStranger && (
-                  <span className="mb-1 ml-1 text-[11px] font-medium text-amber tracking-wide">
-                    {stranger?.name ?? message.sender}
-                  </span>
+                  <span className="pixel-chat-label mb-2 ml-1 text-[10px]">{stranger?.name ?? message.sender}</span>
                 )}
-                <div
-                  className={cn(
-                    'relative max-w-[88%] px-3.5 py-2.5 sm:max-w-[70%] sm:px-4 sm:py-3',
-                    isMe
-                      ? 'rounded-md bg-primary/8 border border-primary/20 text-foreground'
-                      : 'rounded-md bg-secondary border border-border text-foreground'
+                <RetroPixelBubble
+                  text={message.message}
+                  centerText={false}
+                  uppercase={false}
+                  variant={isMe ? 'sent' : 'received'}
+                  gender={resolveBubbleGender(
+                    message.gender,
+                    isMe ? (me?.gender ?? authSession.gender) : stranger?.gender
                   )}
+                  className="max-w-[88%] sm:max-w-[70%]"
                   style={item.tightWidth ? { width: `${item.tightWidth}px` } : undefined}
-                >
-                  <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[14px]">
-                    {message.message}
-                  </p>
-                </div>
+                />
               </MeasuredItem>
             )
           })}

@@ -11,12 +11,13 @@ router = APIRouter()
 class UpdateAccountProfileRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=80)
     interests: list[str] = Field(default_factory=list)
+    gender: str = Field(default="unknown")
 
 
 @router.get("/api/account/profile")
 async def get_account_profile(account_id: CurrentAccountDep, container: ContainerDep) -> dict[str, object]:
     profile = await container.get_account_profile.execute(account_id)
-    return {"display_name": profile.display_name, "interests": profile.interests}
+    return {"display_name": profile.display_name, "interests": profile.interests, "gender": profile.gender}
 
 
 @router.patch("/api/account/profile")
@@ -29,5 +30,6 @@ async def update_account_profile(
         account_id=account_id,
         display_name=payload.display_name,
         interests=payload.interests,
+        gender=payload.gender,
     )
-    return {"display_name": profile.display_name, "interests": profile.interests}
+    return {"display_name": profile.display_name, "interests": profile.interests, "gender": profile.gender}

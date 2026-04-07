@@ -87,6 +87,13 @@ def normalize_interests(interests: list[str]) -> list[str]:
     return normalized[:10]
 
 
+def normalize_gender(gender: str | None) -> str:
+    normalized = (gender or "unknown").strip().lower()
+    if normalized not in {"male", "female", "unknown"}:
+        raise AppError(message="Gender is invalid", code="INVALID_GENDER", status_code=422)
+    return normalized
+
+
 def _mask_email(email: str) -> str:
     local, domain = email.rsplit("@", 1)
     if len(local) <= 1:
@@ -106,6 +113,7 @@ class AuthSessionView:
     display_name: str | None = None
     short_id: str | None = None
     interests: list[str] | None = None
+    gender: str = "unknown"
     is_admin: bool = False
     chat_access_restricted: bool = False
 
@@ -212,6 +220,7 @@ class AuthService:
                 password_hash=hash_password(password),
                 display_name=display_name,
                 interests=interests,
+                gender="unknown",
             )
             await self._risk_event_recorder.record(
                 email_normalized=email_normalized,
@@ -407,6 +416,7 @@ class AuthService:
             display_name=account.display_name,
             short_id=account.short_id,
             interests=interests,
+            gender=normalize_gender(account.gender),
             is_admin=account.is_admin,
             chat_access_restricted=getattr(account, "chat_access_restricted_at", None) is not None,
         )

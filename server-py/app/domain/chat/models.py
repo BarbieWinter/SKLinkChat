@@ -22,6 +22,7 @@ class ChatHistoryEntry:
 class ChatSession:
     session_id: str
     name: str
+    gender: str = "unknown"
     short_id: str | None = None
     state: UserState = UserState.IDLE
     partner_id: str | None = None

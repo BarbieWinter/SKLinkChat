@@ -4,14 +4,17 @@
 This repository is currently a clean workspace with no committed source tree yet. Keep the layout simple as the project grows:
 
 - `src/` for application code
-- `tests/` for automated tests
 - `assets/` for static files such as images or fixtures
 - `docs/` for design notes, API contracts, or architecture decisions
 
-Group code by feature or domain instead of dumping unrelated files at the root. Example: `src/chat/`, `src/auth/`, `tests/chat/`.
+Group code by feature or domain instead of dumping unrelated files at the root. Example: `src/chat/`, `src/auth/`, `docs/api/`.
+
+## AI Navigation
+Before making changes, read `docs/CODEBASE_MAP.md`.
+Use it as the primary locator for entry points, feature ownership, and "change X -> edit Y" mappings.
 
 ## Build, Test, and Development Commands
-No build system is configured yet. When the first runtime is introduced, add the project manifest and document the exact commands here and in the main README.
+Document active commands in `DEVELOPMENT.md`. Do not spread command references across extra markdown files.
 
 Expected baseline:
 
@@ -32,7 +35,7 @@ Use 4 spaces for indentation unless the selected language standard requires othe
 Adopt an autoformatter and linter as soon as tooling exists. Do not merge code that requires manual reformatting to read cleanly.
 
 ## Testing Guidelines
-Place tests under `tests/` and mirror the source layout. Use descriptive names such as `tests/chat/test_message_delivery.*` or `message_delivery.test.*`, depending on the framework. Add unit tests for new logic and integration tests for workflow boundaries. Treat missing tests for new behavior as a gap, not an optional follow-up.
+This repository currently does not keep automated test files in-tree. If tests are reintroduced later, place them under `tests/` and mirror the source layout.
 
 ## Commit & Pull Request Guidelines
 Git history is not available in this workspace, so use a conventional, imperative style now: `feat: add chat session model`, `fix: handle empty payload`. Keep commits focused and reviewable.

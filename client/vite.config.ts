@@ -9,13 +9,7 @@ export default defineConfig(({ mode }) => {
   const geetestRegisterCaptchaId =
     env.VITE_GEETEST_REGISTER_CAPTCHA_ID || env.SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID || ''
   const geetestLoginCaptchaId = env.VITE_GEETEST_LOGIN_CAPTCHA_ID || env.SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID || ''
-  const previewAllowedHosts = [
-    'localhost',
-    '127.0.0.1',
-    '154.94.233.250',
-    'sklinkchat.com',
-    'www.sklinkchat.com'
-  ]
+  const previewAllowedHosts = ['localhost', '127.0.0.1', '154.94.233.250', 'sklinkchat.com', 'www.sklinkchat.com']
 
   return {
     plugins: [react()],

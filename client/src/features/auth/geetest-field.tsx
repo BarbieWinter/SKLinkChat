@@ -197,8 +197,8 @@ export const GeeTestField = forwardRef<GeeTestFieldHandle, GeeTestFieldProps>(
       : isOpening
         ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
         : isLoading
-        ? 'border-sky-500/25 bg-sky-500/10 text-sky-100'
-        : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+          ? 'border-sky-500/25 bg-sky-500/10 text-sky-100'
+          : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
 
     return (
       <div className="relative overflow-hidden rounded-[24px] border border-slate-800/80 bg-[linear-gradient(135deg,rgba(10,15,28,0.96),rgba(12,20,37,0.72))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
@@ -249,7 +249,7 @@ export const GeeTestField = forwardRef<GeeTestFieldHandle, GeeTestFieldProps>(
                   ? 'cursor-default border-emerald-500/35 bg-emerald-500/12 text-emerald-200'
                   : isOpening
                     ? 'border-cyan-400/35 bg-cyan-400/10 text-cyan-50'
-                  : 'border-sky-400/35 bg-[linear-gradient(135deg,rgba(59,130,246,0.18),rgba(34,211,238,0.14))] text-sky-50 hover:border-sky-300/55 hover:bg-[linear-gradient(135deg,rgba(59,130,246,0.25),rgba(34,211,238,0.18))]',
+                    : 'border-sky-400/35 bg-[linear-gradient(135deg,rgba(59,130,246,0.18),rgba(34,211,238,0.14))] text-sky-50 hover:border-sky-300/55 hover:bg-[linear-gradient(135deg,rgba(59,130,246,0.25),rgba(34,211,238,0.18))]',
                 isLoading && 'cursor-wait opacity-70'
               )}
               disabled={isLoading || isSuccess}
@@ -269,7 +269,13 @@ export const GeeTestField = forwardRef<GeeTestFieldHandle, GeeTestFieldProps>(
               ) : (
                 <ShieldCheck className="h-4 w-4" />
               )}
-              {isLoading ? '正在加载...' : isOpening ? '验证窗口已打开' : isSuccess ? '安全验证已完成' : '点击完成安全验证'}
+              {isLoading
+                ? '正在加载...'
+                : isOpening
+                  ? '验证窗口已打开'
+                  : isSuccess
+                    ? '安全验证已完成'
+                    : '点击完成安全验证'}
             </button>
           </div>
         </div>

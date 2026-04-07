@@ -19,10 +19,16 @@ class BootstrapConnectionUseCase:
         websocket: WebSocket,
         *,
         display_name: str | None = None,
+        gender: str | None = None,
         short_id: str | None = None,
     ) -> ChatSession:
         await self.runtime.register_connection(session_id, websocket)
-        return await self.runtime.get_or_create_session(session_id, name=display_name, short_id=short_id)
+        return await self.runtime.get_or_create_session(
+            session_id,
+            name=display_name,
+            gender=gender,
+            short_id=short_id,
+        )
 
 
 @dataclass(slots=True)

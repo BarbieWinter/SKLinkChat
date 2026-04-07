@@ -70,10 +70,7 @@ export const AdminAuditPage = () => {
   }, [])
 
   return (
-    <section
-      data-testid="admin-audit-page"
-      className="rounded-lg border border-border bg-card p-5"
-    >
+    <section data-testid="admin-audit-page" className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">审计日志</h2>

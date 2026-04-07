@@ -12,6 +12,7 @@ class AuthorizedChatSession:
     session_id: str
     display_name: str
     short_id: str
+    gender: str
 
 
 class ChatAccessService:
@@ -50,6 +51,7 @@ class ChatAccessService:
             session_id=session_id,
             display_name=account.display_name,
             short_id=account.short_id,
+            gender=account.gender,
         )
 
     async def require_chat_enabled_account(self, account_id: str) -> str:
