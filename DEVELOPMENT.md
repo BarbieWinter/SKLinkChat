@@ -112,9 +112,15 @@ SERVER_PY_SECURE_COOKIES=false
 VITE_GEETEST_ENABLED=true
 VITE_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
 VITE_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
+VITE_AUTH_MODE=legacy
+VITE_STACK_PROJECT_ID=<your_stack_project_id>
+VITE_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
 ```
 
 其中 `captcha_id` 只用于前端渲染组件，`captcha_key` 只用于后端服务端校验。
+
+`VITE_AUTH_MODE` 默认建议保持 `legacy`（沿用现有认证链路）。  
+当你需要联调 Stack Auth 前端组件时，可先补齐 Stack 两个 key 并访问 `/auth/stack`。
 
 管理员身份现在由 PostgreSQL `accounts.is_admin` 字段驱动。测试或本地切换管理员时，可直接更新数据库：
 
@@ -185,6 +191,11 @@ npm run dev
 
 - http://localhost:5173/admin/reports
 - http://localhost:5173/admin/audit
+
+Stack Auth 前端接入验证路由（M1）：
+
+- http://localhost:5173/auth/stack
+- http://localhost:5173/handler/*
 
 ### 5.3 构建 & 检查
 

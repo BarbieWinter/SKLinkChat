@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { StackHandler } from '@stackframe/react'
 
 import Layout from '@/app/layout'
 import Providers from '@/app/providers'
@@ -9,6 +10,7 @@ import AdminReportsPage from '@/pages/admin-reports-page'
 import HomePage from '@/pages/home-page'
 import NotFoundPage from '@/pages/not-found-page'
 import RetroLandingPage from '@/pages/retro-landing-page'
+import StackAuthPage from '@/pages/stack-auth-page'
 
 // /landing needs its own Providers wrapper (auth context) since it lives
 // outside the main Layout which already wraps Providers internally.
@@ -18,11 +20,25 @@ const LandingWithProviders = () => (
   </Providers>
 )
 
+const StackAuthWithProviders = () => (
+  <Providers>
+    <StackAuthPage />
+  </Providers>
+)
+
+const StackHandlerWithProviders = () => (
+  <Providers>
+    <StackHandler fullPage />
+  </Providers>
+)
+
 const App = () => {
   return (
     <BrowserRouter future={{ v7_startTransition: true }}>
       <Routes>
         <Route path="/landing" element={<LandingWithProviders />} />
+        <Route path="/auth/stack" element={<StackAuthWithProviders />} />
+        <Route path="/handler/*" element={<StackHandlerWithProviders />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="admin" element={<AdminRouteGuard />}>

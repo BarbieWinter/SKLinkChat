@@ -19,9 +19,6 @@ import { useToast } from '@/shared/ui/use-toast'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-const parseInterestInput = (v: string) =>
-  v.split(',').map((s) => s.trim()).filter(Boolean)
-
 const validateEmail       = (v: string) => !v.trim() ? '请输入邮箱地址' : !EMAIL_RE.test(v.trim()) ? '邮箱格式不正确' : null
 const validatePassword    = (v: string) => !v ? '请输入密码' : v.length < 8 ? '密码至少 8 位' : null
 const validateDisplayName = (v: string) => !v.trim() ? '请输入用户名' : v.trim().length > 80 ? '用户名不能超过 80 个字符' : null
@@ -300,7 +297,7 @@ export const AuthEntryCard = () => {
   const [touched, setTouched]               = useState<Record<string, boolean>>({})
   const [forgotEmail, setForgotEmail]       = useState('')
   const [resetForm, setResetForm]           = useState({ password: '', confirm: '' })
-  const [registerForm, setRegisterForm]     = useState({ email: '', password: '', displayName: '', interests: '' })
+  const [registerForm, setRegisterForm]     = useState({ email: '', password: '', displayName: '' })
   const [loginForm, setLoginForm]           = useState({ email: '', password: '' })
   const [verifyCode_, setVerifyCode_]       = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
@@ -367,7 +364,7 @@ export const AuthEntryCard = () => {
       await register({
         email: registerForm.email.trim(), password: registerForm.password,
         displayName: registerForm.displayName.trim(),
-        interests: parseInterestInput(registerForm.interests),
+        interests: [],
         captcha: captchaPayload as GeeTestCaptchaPayload,
       })
       startCooldown(); setVerifyCode_(''); switchMode('verify')
@@ -680,9 +677,6 @@ export const AuthEntryCard = () => {
                     hasError={!!(touched['reg-name'] && validateDisplayName(registerForm.displayName))} />
                   {touched['reg-name'] && validateDisplayName(registerForm.displayName) && <p style={ERR}>{validateDisplayName(registerForm.displayName)}</p>}
                 </div>
-                <PixelInput value={registerForm.interests}
-                  onChange={e => setRegisterForm(p => ({ ...p, interests: e.target.value }))}
-                  placeholder="兴趣标签（逗号分隔，可选）" />
                 <GeeTestField ref={geetestRef} captchaId={activeCaptchaId}
                   onValidateChange={p => { setCaptchaError(null); setCaptchaPayload(p) }}
                   onError={setCaptchaError} />
