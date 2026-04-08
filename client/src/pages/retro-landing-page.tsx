@@ -505,15 +505,15 @@ export default function RetroLandingPage() {
 
         <div style={{ display: 'flex', gap: '0.7rem', alignItems: 'center' }}>
           {authSession.authenticated ? (
-            <button className="lp-btn lp-btn-fill" onClick={() => navigate('/')}>
+            <button className="lp-btn lp-btn-fill" onClick={() => navigate('/chat')}>
               Enter App
             </button>
           ) : (
             <>
-              <button className="lp-btn lp-btn-ghost" onClick={() => navigate('/')}>
+              <button className="lp-btn lp-btn-ghost" onClick={() => navigate('/auth/stack?mode=signin')}>
                 Log In
               </button>
-              <button className="lp-btn lp-btn-fill" onClick={() => navigate('/')}>
+              <button className="lp-btn lp-btn-fill" onClick={() => navigate('/auth/stack?mode=signup')}>
                 Sign Up
               </button>
             </>
@@ -571,7 +571,7 @@ export default function RetroLandingPage() {
         <button
           className="lp-btn-cta"
           style={{ marginTop: '3.2rem' }}
-          onClick={() => navigate('/')}
+          onClick={() => navigate(authSession.authenticated ? '/chat' : '/auth/stack?mode=signup')}
         >
           Start Chatting
         </button>

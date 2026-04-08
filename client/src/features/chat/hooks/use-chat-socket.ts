@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import useWebSocket, { ReadyState } from 'react-use-websocket'
 
 import { getSocketUrl, toUser } from '@/features/chat/services/protocol'
 import { ChatTransportStatus } from '@/features/chat/model/runtime'
 import { WS_ENDPOINT } from '@/shared/config/runtime'
-import { Gender, PayloadType, PresenceCountPayload, UserState } from '@/shared/types'
+import { resolveStackAccessToken } from '@/shared/lib/auth-headers'
+import { Gender, PayloadType, PresenceCountPayload, User, UserState } from '@/shared/types'
 
 const createClientMessageId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -31,6 +32,22 @@ type UseChatSocketOptions = {
   onSocketClosed: (code: number, reason: string) => void
 }
 
+type SocketEnvelope = {
+  type: PayloadType
+  payload: unknown
+}
+
+type IncomingMessagePayload = {
+  id: string
+  name: string
+  message: string
+  gender?: Gender
+}
+
+type TypingPayload = {
+  typing?: boolean
+}
+
 export const useChatSocket = ({
   sessionId,
   meId,
@@ -47,31 +64,63 @@ export const useChatSocket = ({
   onSocketClosed
 }: UseChatSocketOptions) => {
   const hasConnectedRef = useRef(false)
+  const [socketUrl, setSocketUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!sessionId) {
+      setSocketUrl(null)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setSocketUrl(null)
+
+    const resolveSocketUrl = async () => {
+      const accessToken = await resolveStackAccessToken()
+      if (cancelled) {
+        return
+      }
+
+      setSocketUrl(getSocketUrl(WS_ENDPOINT, sessionId, accessToken))
+    }
+
+    void resolveSocketUrl()
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId])
+
   const socket = useWebSocket(
-    sessionId ? getSocketUrl(WS_ENDPOINT, sessionId) : null,
+    socketUrl,
     {
       shouldReconnect: (closeEvent) => !(closeEvent.code === 1008 && closeEvent.reason === 'CHAT_ACCESS_RESTRICTED'),
       onClose: (event) => {
         onSocketClosed(event.code, event.reason)
       },
       onMessage: (event) => {
-        const data = JSON.parse(event.data) as { type: PayloadType; payload: any }
+        const data = JSON.parse(event.data) as SocketEnvelope
 
         switch (data.type) {
           case PayloadType.Disconnect:
             onDisconnect()
             onSystemMessage('system.strangerDisconnected')
             break
-          case PayloadType.Message:
+          case PayloadType.Message: {
+            const payload = data.payload as IncomingMessagePayload
             onIncomingMessage({
-              id: data.payload.id,
-              name: data.payload.name,
-              message: data.payload.message,
-              gender: data.payload.gender
+              id: payload.id,
+              name: payload.name,
+              message: payload.message,
+              gender: payload.gender
             })
             break
+          }
           case PayloadType.UserInfo: {
-            const user = toUser(data.payload)
+            const user = toUser(data.payload as Partial<User>)
             if (!user) {
               return
             }
@@ -84,7 +133,7 @@ export const useChatSocket = ({
             break
           }
           case PayloadType.Match: {
-            const user = toUser(data.payload)
+            const user = toUser(data.payload as Partial<User>)
             if (user) {
               onMatch(user)
             }
@@ -100,7 +149,7 @@ export const useChatSocket = ({
             onErrorMessage(String(data.payload))
             break
           case PayloadType.Typing:
-            onTyping(Boolean(data.payload.typing))
+            onTyping(Boolean((data.payload as TypingPayload).typing))
             break
           case PayloadType.PresenceCount:
             onPresenceCount((data.payload as PresenceCountPayload).online_count)
@@ -108,7 +157,7 @@ export const useChatSocket = ({
         }
       }
     },
-    Boolean(sessionId)
+    Boolean(socketUrl)
   )
 
   useEffect(() => {
@@ -126,6 +175,9 @@ export const useChatSocket = ({
     if (!sessionId) {
       return 'idle'
     }
+    if (!socketUrl) {
+      return 'connecting'
+    }
 
     switch (socket.readyState) {
       case ReadyState.OPEN:
@@ -139,7 +191,7 @@ export const useChatSocket = ({
       default:
         return 'connecting'
     }
-  }, [sessionId, socket.readyState])
+  }, [sessionId, socket.readyState, socketUrl])
 
   return {
     transportStatus,

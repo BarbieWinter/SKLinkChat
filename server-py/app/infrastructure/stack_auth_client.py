@@ -36,6 +36,7 @@ class StackAuthClient:
 
         url = f"{self._api_base_url}/api/v1/users/me"
         headers = {
+            "x-stack-access-type": "server",
             "x-stack-project-id": self._project_id,
             "x-stack-secret-server-key": self._secret_server_key,
             "x-stack-access-token": token,

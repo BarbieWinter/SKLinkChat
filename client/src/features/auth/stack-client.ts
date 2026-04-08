@@ -18,8 +18,8 @@ export const stackClientApp = stackAuthEnabled
       tokenStore: 'cookie',
       urls: {
         handler: '/handler',
-        afterSignIn: '/',
-        afterSignUp: '/',
+        afterSignIn: '/auth/stack?mode=signin',
+        afterSignUp: '/auth/stack?mode=signin',
         afterSignOut: '/'
       }
     })

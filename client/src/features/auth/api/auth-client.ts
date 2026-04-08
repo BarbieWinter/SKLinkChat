@@ -2,6 +2,8 @@ import { API_BASE_URL } from '@/shared/config/runtime'
 import { resolveAuthHeaders } from '@/shared/lib/auth-headers'
 import type { Gender } from '@/shared/types'
 
+const REQUEST_TIMEOUT_MS = 8000
+
 export type AuthSessionPayload = {
   authenticated: boolean
   email_verified: boolean
@@ -27,15 +29,28 @@ export type GeeTestCaptchaPayload = {
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const authHeaders = await resolveAuthHeaders(init?.headers)
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders
-    },
-    ...init
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      ...init,
+      signal: controller.signal
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Request timeout')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {

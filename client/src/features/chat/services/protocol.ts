@@ -5,9 +5,12 @@ export type ServerEnvelope = {
   payload: unknown
 }
 
-export const getSocketUrl = (endpoint: string, sessionId: string) => {
+export const getSocketUrl = (endpoint: string, sessionId: string, stackAccessToken?: string | null) => {
   const url = new URL(endpoint)
   url.searchParams.set('sessionId', sessionId)
+  if (stackAccessToken) {
+    url.searchParams.set('stack_access_token', stackAccessToken)
+  }
   return url.toString()
 }
 

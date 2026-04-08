@@ -40,7 +40,8 @@ const App = () => {
         <Route path="/auth/stack" element={<StackAuthWithProviders />} />
         <Route path="/handler/*" element={<StackHandlerWithProviders />} />
         <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
+          <Route index element={<RetroLandingPage />} />
+          <Route path="chat" element={<HomePage />} />
           <Route path="admin" element={<AdminRouteGuard />}>
             <Route element={<AdminLayout />}>
               <Route path="reports" element={<AdminReportsPage />} />

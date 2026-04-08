@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -19,6 +20,17 @@ def extract_stack_access_token(request: Request) -> str | None:
     token = (request.headers.get("x-stack-access-token") or "").strip()
     if token:
         return token
+
+    stack_auth_raw = (request.headers.get("x-stack-auth") or "").strip()
+    if stack_auth_raw:
+        try:
+            payload = json.loads(stack_auth_raw)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict):
+            access_token = str(payload.get("accessToken") or payload.get("access_token") or "").strip()
+            if access_token:
+                return access_token
 
     authorization = (request.headers.get("authorization") or "").strip()
     if authorization.lower().startswith("bearer "):

@@ -40,7 +40,7 @@ const HomePage = () => {
 
   if (!authSession.authenticated || pendingVerificationEmail) {
     if (stackAuthMode === 'stack') {
-      return <Navigate to="/auth/stack" replace />
+      return <Navigate to="/auth/stack?mode=signin" replace />
     }
     return <AuthEntryCard />
   }

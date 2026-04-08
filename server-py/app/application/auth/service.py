@@ -630,11 +630,12 @@ class AuthService:
         matched_by_email = await self._account_repository.get_by_email_normalized(normalized_email)
         if matched_by_email is not None:
             if matched_by_email.stack_user_id and matched_by_email.stack_user_id != profile.stack_user_id:
-                raise AppError(
-                    message="This account is already linked to another identity",
-                    code="STACK_ACCOUNT_CONFLICT",
-                    status_code=409,
-                )
+                if verified_at is None:
+                    raise AppError(
+                        message="This account is already linked to another identity",
+                        code="STACK_ACCOUNT_CONFLICT",
+                        status_code=409,
+                    )
             return await self._account_repository.bind_stack_user(
                 account_id=matched_by_email.id,
                 stack_user_id=profile.stack_user_id,
