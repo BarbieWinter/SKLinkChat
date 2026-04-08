@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,35 +36,12 @@ class Settings(BaseSettings):
 
     auth_cookie_name: str = "sklinkchat_session"
     auth_session_ttl_seconds: int = 604800
-    verification_token_ttl_seconds: int = 900
-    verification_resend_cooldown_seconds: int = 60
-    verification_resend_hourly_limit: int = 5
-    password_reset_token_ttl_seconds: int = 900
-    password_reset_resend_cooldown_seconds: int = 60
-    password_reset_hourly_limit: int = 5
     chat_message_ttl_seconds: int = 2592000
-    registration_risk_retention_seconds: int = 15552000
     audit_event_retention_seconds: int = 31536000
     cleanup_interval_seconds: int = 60
 
-    email_provider: Literal["fake", "mailpit", "resend"] = "fake"
-    email_from: str | None = None
-    email_from_address: str | None = None
-    smtp_host: str = "127.0.0.1"
-    smtp_port: int = 1025
-    smtp_username: str | None = None
-    smtp_password: str | None = None
-    resend_api_key: str | None = None
-    resend_base_url: str = "https://api.resend.com"
     app_base_url: str | None = None
     frontend_base_url: str | None = None
-
-    geetest_enabled: bool = False
-    geetest_register_captcha_id: str | None = None
-    geetest_register_captcha_key: str | None = None
-    geetest_login_captcha_id: str | None = None
-    geetest_login_captcha_key: str | None = None
-    geetest_base_url: str = "https://gcaptcha4.geetest.com"
 
     stack_auth_enabled: bool = False
     stack_project_id: str | None = None
@@ -87,24 +64,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_email_settings(self) -> Settings:
         self.environment = self.environment.strip().lower()
-        if not self.email_from and self.email_from_address:
-            self.email_from = self.email_from_address
         if not self.app_base_url and self.frontend_base_url:
             self.app_base_url = self.frontend_base_url
 
-        self.email_from = (self.email_from or "noreply@mail.sklinkchat.com").strip()
         self.app_base_url = (self.app_base_url or "http://localhost:4173").rstrip("/")
-        self.resend_api_key = self.resend_api_key.strip() if self.resend_api_key else None
-        self.geetest_register_captcha_id = (
-            self.geetest_register_captcha_id.strip() if self.geetest_register_captcha_id else None
-        )
-        self.geetest_register_captcha_key = (
-            self.geetest_register_captcha_key.strip() if self.geetest_register_captcha_key else None
-        )
-        self.geetest_login_captcha_id = self.geetest_login_captcha_id.strip() if self.geetest_login_captcha_id else None
-        self.geetest_login_captcha_key = (
-            self.geetest_login_captcha_key.strip() if self.geetest_login_captcha_key else None
-        )
         self.stack_project_id = (self.stack_project_id or "").strip() or None
         self.stack_secret_server_key = (self.stack_secret_server_key or "").strip() or None
         self.stack_api_base_url = (self.stack_api_base_url or "https://api.stack-auth.com").rstrip("/")
@@ -115,32 +78,6 @@ class Settings(BaseSettings):
         if not self.stack_secret_server_key:
             self.stack_secret_server_key = os.getenv("STACK_SECRET_SERVER_KEY", "").strip() or None
 
-        if self.email_provider == "resend":
-            if not self.resend_api_key:
-                raise ValueError("SERVER_PY_RESEND_API_KEY is required when SERVER_PY_EMAIL_PROVIDER=resend")
-            if not self.email_from:
-                raise ValueError("SERVER_PY_EMAIL_FROM is required when SERVER_PY_EMAIL_PROVIDER=resend")
-            if not self.app_base_url:
-                raise ValueError("SERVER_PY_APP_BASE_URL is required when SERVER_PY_EMAIL_PROVIDER=resend")
-
-        if self.geetest_enabled:
-            if not self.geetest_register_captcha_id:
-                raise ValueError(
-                    "SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID is required when SERVER_PY_GEETEST_ENABLED=true"
-                )
-            if not self.geetest_register_captcha_key:
-                raise ValueError(
-                    "SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY is required when SERVER_PY_GEETEST_ENABLED=true"
-                )
-            if not self.geetest_login_captcha_id:
-                raise ValueError(
-                    "SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID is required when SERVER_PY_GEETEST_ENABLED=true"
-                )
-            if not self.geetest_login_captcha_key:
-                raise ValueError(
-                    "SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY is required when SERVER_PY_GEETEST_ENABLED=true"
-                )
-
         if self.stack_auth_enabled:
             if not self.stack_project_id:
                 raise ValueError("SERVER_PY_STACK_PROJECT_ID is required when SERVER_PY_STACK_AUTH_ENABLED=true")
@@ -150,13 +87,8 @@ class Settings(BaseSettings):
                 )
 
         if self.environment == "production":
-            if self.email_provider != "resend":
-                raise ValueError("SERVER_PY_EMAIL_PROVIDER must be resend when SERVER_PY_ENVIRONMENT=production")
-            if not self.geetest_enabled and not self.stack_auth_enabled:
-                raise ValueError(
-                    "At least one verification path must be enabled in production "
-                    "(SERVER_PY_GEETEST_ENABLED or SERVER_PY_STACK_AUTH_ENABLED)"
-                )
+            if not self.stack_auth_enabled:
+                raise ValueError("SERVER_PY_STACK_AUTH_ENABLED must be true when SERVER_PY_ENVIRONMENT=production")
             if not self.secure_cookies:
                 raise ValueError("SERVER_PY_SECURE_COOKIES must be true when SERVER_PY_ENVIRONMENT=production")
 

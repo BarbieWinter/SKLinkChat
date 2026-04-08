@@ -1,51 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol
-
-
-class EmailSender(Protocol):
-    async def send_verification_code(self, *, recipient: str, display_name: str, code: str) -> None: ...
-
-    async def send_password_reset_email(self, *, recipient: str, display_name: str, reset_link: str) -> None: ...
-
-
-CaptchaScenario = Literal["register", "login", "resend_verification"]
-
-
-@dataclass(slots=True, frozen=True)
-class GeeTestCaptchaPayload:
-    lot_number: str
-    captcha_output: str
-    pass_token: str
-    gen_time: str
-
-
-@dataclass(slots=True, frozen=True)
-class GeeTestVerificationResult:
-    success: bool
-    provider: str
-    scenario: CaptchaScenario
-    error_codes: tuple[str, ...] = ()
-
-
-class GeeTestConfigurationError(RuntimeError):
-    pass
-
-
-class GeeTestServiceUnavailableError(RuntimeError):
-    pass
-
-
-class GeeTestVerifier(Protocol):
-    async def verify(
-        self,
-        payload: GeeTestCaptchaPayload,
-        *,
-        scenario: CaptchaScenario,
-        remote_ip: str | None,
-    ) -> GeeTestVerificationResult: ...
+from typing import Protocol
 
 
 @dataclass(slots=True, frozen=True)
@@ -111,16 +67,3 @@ class DurableChatRepository(Protocol):
         reason: str,
         details: str | None,
     ) -> int: ...
-
-
-class RiskEventRecorder(Protocol):
-    async def record(
-        self,
-        *,
-        email_normalized: str,
-        outcome: str,
-        details: Mapping[str, object],
-        account_id: str | None,
-        ip_hash: str | None,
-        user_agent: str | None,
-    ) -> None: ...

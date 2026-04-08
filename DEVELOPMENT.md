@@ -56,29 +56,9 @@ redis-server --daemonize yes
 
 默认地址 `redis://localhost:6379/0`，写入 `.env` 的 key 是 `SERVER_PY_REDIS_URL`。
 
-## 三、Resend（邮件服务）
+## 三、后端 (server-py)
 
-当前项目使用 [Resend](https://resend.com) 作为主邮件服务，已验证发件域名 `mail.sklinkchat.com`。
-
-需要的环境变量：
-
-```
-SERVER_PY_EMAIL_PROVIDER=resend
-SERVER_PY_EMAIL_FROM=noreply@mail.sklinkchat.com
-SERVER_PY_RESEND_API_KEY=<your_resend_api_key>
-SERVER_PY_APP_BASE_URL=http://localhost:5173
-```
-
-> **可选本地调试**：如需在本地使用 Mailpit 拦截邮件（不走真实发送），可将 `EMAIL_PROVIDER` 改为 `mailpit` 并启动 Mailpit：
-> ```bash
-> brew install mailpit && mailpit
-> # 或 docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
-> ```
-> SMTP: `127.0.0.1:1025` / Web UI: http://localhost:8025
-
-## 四、后端 (server-py)
-
-### 4.1 初始化
+### 3.1 初始化
 
 ```bash
 cd server-py
@@ -87,16 +67,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### 4.2 环境变量
+### 3.2 环境变量
 
 复制 `.env.example`（或直接编辑 `.env`），确保至少包含：
 
 ```
 SERVER_PY_DATABASE_URL=postgresql+psycopg://sklinkchat:sklinkchat@127.0.0.1:5432/sklinkchat
 SERVER_PY_REDIS_URL=redis://localhost:6379/0
-SERVER_PY_EMAIL_PROVIDER=resend
-SERVER_PY_EMAIL_FROM=noreply@mail.sklinkchat.com
-SERVER_PY_RESEND_API_KEY=<your_resend_api_key>
 SERVER_PY_APP_BASE_URL=http://localhost:5173
 SERVER_PY_STACK_AUTH_ENABLED=true
 SERVER_PY_STACK_PROJECT_ID=<your_stack_project_id>
@@ -108,7 +85,6 @@ SERVER_PY_SECURE_COOKIES=false
 如果你只单独启动前端，也可以显式配置：
 
 ```
-VITE_AUTH_MODE=stack
 VITE_STACK_PROJECT_ID=<your_stack_project_id>
 VITE_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
 # 或者使用 Stack 文档默认命名（本项目已兼容）
@@ -116,16 +92,7 @@ NEXT_PUBLIC_STACK_PROJECT_ID=<your_stack_project_id>
 NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
 ```
 
-`VITE_AUTH_MODE=stack` 时，首页未登录会直接跳转 `/auth/stack`。  
-后端启用 `SERVER_PY_STACK_AUTH_ENABLED=true` 后，旧 `/api/auth/register|login|verify-email|resend-verification` 将返回 `410 LEGACY_AUTH_DISABLED`。
-
-如果你要临时回滚到旧认证链路，再恢复 GeeTest 配置并切回：
-
-```
-VITE_AUTH_MODE=legacy
-SERVER_PY_STACK_AUTH_ENABLED=false
-SERVER_PY_GEETEST_ENABLED=true
-```
+前端未登录时会直接跳转 `/auth/stack`，旧登录/注册/GeeTest 链路已经从项目中删除。
 
 如果你习惯使用 Stack 默认变量名，也支持：
 
@@ -144,7 +111,7 @@ WHERE email_normalized = 'admin@example.com';
 
 修改后无需改 `.env`，重新请求 `/api/auth/session` 即会返回最新 `is_admin` 状态。
 
-### 4.3 数据库迁移
+### 3.3 数据库迁移
 
 ```bash
 cd server-py
@@ -163,7 +130,7 @@ alembic downgrade -1
 psql -U sklinkchat -d sklinkchat -c "\dt+"
 ```
 
-### 4.4 启动开发服务
+### 3.4 启动开发服务
 
 ```bash
 cd server-py
@@ -173,7 +140,7 @@ uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8000
 
 后端运行在 http://localhost:8000 ，健康检查 http://localhost:8000/healthz 。
 
-### 4.5 代码检查
+### 3.5 代码检查
 
 ```bash
 cd server-py
@@ -181,16 +148,16 @@ cd server-py
 python -m compileall app
 ```
 
-## 五、前端 (client)
+## 四、前端 (client)
 
-### 5.1 初始化
+### 4.1 初始化
 
 ```bash
 cd client
 npm install
 ```
 
-### 5.2 启动开发服务
+### 4.2 启动开发服务
 
 ```bash
 cd client
@@ -209,14 +176,14 @@ Stack Auth 前端接入验证路由（M1）：
 - http://localhost:5173/auth/stack
 - http://localhost:5173/handler/*
 
-### 5.3 构建 & 检查
+### 4.3 构建 & 检查
 
 ```bash
 npm run build      # 生产构建
 npm run lint            # ESLint 检查
 ```
 
-## 六、全栈启动顺序
+## 五、全栈启动顺序
 
 ```bash
 # 1. 基础设施
@@ -234,7 +201,7 @@ cd client && npm run dev
 
 打开 http://localhost:5173 即可使用。
 
-## 七、Docker Compose（可选）
+## 六、Docker Compose（可选）
 
 本机如果有 Docker，也可以一键启动全部服务：
 

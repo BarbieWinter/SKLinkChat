@@ -9,7 +9,6 @@ const stackPublishableClientKey = readEnv(
 )
 
 export const stackAuthEnabled = stackProjectId.length > 0 && stackPublishableClientKey.length > 0
-export const stackAuthMode = readEnv(env.VITE_AUTH_MODE).toLowerCase() || 'legacy'
 
 export const stackClientApp = stackAuthEnabled
   ? new StackClientApp({

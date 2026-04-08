@@ -95,7 +95,3 @@ export const WS_ENDPOINT = (() => {
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return url.toString()
 })()
-
-export const GEETEST_ENABLED = import.meta.env.VITE_GEETEST_ENABLED?.trim() === 'true'
-export const GEETEST_REGISTER_CAPTCHA_ID = import.meta.env.VITE_GEETEST_REGISTER_CAPTCHA_ID?.trim() ?? ''
-export const GEETEST_LOGIN_CAPTCHA_ID = import.meta.env.VITE_GEETEST_LOGIN_CAPTCHA_ID?.trim() ?? ''

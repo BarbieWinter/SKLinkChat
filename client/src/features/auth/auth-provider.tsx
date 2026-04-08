@@ -1,43 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 import { useAppStore } from '@/app/store'
-import {
-  AuthSessionPayload,
-  GeeTestCaptchaPayload,
-  VerificationRequiredPayload,
-  getAuthSession,
-  loginAccount,
-  logoutAccount,
-  registerAccount,
-  resendVerificationCode,
-  updateAccountSettings,
-  verifyEmailCode
-} from '@/features/auth/api/auth-client'
-import { stackAuthMode, stackClientApp } from '@/features/auth/stack-client'
+import { AuthSessionPayload, getAuthSession, logoutAccount, updateAccountSettings } from '@/features/auth/api/auth-client'
+import { stackClientApp } from '@/features/auth/stack-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 import type { Gender } from '@/shared/types'
 
 type AuthStatus = 'loading' | 'ready'
-type LoginResult = 'authenticated' | 'verification_required'
 
 type AuthContextValue = {
   authSession: AuthSessionPayload
   status: AuthStatus
-  pendingVerificationEmail: string | null
-  register: (payload: {
-    email: string
-    password: string
-    displayName: string
-    interests: string[]
-    captcha: GeeTestCaptchaPayload
-  }) => Promise<void>
-  login: (payload: { email: string; password: string; captcha: GeeTestCaptchaPayload }) => Promise<LoginResult>
   logout: () => Promise<void>
-  verifyCode: (email: string, code: string) => Promise<void>
-  resendCode: (payload: { email: string }) => Promise<void>
   syncProfile: (payload: { interests: string[]; gender: Gender }) => Promise<void>
   refreshSession: () => Promise<void>
-  setPendingVerificationEmail: (email: string | null) => void
 }
 
 const EMPTY_AUTH_SESSION: AuthSessionPayload = {
@@ -51,10 +27,6 @@ const EMPTY_AUTH_SESSION: AuthSessionPayload = {
   chat_access_restricted: false
 }
 
-const isVerificationRequired = (
-  result: AuthSessionPayload | VerificationRequiredPayload
-): result is VerificationRequiredPayload => 'status' in result && result.status === 'verification_required'
-
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -64,7 +36,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const clear = useAppStore((state) => state.clear)
   const [authSession, setAuthSession] = useState<AuthSessionPayload>(EMPTY_AUTH_SESSION)
   const [status, setStatus] = useState<AuthStatus>('loading')
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
 
   const applySession = useCallback(
     (nextSession: AuthSessionPayload) => {
@@ -113,58 +84,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     () => ({
       authSession,
       status,
-      pendingVerificationEmail,
-      register: async ({ email, password, displayName, interests, captcha }) => {
-        if (stackAuthMode === 'stack') {
-          throw new Error('Legacy register flow is disabled in stack mode')
-        }
-        await registerAccount({
-          email,
-          password,
-          display_name: displayName,
-          interests,
-          captcha
-        })
-        setPendingVerificationEmail(email)
-      },
-      login: async ({ email, password, captcha }) => {
-        if (stackAuthMode === 'stack') {
-          throw new Error('Legacy login flow is disabled in stack mode')
-        }
-        const result = await loginAccount({ email, password, captcha })
-        if (isVerificationRequired(result)) {
-          setPendingVerificationEmail(email)
-          return 'verification_required'
-        }
-        applySession(result)
-        setStatus('ready')
-        return 'authenticated'
-      },
       logout: async () => {
         await logoutAccount()
-        if (stackAuthMode === 'stack' && stackClientApp) {
+        if (stackClientApp) {
           await stackClientApp.signOut().catch(() => undefined)
         }
         clearStoredSessionId()
         clear()
         resetSession()
         applySession(EMPTY_AUTH_SESSION)
-        setPendingVerificationEmail(null)
-      },
-      verifyCode: async (email: string, code: string) => {
-        if (stackAuthMode === 'stack') {
-          throw new Error('Legacy verification flow is disabled in stack mode')
-        }
-        const nextSession = await verifyEmailCode(email, code)
-        applySession(nextSession)
-        setPendingVerificationEmail(null)
-        setStatus('ready')
-      },
-      resendCode: async ({ email }) => {
-        if (stackAuthMode === 'stack') {
-          throw new Error('Legacy verification flow is disabled in stack mode')
-        }
-        await resendVerificationCode({ email })
       },
       syncProfile: async ({ interests, gender }) => {
         const nextProfile = await updateAccountSettings({ interests, gender })
@@ -177,20 +105,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           gender: nextProfile.gender
         }))
       },
-      refreshSession,
-      setPendingVerificationEmail
+      refreshSession
     }),
-    [
-      applySession,
-      authSession,
-      clear,
-      pendingVerificationEmail,
-      refreshSession,
-      resetSession,
-      saveSettings,
-      setDisplayName,
-      status
-    ]
+    [applySession, authSession, clear, refreshSession, resetSession, saveSettings, setDisplayName, status]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

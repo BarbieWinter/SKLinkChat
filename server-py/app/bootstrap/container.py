@@ -35,9 +35,7 @@ from app.application.platform.use_cases import (
     UpdateAccountProfileUseCase,
 )
 from app.application.retention.service import RetentionService
-from app.infrastructure.email_sender import build_email_sender
 from app.infrastructure.feature_flags import NoOpFeatureFlagEvaluator
-from app.infrastructure.geetest_verifier import build_geetest_verifier
 from app.infrastructure.jobs.inline_job_dispatcher import InlineJobDispatcher
 from app.infrastructure.moderation_gateway import NoOpModerationGateway
 from app.infrastructure.observability.database_audit_sink import DatabaseAuditSink
@@ -49,9 +47,6 @@ from app.infrastructure.postgres.repositories import (
     AuditEventRepository,
     AuthSessionRepository,
     DurableChatRepositoryImpl,
-    EmailVerificationTokenRepository,
-    PasswordResetTokenRepository,
-    RiskEventRepository,
 )
 from app.infrastructure.readiness_probe import CompositeReadinessProbe
 from app.infrastructure.realtime.in_memory_connection_hub import InMemoryConnectionHub
@@ -111,12 +106,6 @@ def build_container(
 
     account_repository = AccountRepository(session_factory)
     auth_session_repository = AuthSessionRepository(session_factory)
-    verification_token_repository = EmailVerificationTokenRepository(session_factory)
-    password_reset_token_repository = PasswordResetTokenRepository(session_factory)
-    risk_event_repository = RiskEventRepository(
-        session_factory,
-        retention_seconds=settings.registration_risk_retention_seconds,
-    )
     durable_chat_repository = DurableChatRepositoryImpl(
         session_factory,
         chat_message_ttl_seconds=settings.chat_message_ttl_seconds,
@@ -130,19 +119,7 @@ def build_container(
     auth_service = AuthService(
         account_repository=account_repository,
         auth_session_repository=auth_session_repository,
-        verification_token_repository=verification_token_repository,
-        password_reset_token_repository=password_reset_token_repository,
-        risk_event_recorder=risk_event_repository,
-        email_sender=build_email_sender(settings),
-        geetest_verifier=build_geetest_verifier(settings),
-        verification_token_ttl_seconds=settings.verification_token_ttl_seconds,
         auth_session_ttl_seconds=settings.auth_session_ttl_seconds,
-        verification_resend_cooldown_seconds=settings.verification_resend_cooldown_seconds,
-        verification_resend_hourly_limit=settings.verification_resend_hourly_limit,
-        password_reset_token_ttl_seconds=settings.password_reset_token_ttl_seconds,
-        password_reset_resend_cooldown_seconds=settings.password_reset_resend_cooldown_seconds,
-        password_reset_hourly_limit=settings.password_reset_hourly_limit,
-        app_base_url=settings.app_base_url,
         stack_auth_enabled=settings.stack_auth_enabled,
         stack_auth_client=(
             StackAuthClient(
@@ -191,10 +168,7 @@ def build_container(
     )
     retention_service = RetentionService(
         auth_session_repository=auth_session_repository,
-        verification_token_repository=verification_token_repository,
-        password_reset_token_repository=password_reset_token_repository,
         durable_chat_repository=durable_chat_repository,
-        risk_event_repository=risk_event_repository,
         audit_event_repository=audit_event_repository,
     )
 

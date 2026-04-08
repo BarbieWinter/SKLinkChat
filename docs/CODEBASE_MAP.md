@@ -58,13 +58,13 @@
 ### 认证与账户
 
 - `client/src/features/auth/auth-provider.tsx`
-  登录态来源、会话恢复、登出逻辑。
-- `client/src/features/auth/ui/auth-entry-card.tsx`
-  注册 / 登录主卡片 UI。
+  Stack Auth 登录态同步、本地会话恢复、登出逻辑。
+- `client/src/pages/stack-auth-page.tsx`
+  Stack Auth 登录 / 注册页和登录态同步页。
 - `client/src/features/auth/ui/restricted-chat-access-card.tsx`
   账号受限时的前端提示卡片。
 - `client/src/features/auth/api/auth-client.ts`
-  认证相关 HTTP 调用。
+  本地会话、登出、资料更新相关 HTTP 调用。
 
 ### 管理后台
 
@@ -110,7 +110,7 @@
 ### HTTP 路由
 
 - `server-py/app/presentation/http/routes/auth.py`
-  注册、登录、邮箱验证、找回密码。
+  Stack 会话同步后的本地 session 读取 / 登出。
 - `server-py/app/presentation/http/routes/account.py`
   当前用户资料读取和修改。
 - `server-py/app/presentation/http/routes/session.py`
@@ -193,7 +193,7 @@
 
 ### 改登录注册或用户资料
 
-- 前端登录注册 UI：`client/src/features/auth/ui/auth-entry-card.tsx`
+- 前端 Stack 登录页：`client/src/pages/stack-auth-page.tsx`
 - 前端认证状态：`client/src/features/auth/auth-provider.tsx`
 - 前端认证请求：`client/src/features/auth/api/auth-client.ts`
 - 后端认证接口：`server-py/app/presentation/http/routes/auth.py`

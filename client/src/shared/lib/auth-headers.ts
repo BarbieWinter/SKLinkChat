@@ -1,4 +1,4 @@
-import { stackAuthMode, stackClientApp } from '@/features/auth/stack-client'
+import { stackClientApp } from '@/features/auth/stack-client'
 
 const STACK_ACCESS_TOKEN_TIMEOUT_MS = 2500
 
@@ -21,7 +21,7 @@ const resolveWithTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Pr
 }
 
 export const resolveStackAccessToken = async (): Promise<string | null> => {
-  if (stackAuthMode !== 'stack' || !stackClientApp) {
+  if (!stackClientApp) {
     return null
   }
 
@@ -43,7 +43,7 @@ export const resolveAuthHeaders = async (initialHeaders?: HeadersInit): Promise<
     Object.assign(mergedHeaders, initialHeaders)
   }
 
-  if (stackAuthMode === 'stack' && stackClientApp) {
+  if (stackClientApp) {
     const [stackAuthHeaders, accessToken] = await Promise.all([
       resolveWithTimeout(stackClientApp.getAuthHeaders(), STACK_ACCESS_TOKEN_TIMEOUT_MS),
       resolveStackAccessToken()
