@@ -27,10 +27,8 @@
   全局页面壳和外层布局。
 - `client/src/pages/home-page.tsx`
   首页入口，通常会接认证卡片或聊天工作区。
-- `client/src/pages/admin-reports-page.tsx`
-  管理后台举报页路由入口。
-- `client/src/pages/admin-audit-page.tsx`
-  管理后台审计页路由入口。
+- `client/src/pages/stack-auth-page.tsx`
+  Stack Auth 登录 / 注册页路由入口。
 
 ### 聊天主链路
 
@@ -176,7 +174,7 @@
 
 - 首页或路由切换：`client/src/app/App.tsx`、`client/src/pages/home-page.tsx`
 - 聊天页整体布局：`client/src/features/chat/ui/chat-workspace.tsx`
-- 管理后台结构：`client/src/features/admin/ui/admin-layout.tsx`
+- 管理后台结构：`client/src/features/admin/ui/admin-layout.tsx`、`client/src/features/admin/ui/admin-reports-page.tsx`
 
 ### 改聊天视觉
 
