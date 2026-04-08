@@ -1,4 +1,8 @@
 .env
+.env.*
 .run/
 server-py/.env
+server-py/.env.*
+client/.env
+client/.env.*
 __pycache__/

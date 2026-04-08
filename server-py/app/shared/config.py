@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from typing import Literal, TypedDict
 
@@ -65,6 +66,11 @@ class Settings(BaseSettings):
     geetest_login_captcha_key: str | None = None
     geetest_base_url: str = "https://gcaptcha4.geetest.com"
 
+    stack_auth_enabled: bool = False
+    stack_project_id: str | None = None
+    stack_secret_server_key: str | None = None
+    stack_api_base_url: str = "https://api.stack-auth.com"
+
     secure_cookies: bool = False
 
     @field_validator("database_url", mode="before")
@@ -99,6 +105,15 @@ class Settings(BaseSettings):
         self.geetest_login_captcha_key = (
             self.geetest_login_captcha_key.strip() if self.geetest_login_captcha_key else None
         )
+        self.stack_project_id = (self.stack_project_id or "").strip() or None
+        self.stack_secret_server_key = (self.stack_secret_server_key or "").strip() or None
+        self.stack_api_base_url = (self.stack_api_base_url or "https://api.stack-auth.com").rstrip("/")
+
+        if not self.stack_project_id:
+            stack_project_id = os.getenv("STACK_PROJECT_ID") or os.getenv("NEXT_PUBLIC_STACK_PROJECT_ID") or ""
+            self.stack_project_id = stack_project_id.strip() or None
+        if not self.stack_secret_server_key:
+            self.stack_secret_server_key = os.getenv("STACK_SECRET_SERVER_KEY", "").strip() or None
 
         if self.email_provider == "resend":
             if not self.resend_api_key:
@@ -126,11 +141,22 @@ class Settings(BaseSettings):
                     "SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY is required when SERVER_PY_GEETEST_ENABLED=true"
                 )
 
+        if self.stack_auth_enabled:
+            if not self.stack_project_id:
+                raise ValueError("SERVER_PY_STACK_PROJECT_ID is required when SERVER_PY_STACK_AUTH_ENABLED=true")
+            if not self.stack_secret_server_key:
+                raise ValueError(
+                    "SERVER_PY_STACK_SECRET_SERVER_KEY is required when SERVER_PY_STACK_AUTH_ENABLED=true"
+                )
+
         if self.environment == "production":
             if self.email_provider != "resend":
                 raise ValueError("SERVER_PY_EMAIL_PROVIDER must be resend when SERVER_PY_ENVIRONMENT=production")
-            if not self.geetest_enabled:
-                raise ValueError("SERVER_PY_GEETEST_ENABLED must be true when SERVER_PY_ENVIRONMENT=production")
+            if not self.geetest_enabled and not self.stack_auth_enabled:
+                raise ValueError(
+                    "At least one verification path must be enabled in production "
+                    "(SERVER_PY_GEETEST_ENABLED or SERVER_PY_STACK_AUTH_ENABLED)"
+                )
             if not self.secure_cookies:
                 raise ValueError("SERVER_PY_SECURE_COOKIES must be true when SERVER_PY_ENVIRONMENT=production")
 

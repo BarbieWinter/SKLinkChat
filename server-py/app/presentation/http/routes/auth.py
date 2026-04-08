@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.application.auth.service import AuthTokenBundle, RegistrationResult
 from app.application.platform.services import GeeTestCaptchaPayload
 from app.bootstrap.container import ApplicationContainer
-from app.presentation.http.dependencies import CurrentAuthDep, get_container
+from app.presentation.http.dependencies import extract_stack_access_token, get_container
 
 router = APIRouter()
 ContainerOnlyDep = Annotated[ApplicationContainer, Depends(get_container)]
@@ -162,8 +162,20 @@ async def resend_verification(
 
 
 @router.get("/api/auth/session")
-async def get_auth_session(auth: CurrentAuthDep) -> dict[str, object]:
-    _, session_view = auth
+async def get_auth_session(
+    request: Request,
+    response: Response,
+    container: ContainerOnlyDep,
+) -> dict[str, object]:
+    raw_session_token = request.cookies.get(container.settings.auth_cookie_name)
+    stack_access_token = extract_stack_access_token(request)
+    account_id, session_view = await container.resolve_auth_session.execute(
+        raw_session_token,
+        stack_access_token=stack_access_token,
+    )
+    if account_id is not None and stack_access_token:
+        bundle = await container.auth_service.create_session_for_account_id(account_id)
+        _set_auth_cookie(response, container, bundle.raw_session_token)
     return _session_dict(session_view)
 
 

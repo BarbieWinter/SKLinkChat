@@ -167,9 +167,14 @@
 
 ## 当前状态
 
-- 已开始执行 M1（接入层）：
+- 已完成 M1（接入层）：
   - 前端已安装 `@stackframe/react` / `@stackframe/js`
   - 已新增 `StackProvider + StackTheme` 注入（受配置开关控制）
   - 已新增 `/auth/stack` 与 `/handler/*` 路由入口
   - 已补充 Stack 相关前端环境变量说明
-- 业务主链路（现有 `AuthProvider`、聊天鉴权）仍保持 legacy，待 M2/M3 切换。
+- 已进入 M2（鉴权层）并完成核心改造：
+  - 后端支持 `x-stack-access-token` 身份解析（调用 Stack `/api/v1/users/me`）
+  - 本地 `accounts` 增加 `stack_user_id` 绑定字段（迁移：`0010_account_stack_user_id`）
+  - `/api/auth/session` 已支持 Stack 身份桥接并回写本地会话 cookie
+  - HTTP 鉴权与 WS 鉴权入口均已支持 Stack token 回退
+- 当前仍保留 legacy auth + GeeTest 链路，供灰度与回滚；M3 再执行下线清理。

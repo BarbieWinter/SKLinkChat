@@ -1,5 +1,8 @@
 import { motion } from 'framer-motion'
+import { Navigate } from 'react-router-dom'
+
 import { useAuth } from '@/features/auth/auth-provider'
+import { stackAuthMode } from '@/features/auth/stack-client'
 import { AuthEntryCard } from '@/features/auth/ui/auth-entry-card'
 import { RestrictedChatAccessCard } from '@/features/auth/ui/restricted-chat-access-card'
 import { ChatWorkspace } from '@/features/chat/ui/chat-workspace'
@@ -36,6 +39,9 @@ const HomePage = () => {
   }
 
   if (!authSession.authenticated || pendingVerificationEmail) {
+    if (stackAuthMode === 'stack') {
+      return <Navigate to="/auth/stack" replace />
+    }
     return <AuthEntryCard />
   }
 

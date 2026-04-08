@@ -40,6 +40,11 @@ class AccountRepository:
         async with self._session_factory() as session:
             return await self._get_by_id(session, account_id)
 
+    async def get_by_stack_user_id(self, stack_user_id: str) -> Account | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(Account).where(Account.stack_user_id == stack_user_id))
+            return result.scalar_one_or_none()
+
     async def create(
         self,
         *,
@@ -48,6 +53,8 @@ class AccountRepository:
         password_hash: str,
         display_name: str,
         interests: Sequence[str],
+        stack_user_id: str | None = None,
+        email_verified_at: datetime | None = None,
         gender: str = "unknown",
     ) -> Account:
         for _attempt in range(20):
@@ -55,9 +62,11 @@ class AccountRepository:
                 account = Account(
                     email=email,
                     email_normalized=email_normalized,
+                    stack_user_id=stack_user_id,
                     password_hash=password_hash,
                     display_name=display_name,
                     short_id=_generate_short_id(),
+                    email_verified_at=email_verified_at,
                     gender=gender,
                 )
                 session.add(account)
@@ -105,6 +114,55 @@ class AccountRepository:
                 if _is_display_name_conflict(error):
                     raise ValueError("display_name_conflict") from error
                 raise
+            await session.refresh(account)
+            return account
+
+    async def bind_stack_user(
+        self,
+        *,
+        account_id: str,
+        stack_user_id: str,
+        email: str,
+        email_normalized: str,
+        email_verified_at: datetime | None,
+    ) -> Account:
+        async with self._session_factory() as session:
+            account = await self._get_by_id(session, account_id, lock=True)
+            if account is None:
+                raise LookupError("account not found")
+
+            account.stack_user_id = stack_user_id
+            account.email = email
+            account.email_normalized = email_normalized
+            if email_verified_at is not None:
+                account.email_verified_at = email_verified_at
+            account.updated_at = utc_now()
+
+            await session.commit()
+            await session.refresh(account)
+            return account
+
+    async def sync_stack_profile(
+        self,
+        *,
+        account_id: str,
+        email: str | None,
+        email_normalized: str | None,
+        email_verified_at: datetime | None,
+    ) -> Account:
+        async with self._session_factory() as session:
+            account = await self._get_by_id(session, account_id, lock=True)
+            if account is None:
+                raise LookupError("account not found")
+
+            if email and email_normalized:
+                account.email = email
+                account.email_normalized = email_normalized
+            if email_verified_at is not None:
+                account.email_verified_at = email_verified_at
+            account.updated_at = utc_now()
+
+            await session.commit()
             await session.refresh(account)
             return account
 

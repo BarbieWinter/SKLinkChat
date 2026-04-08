@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     define: {
       'import.meta.env.VITE_GEETEST_ENABLED': JSON.stringify(geetestEnabled),
       'import.meta.env.VITE_GEETEST_REGISTER_CAPTCHA_ID': JSON.stringify(geetestRegisterCaptchaId),

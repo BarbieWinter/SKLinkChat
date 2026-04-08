@@ -40,6 +40,7 @@ class Account(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("display_name", name="uq_accounts_display_name"),
         Index("ux_accounts_short_id", "short_id", unique=True),
+        Index("ux_accounts_stack_user_id", "stack_user_id", unique=True),
         CheckConstraint(
             "((chat_access_restricted_at IS NULL "
             "AND chat_access_restriction_reason IS NULL "
@@ -55,6 +56,7 @@ class Account(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     email_normalized: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    stack_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     display_name: Mapped[str] = mapped_column(String(80), nullable=False)
     short_id: Mapped[str] = mapped_column(String(6), nullable=False)

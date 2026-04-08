@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 from email.utils import parseaddr
@@ -32,6 +33,7 @@ from app.infrastructure.postgres.repositories import (
     EmailVerificationTokenRepository,
     PasswordResetTokenRepository,
 )
+from app.infrastructure.stack_auth_client import StackAuthClient, StackUserProfile
 from app.shared.errors import AppError
 
 
@@ -149,6 +151,8 @@ class AuthService:
         password_reset_resend_cooldown_seconds: int,
         password_reset_hourly_limit: int,
         app_base_url: str,
+        stack_auth_enabled: bool = False,
+        stack_auth_client: StackAuthClient | None = None,
     ) -> None:
         self._account_repository = account_repository
         self._auth_session_repository = auth_session_repository
@@ -165,6 +169,8 @@ class AuthService:
         self._password_reset_resend_cooldown_seconds = password_reset_resend_cooldown_seconds
         self._password_reset_hourly_limit = password_reset_hourly_limit
         self._app_base_url = app_base_url.rstrip("/")
+        self._stack_auth_enabled = stack_auth_enabled
+        self._stack_auth_client = stack_auth_client
 
     async def register(
         self,
@@ -281,21 +287,26 @@ class AuthService:
             return
         await self._auth_session_repository.delete_by_token_hash(hash_secret(raw_session_token))
 
-    async def get_session_view(self, *, raw_session_token: str | None) -> tuple[str | None, AuthSessionView]:
-        if not raw_session_token:
-            return None, AuthSessionView(authenticated=False)
+    async def get_session_view(
+        self,
+        *,
+        raw_session_token: str | None,
+        stack_access_token: str | None = None,
+    ) -> tuple[str | None, AuthSessionView]:
+        if raw_session_token:
+            account_id = await self._auth_session_repository.get_active_account_id(
+                hash_secret(raw_session_token),
+                utc_now(),
+            )
+            if account_id is not None:
+                account = await self._account_repository.get_by_id(account_id)
+                if account is not None:
+                    return account.id, await self._build_session_view(account)
 
-        account_id = await self._auth_session_repository.get_active_account_id(
-            hash_secret(raw_session_token),
-            utc_now(),
-        )
-        if account_id is None:
-            return None, AuthSessionView(authenticated=False)
+        if self._stack_auth_enabled and self._stack_auth_client is not None:
+            return await self._resolve_stack_session_view(stack_access_token)
 
-        account = await self._account_repository.get_by_id(account_id)
-        if account is None:
-            return None, AuthSessionView(authenticated=False)
-        return account.id, await self._build_session_view(account)
+        return None, AuthSessionView(authenticated=False)
 
     async def verify_code(self, *, email: str, code: str) -> AuthTokenBundle:
         _, email_normalized = normalize_email(email)
@@ -425,6 +436,10 @@ class AuthService:
             raw_session_token=raw_session_token,
             auth_session=await self._build_session_view(account),
         )
+
+    async def create_session_for_account_id(self, account_id: str) -> AuthTokenBundle:
+        account = await self._require_account(account_id)
+        return await self._create_authenticated_session(account)
 
     async def _build_session_view(self, account: Account) -> AuthSessionView:
         interests = await self._account_repository.list_interests(account.id)
@@ -571,3 +586,101 @@ class AuthService:
         remaining = _PASSWORD_RESET_MIN_DELAY_SECONDS - (asyncio.get_running_loop().time() - started_at)
         if remaining > 0:
             await asyncio.sleep(remaining)
+
+    async def _resolve_stack_session_view(self, access_token: str | None) -> tuple[str | None, AuthSessionView]:
+        profile = await self._stack_auth_client.get_user_by_access_token(access_token)  # type: ignore[union-attr]
+        if profile is None:
+            return None, AuthSessionView(authenticated=False)
+
+        account = await self._resolve_stack_account(profile)
+        return account.id, await self._build_session_view(account)
+
+    async def _resolve_stack_account(self, profile: StackUserProfile) -> Account:
+        account = await self._account_repository.get_by_stack_user_id(profile.stack_user_id)
+        try:
+            normalized_email = normalize_email(profile.primary_email)[1] if profile.primary_email else None
+        except AppError as error:
+            raise AppError(
+                message="Stack account does not provide a valid email",
+                code="STACK_EMAIL_REQUIRED",
+                status_code=401,
+            ) from error
+        verified_at = utc_now() if profile.primary_email_verified else None
+
+        if account is not None:
+            maybe_existing = None
+            if normalized_email is not None:
+                maybe_existing = await self._account_repository.get_by_email_normalized(normalized_email)
+            if maybe_existing is not None and maybe_existing.id != account.id:
+                return account
+            return await self._account_repository.sync_stack_profile(
+                account_id=account.id,
+                email=profile.primary_email,
+                email_normalized=normalized_email,
+                email_verified_at=verified_at,
+            )
+
+        if normalized_email is None or profile.primary_email is None:
+            raise AppError(
+                message="Stack account does not provide a valid email",
+                code="STACK_EMAIL_REQUIRED",
+                status_code=401,
+            )
+
+        matched_by_email = await self._account_repository.get_by_email_normalized(normalized_email)
+        if matched_by_email is not None:
+            if matched_by_email.stack_user_id and matched_by_email.stack_user_id != profile.stack_user_id:
+                raise AppError(
+                    message="This account is already linked to another identity",
+                    code="STACK_ACCOUNT_CONFLICT",
+                    status_code=409,
+                )
+            return await self._account_repository.bind_stack_user(
+                account_id=matched_by_email.id,
+                stack_user_id=profile.stack_user_id,
+                email=profile.primary_email,
+                email_normalized=normalized_email,
+                email_verified_at=verified_at,
+            )
+
+        base_display_name = await self._allocate_stack_display_name(profile)
+        for index in range(1, 31):
+            try:
+                return await self._account_repository.create(
+                    email=profile.primary_email,
+                    email_normalized=normalized_email,
+                    password_hash=hash_password(issue_token(24)),
+                    display_name=self._next_display_name_candidate(base_display_name, index),
+                    interests=[],
+                    stack_user_id=profile.stack_user_id,
+                    email_verified_at=verified_at,
+                    gender="unknown",
+                )
+            except ValueError as error:
+                if str(error) != "display_name_conflict":
+                    raise
+        raise AppError(message="Unable to allocate display name", code="DISPLAY_NAME_CONFLICT", status_code=409)
+
+    async def _allocate_stack_display_name(self, profile: StackUserProfile) -> str:
+        for candidate in self._iter_stack_display_name_candidates(profile):
+            try:
+                return normalize_display_name(candidate)
+            except AppError:
+                continue
+        raise AppError(message="Username is required", code="DISPLAY_NAME_REQUIRED", status_code=422)
+
+    def _iter_stack_display_name_candidates(self, profile: StackUserProfile):
+        if profile.display_name:
+            yield profile.display_name
+        if profile.primary_email:
+            yield profile.primary_email.split("@", 1)[0]
+        yield f"user-{profile.stack_user_id[:8]}"
+
+    def _next_display_name_candidate(self, base: str, index: int) -> str:
+        if index <= 1:
+            return base
+        suffix = f"-{index}"
+        normalized = re.sub(r"\s+", "-", base.strip())
+        if len(normalized) + len(suffix) > 80:
+            normalized = normalized[: 80 - len(suffix)]
+        return f"{normalized}{suffix}"

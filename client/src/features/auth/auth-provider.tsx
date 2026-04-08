@@ -13,6 +13,7 @@ import {
   updateAccountSettings,
   verifyEmailCode
 } from '@/features/auth/api/auth-client'
+import { stackAuthMode, stackClientApp } from '@/features/auth/stack-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 import type { Gender } from '@/shared/types'
 
@@ -135,6 +136,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       },
       logout: async () => {
         await logoutAccount()
+        if (stackAuthMode === 'stack' && stackClientApp) {
+          await stackClientApp.signOut().catch(() => undefined)
+        }
         clearStoredSessionId()
         clear()
         resetSession()
@@ -164,7 +168,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       refreshSession,
       setPendingVerificationEmail
     }),
-    [authSession, clear, pendingVerificationEmail, resetSession, saveSettings, setDisplayName, status]
+    [
+      applySession,
+      authSession,
+      clear,
+      pendingVerificationEmail,
+      refreshSession,
+      resetSession,
+      saveSettings,
+      setDisplayName,
+      status
+    ]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

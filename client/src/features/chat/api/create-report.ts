@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/shared/config/runtime'
+import { resolveAuthHeaders } from '@/shared/lib/auth-headers'
 
 export type CreateChatReportPayload = {
   session_id: string
@@ -8,12 +9,14 @@ export type CreateChatReportPayload = {
 }
 
 export const createChatReport = async (payload: CreateChatReportPayload) => {
+  const authHeaders = await resolveAuthHeaders({
+    'Content-Type': 'application/json'
+  })
+
   const response = await fetch(`${API_BASE_URL}/api/chat/reports`, {
     method: 'POST',
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: authHeaders,
     body: JSON.stringify(payload)
   })
 

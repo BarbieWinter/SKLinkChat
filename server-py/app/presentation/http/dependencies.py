@@ -15,9 +15,23 @@ def get_container(request: Request) -> ApplicationContainer:
 ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
 
 
+def extract_stack_access_token(request: Request) -> str | None:
+    token = (request.headers.get("x-stack-access-token") or "").strip()
+    if token:
+        return token
+
+    authorization = (request.headers.get("authorization") or "").strip()
+    if authorization.lower().startswith("bearer "):
+        bearer = authorization[7:].strip()
+        if bearer:
+            return bearer
+    return None
+
+
 async def get_current_auth(request: Request, container: ContainerDep) -> tuple[str | None, object]:
     raw_token = request.cookies.get(container.settings.auth_cookie_name)
-    return await container.resolve_auth_session.execute(raw_token)
+    stack_access_token = extract_stack_access_token(request)
+    return await container.resolve_auth_session.execute(raw_token, stack_access_token=stack_access_token)
 
 
 CurrentAuthDep = Annotated[tuple[str | None, object], Depends(get_current_auth)]

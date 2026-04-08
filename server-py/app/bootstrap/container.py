@@ -59,6 +59,7 @@ from app.infrastructure.redis.presence_repository import RedisPresenceRepository
 from app.infrastructure.redis.readiness_probe import RedisReadinessProbe
 from app.infrastructure.redis.redis_event_bus import RedisEventBus
 from app.infrastructure.redis.session_repository import RedisSessionRepository
+from app.infrastructure.stack_auth_client import StackAuthClient
 from app.shared.config import Settings
 
 
@@ -142,6 +143,16 @@ def build_container(
         password_reset_resend_cooldown_seconds=settings.password_reset_resend_cooldown_seconds,
         password_reset_hourly_limit=settings.password_reset_hourly_limit,
         app_base_url=settings.app_base_url,
+        stack_auth_enabled=settings.stack_auth_enabled,
+        stack_auth_client=(
+            StackAuthClient(
+                project_id=settings.stack_project_id,
+                secret_server_key=settings.stack_secret_server_key,
+                api_base_url=settings.stack_api_base_url,
+            )
+            if settings.stack_auth_enabled and settings.stack_project_id and settings.stack_secret_server_key
+            else None
+        ),
     )
     account_service = AccountService(account_repository)
     admin_governance_service = AdminGovernanceService(

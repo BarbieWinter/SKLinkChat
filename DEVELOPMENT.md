@@ -115,12 +115,31 @@ VITE_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
 VITE_AUTH_MODE=legacy
 VITE_STACK_PROJECT_ID=<your_stack_project_id>
 VITE_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
+# 或者使用 Stack 文档默认命名（本项目已兼容）
+NEXT_PUBLIC_STACK_PROJECT_ID=<your_stack_project_id>
+NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
 ```
 
 其中 `captcha_id` 只用于前端渲染组件，`captcha_key` 只用于后端服务端校验。
 
 `VITE_AUTH_MODE` 默认建议保持 `legacy`（沿用现有认证链路）。  
 当你需要联调 Stack Auth 前端组件时，可先补齐 Stack 两个 key 并访问 `/auth/stack`。
+
+后端启用 Stack 身份校验时，额外配置：
+
+```
+SERVER_PY_STACK_AUTH_ENABLED=true
+SERVER_PY_STACK_PROJECT_ID=<your_stack_project_id>
+SERVER_PY_STACK_SECRET_SERVER_KEY=<your_stack_secret_server_key>
+SERVER_PY_STACK_API_BASE_URL=https://api.stack-auth.com
+```
+
+如果你习惯使用 Stack 默认变量名，也支持：
+
+```
+STACK_PROJECT_ID=<your_stack_project_id>
+STACK_SECRET_SERVER_KEY=<your_stack_secret_server_key>
+```
 
 管理员身份现在由 PostgreSQL `accounts.is_admin` 字段驱动。测试或本地切换管理员时，可直接更新数据库：
 

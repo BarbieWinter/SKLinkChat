@@ -21,8 +21,15 @@ class CreateChatSessionUseCase:
 class ResolveAuthSessionUseCase:
     auth_service: AuthService
 
-    async def execute(self, raw_session_token: str | None) -> tuple[str | None, AuthSessionView]:
-        return await self.auth_service.get_session_view(raw_session_token=raw_session_token)
+    async def execute(
+        self,
+        raw_session_token: str | None,
+        stack_access_token: str | None = None,
+    ) -> tuple[str | None, AuthSessionView]:
+        return await self.auth_service.get_session_view(
+            raw_session_token=raw_session_token,
+            stack_access_token=stack_access_token,
+        )
 
 
 @dataclass(slots=True)

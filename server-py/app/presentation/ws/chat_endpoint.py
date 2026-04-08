@@ -189,7 +189,15 @@ async def _handle_typing(
 async def websocket_endpoint(websocket: WebSocket, sessionId: str) -> None:
     container: ApplicationContainer = websocket.app.state.container
     raw_session_token = websocket.cookies.get(container.settings.auth_cookie_name)
-    account_id, auth_session = await container.resolve_auth_session.execute(raw_session_token)
+    stack_access_token_header = websocket.headers.get("x-stack-access-token")
+    stack_access_token_query = websocket.query_params.get("stack_access_token")
+    stack_access_token = (
+        (stack_access_token_header or stack_access_token_query or "").strip() or None
+    )
+    account_id, auth_session = await container.resolve_auth_session.execute(
+        raw_session_token,
+        stack_access_token=stack_access_token,
+    )
     if account_id is None or not auth_session.authenticated:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="UNAUTHENTICATED")
     try:

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/shared/config/runtime'
+import { resolveAuthHeaders } from '@/shared/lib/auth-headers'
 
 export type AdminReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned'
 export type AdminReportReason = 'harassment' | 'sexual_content' | 'spam' | 'hate_speech' | 'other'
@@ -74,11 +75,13 @@ export type AdminAuditEvent = {
 }
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const authHeaders = await resolveAuthHeaders(init?.headers)
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(init?.headers ?? {})
+      ...authHeaders
     },
     ...init
   })

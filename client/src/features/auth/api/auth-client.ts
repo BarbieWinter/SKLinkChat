@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/shared/config/runtime'
+import { resolveAuthHeaders } from '@/shared/lib/auth-headers'
 import type { Gender } from '@/shared/types'
 
 export type AuthSessionPayload = {
@@ -25,11 +26,13 @@ export type GeeTestCaptchaPayload = {
 }
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const authHeaders = await resolveAuthHeaders(init?.headers)
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(init?.headers ?? {})
+      ...authHeaders
     },
     ...init
   })
