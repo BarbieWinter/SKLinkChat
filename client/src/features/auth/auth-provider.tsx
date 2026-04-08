@@ -115,6 +115,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       status,
       pendingVerificationEmail,
       register: async ({ email, password, displayName, interests, captcha }) => {
+        if (stackAuthMode === 'stack') {
+          throw new Error('Legacy register flow is disabled in stack mode')
+        }
         await registerAccount({
           email,
           password,
@@ -125,6 +128,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setPendingVerificationEmail(email)
       },
       login: async ({ email, password, captcha }) => {
+        if (stackAuthMode === 'stack') {
+          throw new Error('Legacy login flow is disabled in stack mode')
+        }
         const result = await loginAccount({ email, password, captcha })
         if (isVerificationRequired(result)) {
           setPendingVerificationEmail(email)
@@ -146,12 +152,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setPendingVerificationEmail(null)
       },
       verifyCode: async (email: string, code: string) => {
+        if (stackAuthMode === 'stack') {
+          throw new Error('Legacy verification flow is disabled in stack mode')
+        }
         const nextSession = await verifyEmailCode(email, code)
         applySession(nextSession)
         setPendingVerificationEmail(null)
         setStatus('ready')
       },
       resendCode: async ({ email }) => {
+        if (stackAuthMode === 'stack') {
+          throw new Error('Legacy verification flow is disabled in stack mode')
+        }
         await resendVerificationCode({ email })
       },
       syncProfile: async ({ interests, gender }) => {

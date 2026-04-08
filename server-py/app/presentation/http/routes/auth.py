@@ -9,6 +9,7 @@ from app.application.auth.service import AuthTokenBundle, RegistrationResult
 from app.application.platform.services import GeeTestCaptchaPayload
 from app.bootstrap.container import ApplicationContainer
 from app.presentation.http.dependencies import extract_stack_access_token, get_container
+from app.shared.errors import AppError
 
 router = APIRouter()
 ContainerOnlyDep = Annotated[ApplicationContainer, Depends(get_container)]
@@ -91,12 +92,22 @@ def _registration_result_dict(result: RegistrationResult) -> dict[str, object]:
     return {"status": result.status, "masked_email": result.masked_email}
 
 
+def _ensure_legacy_auth_available(container: ApplicationContainer) -> None:
+    if container.settings.stack_auth_enabled:
+        raise AppError(
+            message="Legacy auth endpoints are disabled. Please use Stack Auth components.",
+            code="LEGACY_AUTH_DISABLED",
+            status_code=410,
+        )
+
+
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(
     payload: RegisterRequest,
     request: Request,
     container: ContainerOnlyDep,
 ) -> dict[str, object]:
+    _ensure_legacy_auth_available(container)
     result = await container.auth_service.register(
         email=payload.email,
         password=payload.password,
@@ -116,6 +127,7 @@ async def login(
     response: Response,
     container: ContainerOnlyDep,
 ) -> dict[str, object]:
+    _ensure_legacy_auth_available(container)
     result = await container.auth_service.login(
         email=payload.email,
         password=payload.password,
@@ -143,6 +155,7 @@ async def logout(
 async def verify_email(
     payload: VerifyCodeRequest, response: Response, container: ContainerOnlyDep,
 ) -> dict[str, object]:
+    _ensure_legacy_auth_available(container)
     bundle = await container.auth_service.verify_code(email=payload.email, code=payload.code)
     _set_auth_cookie(response, container, bundle.raw_session_token)
     return _session_dict(bundle.auth_session)
@@ -154,6 +167,7 @@ async def resend_verification(
     request: Request,
     container: ContainerOnlyDep,
 ) -> dict[str, str]:
+    _ensure_legacy_auth_available(container)
     await container.auth_service.resend_verification(
         email=payload.email,
         ip_address=request.client.host if request.client else None,
@@ -190,11 +204,13 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/api/auth/request-password-reset")
 async def request_password_reset(payload: RequestPasswordResetRequest, container: ContainerOnlyDep) -> dict[str, str]:
+    _ensure_legacy_auth_available(container)
     await container.auth_service.request_password_reset(email=payload.email)
     return {"status": "ok"}
 
 
 @router.post("/api/auth/reset-password")
 async def reset_password(payload: ResetPasswordRequest, container: ContainerOnlyDep) -> dict[str, str]:
+    _ensure_legacy_auth_available(container)
     await container.auth_service.reset_password(raw_token=payload.token, new_password=payload.new_password)
     return {"status": "ok"}

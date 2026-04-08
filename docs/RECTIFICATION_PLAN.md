@@ -177,4 +177,8 @@
   - 本地 `accounts` 增加 `stack_user_id` 绑定字段（迁移：`0010_account_stack_user_id`）
   - `/api/auth/session` 已支持 Stack 身份桥接并回写本地会话 cookie
   - HTTP 鉴权与 WS 鉴权入口均已支持 Stack token 回退
-- 当前仍保留 legacy auth + GeeTest 链路，供灰度与回滚；M3 再执行下线清理。
+- 已进入 M3（替换层）并完成首批下线：
+  - `stack` 模式下首页强制进入 Stack 组件登录页
+  - 旧 `/api/auth/register|login|verify-email|resend-verification|request-password-reset|reset-password`
+    在 `SERVER_PY_STACK_AUTH_ENABLED=true` 时返回 `410 LEGACY_AUTH_DISABLED`
+  - 旧表单链路仅用于回滚场景（`VITE_AUTH_MODE=legacy` + `SERVER_PY_STACK_AUTH_ENABLED=false`）

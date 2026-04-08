@@ -98,21 +98,17 @@ SERVER_PY_EMAIL_PROVIDER=resend
 SERVER_PY_EMAIL_FROM=noreply@mail.sklinkchat.com
 SERVER_PY_RESEND_API_KEY=<your_resend_api_key>
 SERVER_PY_APP_BASE_URL=http://localhost:5173
-SERVER_PY_GEETEST_ENABLED=true
-SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
-SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY=<your_register_captcha_key>
-SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
-SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY=<your_login_captcha_key>
+SERVER_PY_STACK_AUTH_ENABLED=true
+SERVER_PY_STACK_PROJECT_ID=<your_stack_project_id>
+SERVER_PY_STACK_SECRET_SERVER_KEY=<your_stack_secret_server_key>
+SERVER_PY_STACK_API_BASE_URL=https://api.stack-auth.com
 SERVER_PY_SECURE_COOKIES=false
 ```
 
 如果你只单独启动前端，也可以显式配置：
 
 ```
-VITE_GEETEST_ENABLED=true
-VITE_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
-VITE_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
-VITE_AUTH_MODE=legacy
+VITE_AUTH_MODE=stack
 VITE_STACK_PROJECT_ID=<your_stack_project_id>
 VITE_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
 # 或者使用 Stack 文档默认命名（本项目已兼容）
@@ -120,18 +116,15 @@ NEXT_PUBLIC_STACK_PROJECT_ID=<your_stack_project_id>
 NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=<your_stack_publishable_client_key>
 ```
 
-其中 `captcha_id` 只用于前端渲染组件，`captcha_key` 只用于后端服务端校验。
+`VITE_AUTH_MODE=stack` 时，首页未登录会直接跳转 `/auth/stack`。  
+后端启用 `SERVER_PY_STACK_AUTH_ENABLED=true` 后，旧 `/api/auth/register|login|verify-email|resend-verification` 将返回 `410 LEGACY_AUTH_DISABLED`。
 
-`VITE_AUTH_MODE` 默认建议保持 `legacy`（沿用现有认证链路）。  
-当你需要联调 Stack Auth 前端组件时，可先补齐 Stack 两个 key 并访问 `/auth/stack`。
-
-后端启用 Stack 身份校验时，额外配置：
+如果你要临时回滚到旧认证链路，再恢复 GeeTest 配置并切回：
 
 ```
-SERVER_PY_STACK_AUTH_ENABLED=true
-SERVER_PY_STACK_PROJECT_ID=<your_stack_project_id>
-SERVER_PY_STACK_SECRET_SERVER_KEY=<your_stack_secret_server_key>
-SERVER_PY_STACK_API_BASE_URL=https://api.stack-auth.com
+VITE_AUTH_MODE=legacy
+SERVER_PY_STACK_AUTH_ENABLED=false
+SERVER_PY_GEETEST_ENABLED=true
 ```
 
 如果你习惯使用 Stack 默认变量名，也支持：
@@ -249,14 +242,13 @@ cd client && npm run dev
 docker compose up --build
 ```
 
-如果需要通过 Docker Compose 一起启用 GeeTest GT4，请在根目录 `.env` 中提供：
+如果需要通过 Docker Compose 启用 Stack Auth，请在根目录 `.env` 中提供：
 
 ```
-SERVER_PY_GEETEST_ENABLED=true
-SERVER_PY_GEETEST_REGISTER_CAPTCHA_ID=<your_register_captcha_id>
-SERVER_PY_GEETEST_REGISTER_CAPTCHA_KEY=<your_register_captcha_key>
-SERVER_PY_GEETEST_LOGIN_CAPTCHA_ID=<your_login_captcha_id>
-SERVER_PY_GEETEST_LOGIN_CAPTCHA_KEY=<your_login_captcha_key>
+SERVER_PY_STACK_AUTH_ENABLED=true
+SERVER_PY_STACK_PROJECT_ID=<your_stack_project_id>
+SERVER_PY_STACK_SECRET_SERVER_KEY=<your_stack_secret_server_key>
+SERVER_PY_STACK_API_BASE_URL=https://api.stack-auth.com
 ```
 
 注意：当前开发机没有 Docker，上面的"全栈启动顺序"是主验证路径。
