@@ -97,7 +97,11 @@ export const useChatSocket = ({
   const socket = useWebSocket(
     socketUrl,
     {
-      shouldReconnect: (closeEvent) => !(closeEvent.code === 1008 && closeEvent.reason === 'CHAT_ACCESS_RESTRICTED'),
+      shouldReconnect: (closeEvent) => {
+        if (closeEvent.code !== 1008) return true
+        // 这两种情况都不应重试：session 已过期或账号被限制
+        return closeEvent.reason !== 'UNAUTHENTICATED' && closeEvent.reason !== 'CHAT_ACCESS_RESTRICTED'
+      },
       onClose: (event) => {
         onSocketClosed(event.code, event.reason)
       },

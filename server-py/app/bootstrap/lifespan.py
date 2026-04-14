@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from app.bootstrap.container import build_container
 from app.infrastructure.postgres.database import close_database, init_database
 from app.infrastructure.redis.client import close_redis_client, init_redis_client
+from app.presentation.ws.presence_updates import schedule_presence_count_broadcast
 from app.shared.config import get_settings
 from app.shared.logging import configure_logging
 
@@ -42,7 +43,12 @@ async def lifespan(app: FastAPI):
             for partner_id in partner_ids:
                 partner_ws = container.connection_hub.get(partner_id)
                 if partner_ws is not None:
-                    await partner_ws.send_json({"type": "disconnect", "payload": None})
+                    try:
+                        await partner_ws.send_json({"type": "disconnect", "payload": None})
+                    except Exception:
+                        pass
+            if partner_ids:
+                schedule_presence_count_broadcast(app, container)
             await asyncio.sleep(1)
 
     async def run_retention_jobs() -> None:

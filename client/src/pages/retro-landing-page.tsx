@@ -11,7 +11,6 @@
  *     between adjacent characters.
  *  5. Navbar: transparent → frosted-glass on scroll.
  *  6. Bottom 3D perspective grid marching forward.
- *  7. Pixel character SVGs (male left / female right) with float animation.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -304,114 +303,6 @@ function useTextScramble() {
   return { chars, color }
 }
 
-// ─── PixelMale ────────────────────────────────────────────────────────────────
-
-function PixelMale({ size = 180 }: { size?: number }) {
-  // 12 × 20 grid — more detail, cyan-shirt, dark pants
-  const SK = '#ffd4b0'  // skin
-  const HR = '#1a0f0a'  // hair (very dark)
-  const EY = '#0d0d0d'  // eye
-  const SH = '#1d4ed8'  // shirt (deep blue)
-  const SA = '#2563eb'  // shirt arm / side
-  const PN = '#0f172a'  // pants
-  const PL = '#1e293b'  // pants lighter stripe
-  const BT = '#0a0a0a'  // boot
-  const N  = null
-  // prettier-ignore
-  const rows: (string | null)[][] = [
-    [N,N,N,HR,HR,HR,HR,HR,N,N,N,N],   // 0
-    [N,N,HR,SK,SK,SK,SK,SK,HR,N,N,N], // 1
-    [N,HR,SK,SK,EY,SK,EY,SK,SK,HR,N,N], // 2  eyes
-    [N,HR,SK,SK,SK,SK,SK,SK,SK,HR,N,N], // 3
-    [N,HR,SK,SK,SK,SK,SK,SK,SK,HR,N,N], // 4  mouth row
-    [N,N,SK,SK,SK,SK,SK,SK,SK,N,N,N],  // 5  neck
-    [N,N,N,SK,SK,SK,SK,SK,N,N,N,N],   // 6  neck narrow
-    [SH,SH,SH,SH,SH,SH,SH,SH,SH,SH,N,N], // 7  shoulders
-    [SA,SH,SH,SH,SH,SH,SH,SH,SH,SA,N,N], // 8
-    [SA,SH,SH,SH,SH,SH,SH,SH,SH,SA,N,N], // 9
-    [SA,SH,SH,SH,SH,SH,SH,SH,SH,SA,N,N], // 10
-    [N,SA,SH,SH,SH,SH,SH,SH,SA,N,N,N],  // 11
-    [N,N,PN,PN,PN,PN,PN,PN,N,N,N,N],  // 12 belt
-    [N,N,PN,PL,PN,N,PN,PL,PN,N,N,N],  // 13 legs top
-    [N,N,PN,PL,PN,N,PN,PL,PN,N,N,N],  // 14
-    [N,N,PN,PL,PN,N,PN,PL,PN,N,N,N],  // 15
-    [N,N,PN,PL,PN,N,PN,PL,PN,N,N,N],  // 16
-    [N,N,PN,PN,PN,N,PN,PN,PN,N,N,N],  // 17 ankle
-    [N,BT,BT,BT,N,N,N,BT,BT,BT,N,N], // 18 boots
-    [BT,BT,BT,BT,N,N,N,BT,BT,BT,BT,N], // 19 boot tips
-  ]
-  const COLS = 12, ROWS = rows.length
-  return (
-    <svg
-      width={size}
-      height={Math.round(size * ROWS / COLS)}
-      viewBox={`0 0 ${COLS} ${ROWS}`}
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-    >
-      {rows.map((row, r) =>
-        row.map((fill, c) =>
-          fill ? <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill={fill} /> : null
-        )
-      )}
-    </svg>
-  )
-}
-
-// ─── PixelFemale ──────────────────────────────────────────────────────────────
-
-function PixelFemale({ size = 180 }: { size?: number }) {
-  const SK = '#ffd4b0'
-  const HR = '#2d0e00'  // dark auburn hair
-  const HL = '#5a1a00'  // hair highlight
-  const EY = '#0d0d0d'
-  const BL = '#ffb3cc'  // blush
-  const DR = '#db2777'  // dress body
-  const DL = '#ec4899'  // dress lighter
-  const DH = '#be185d'  // dress hem/shadow
-  const BT = '#0a0a0a'
-  const N  = null
-  // prettier-ignore
-  const rows: (string | null)[][] = [
-    [N,N,HR,HR,HR,HR,HR,HR,HR,N,N,N],   // 0 hair top
-    [N,HR,HL,HR,HR,HR,HR,HR,HL,HR,N,N], // 1 hair crown
-    [HR,HR,SK,SK,EY,SK,EY,SK,SK,HR,HR,N], // 2 face + eyes
-    [HR,SK,SK,BL,SK,SK,SK,BL,SK,SK,HR,N], // 3 blush
-    [HR,SK,SK,SK,SK,SK,SK,SK,SK,SK,HR,N], // 4
-    [N,HR,SK,SK,SK,SK,SK,SK,SK,HR,N,N],  // 5 neck
-    [N,N,N,SK,SK,SK,SK,SK,N,N,N,N],    // 6 neck narrow
-    [N,N,DR,DR,DR,DR,DR,DR,N,N,N,N],   // 7 bodice
-    [DL,DL,DR,DR,DR,DR,DR,DR,DL,DL,N,N], // 8 shoulder/arms
-    [DL,DL,DR,DR,DR,DR,DR,DR,DL,DL,N,N], // 9
-    [N,DL,DR,DR,DR,DR,DR,DR,DL,N,N,N],  // 10
-    [N,DL,DR,DR,DR,DR,DR,DR,DL,N,N,N],  // 11 waist flare start
-    [N,DR,DR,DR,DR,DR,DR,DR,DR,N,N,N],  // 12
-    [DR,DR,DR,DR,DR,DR,DR,DR,DR,DR,N,N], // 13 skirt wide
-    [DH,DH,DH,DH,DH,DH,DH,DH,DH,DH,N,N], // 14 hem
-    [N,N,N,SK,SK,N,SK,SK,N,N,N,N],    // 15 legs
-    [N,N,N,SK,SK,N,SK,SK,N,N,N,N],    // 16
-    [N,N,N,SK,SK,N,SK,SK,N,N,N,N],    // 17
-    [N,N,BT,BT,BT,N,BT,BT,BT,N,N,N],  // 18 shoes
-    [N,BT,BT,BT,N,N,N,BT,BT,BT,N,N],  // 19
-  ]
-  const COLS = 12, ROWS = rows.length
-  return (
-    <svg
-      width={size}
-      height={Math.round(size * ROWS / COLS)}
-      viewBox={`0 0 ${COLS} ${ROWS}`}
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-    >
-      {rows.map((row, r) =>
-        row.map((fill, c) =>
-          fill ? <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill={fill} /> : null
-        )
-      )}
-    </svg>
-  )
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function RetroLandingPage() {
@@ -523,10 +414,6 @@ export default function RetroLandingPage() {
 
       {/* ── Hero ── */}
       <section className="lp-hero">
-        {/* Side characters */}
-        <div className="lp-char-left"><PixelMale   size={160} /></div>
-        <div className="lp-char-right"><PixelFemale size={160} /></div>
-
         {/* Eyebrow */}
         <p className="lp-eyebrow">Anonymous · Encrypted · Real-time</p>
 

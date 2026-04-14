@@ -27,11 +27,24 @@ async def _broadcast_presence_count(app: FastAPI, container: ApplicationContaine
     for session_id, websocket in container.connection_hub.snapshot():
         try:
             await cast(Awaitable[None], websocket.send_json(payload))
-        except RuntimeError:
+        except Exception:
             stale.append((session_id, websocket))
 
+    stale_sessions_gone: list[str] = []
     for session_id, websocket in stale:
-        container.connection_hub.unregister_ws(session_id, websocket)
+        remaining = container.connection_hub.unregister_ws(session_id, websocket)
+        if remaining == 0:
+            stale_sessions_gone.append(session_id)
+
+    if stale_sessions_gone:
+        # Mark each orphaned session as disconnected (updates Redis presence count),
+        # then schedule a follow-up broadcast so clients see the corrected count.
+        async def _cleanup_stale_and_rebroadcast() -> None:
+            for sid in stale_sessions_gone:
+                await container.mark_disconnected.execute(sid)
+            schedule_presence_count_broadcast(app, container)
+
+        asyncio.create_task(_cleanup_stale_and_rebroadcast())
 
 
 def schedule_presence_count_broadcast(app: FastAPI, container: ApplicationContainer) -> None:

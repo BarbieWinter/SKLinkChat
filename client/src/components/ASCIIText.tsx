@@ -81,6 +81,7 @@ class AsciiFilter {
     this.domElement.style.left = '0';
     this.domElement.style.width = '100%';
     this.domElement.style.height = '100%';
+    this.domElement.style.overflow = 'hidden';
 
     this.pre = document.createElement('pre');
     this.domElement.appendChild(this.pre);
@@ -129,8 +130,15 @@ class AsciiFilter {
       this.cols = Math.floor(this.width / (this.fontSize * (charWidth / this.fontSize)));
       this.rows = Math.floor(this.height / this.fontSize);
 
+      // Setting canvas dimensions resets the 2D context state — re-apply
+      // imageSmoothingEnabled = false so drawImage uses nearest-neighbour
+      // downsampling.  Without this, bilinear interpolation creates semi-
+      // transparent edge halos that the alpha-threshold check turns into
+      // stray ASCII characters outside the letterforms.
       this.canvas.width = this.cols;
       this.canvas.height = this.rows;
+      this.context.imageSmoothingEnabled = false;
+
       this.pre.style.fontFamily = this.fontFamily;
       this.pre.style.fontSize = `${this.fontSize}px`;
       this.pre.style.margin = '0';
@@ -414,7 +422,7 @@ class CanvAscii {
       const planeH = this.planeBaseHeight;
       const zForHeight = planeH / (2 * TAN_HALF_FOV);
       const zForWidth  = planeW / (2 * (w / h) * TAN_HALF_FOV);
-      this.camera.position.z = Math.max(zForHeight, zForWidth) * 1.05;
+      this.camera.position.z = Math.max(zForHeight, zForWidth) * 1.15;
     }
 
     this.camera.updateProjectionMatrix();
@@ -623,7 +631,8 @@ export default function ASCIIText({
       style={{
         position: 'absolute',
         width: '100%',
-        height: '100%'
+        height: '100%',
+        overflow: 'hidden'
       }}
     >
       <style>{`
@@ -653,6 +662,7 @@ export default function ASCIIText({
           position: absolute;
           left: 0;
           top: 0;
+          overflow: hidden;
           background-image: linear-gradient(135deg, #f472b6 0%, #a78bfa 28%, #60a5fa 58%, #22d3ee 100%);
           background-attachment: local;
           -webkit-text-fill-color: transparent;

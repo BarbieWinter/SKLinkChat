@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from 'react-query'
 
 import { useAppStore } from '@/app/store'
 import { AuthSessionPayload, getAuthSession, logoutAccount, updateAccountSettings } from '@/features/auth/api/auth-client'
 import { stackClientApp } from '@/features/auth/stack-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
+import { ONLINE_USER_COUNT_QUERY_KEY, wsPresenceTracker } from '@/features/presence/api/get-online-count'
 import type { Gender } from '@/shared/types'
 
 type AuthStatus = 'loading' | 'ready'
@@ -30,6 +32,7 @@ const EMPTY_AUTH_SESSION: AuthSessionPayload = {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const queryClient = useQueryClient()
   const setDisplayName = useAppStore((state) => state.setDisplayName)
   const saveSettings = useAppStore((state) => state.saveSettings)
   const resetSession = useAppStore((state) => state.resetSession)
@@ -93,6 +96,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         clear()
         resetSession()
         applySession(EMPTY_AUTH_SESSION)
+        // 清除在线人数缓存和 WS 推送时间戳，让下次登录后重新从服务端获取准确值
+        wsPresenceTracker.lastPushedAt = 0
+        queryClient.removeQueries(ONLINE_USER_COUNT_QUERY_KEY)
       },
       syncProfile: async ({ interests, gender }) => {
         const nextProfile = await updateAccountSettings({ interests, gender })

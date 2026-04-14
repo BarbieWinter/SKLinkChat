@@ -35,6 +35,7 @@ const SettingsDialog = () => {
   const { displayName, keywords } = useAppStore()
   const [open, setOpen] = useState(false)
   const { authSession, syncProfile } = useAuth()
+  const genderLocked = authSession.gender !== 'unknown'
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -121,6 +122,7 @@ const SettingsDialog = () => {
                     <FormControl>
                       <select
                         className="h-10 w-full rounded-md border border-border bg-input px-4 text-sm text-foreground outline-none transition-all focus:border-primary"
+                        disabled={genderLocked}
                         {...field}
                       >
                         <option value="unknown">{t('settings.genderUnknown')}</option>
@@ -129,7 +131,7 @@ const SettingsDialog = () => {
                       </select>
                     </FormControl>
                     <FormDescription className="px-1 text-[11px] leading-relaxed">
-                      {t('settings.genderHint')}
+                      {genderLocked ? '性别已锁定，后续不可修改。' : t('settings.genderHint')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

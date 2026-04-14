@@ -13,7 +13,7 @@ import {
   SessionBootstrapStatus,
   getChatRuntimeAvailability
 } from '@/features/chat/model/runtime'
-import { ONLINE_USER_COUNT_QUERY_KEY } from '@/features/presence/api/get-online-count'
+import { ONLINE_USER_COUNT_QUERY_KEY, wsPresenceTracker } from '@/features/presence/api/get-online-count'
 import { useI18n } from '@/shared/i18n/use-i18n'
 import { User, UserState } from '@/shared/types'
 import { useToast } from '@/shared/ui/use-toast'
@@ -122,10 +122,14 @@ export const useChatRuntime = (): ChatProviderState => {
       }),
     onTyping: (typing) => setStrangerTyping(typing),
     onPresenceCount: (onlineCount) => {
+      // WS 推送是最权威的来源。先取消所有 in-flight 的 HTTP 请求，
+      // 防止慢响应在 setQueryData 之后到达并用旧快照覆盖正确值。
+      void queryClient.cancelQueries(ONLINE_USER_COUNT_QUERY_KEY)
+      wsPresenceTracker.lastPushedAt = Date.now()
       queryClient.setQueryData(ONLINE_USER_COUNT_QUERY_KEY, onlineCount)
     },
     onSocketClosed: (code, reason) => {
-      if (code === 1008 && reason === 'CHAT_ACCESS_RESTRICTED') {
+      if (code === 1008 && (reason === 'CHAT_ACCESS_RESTRICTED' || reason === 'UNAUTHENTICATED')) {
         void refreshSession()
       }
     }

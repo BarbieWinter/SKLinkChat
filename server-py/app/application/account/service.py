@@ -32,10 +32,18 @@ class AccountService:
         interests: list[str],
         gender: str,
     ) -> AccountProfileView:
+        account = await self._account_repository.get_by_id(account_id)
+        if account is None:
+            raise AppError(message="Authentication required", code="UNAUTHENTICATED", status_code=401)
+
+        normalized_gender = normalize_gender(gender)
+        if account.gender != "unknown" and normalized_gender != account.gender:
+            raise AppError(message="Gender can no longer be changed", code="GENDER_LOCKED", status_code=409)
+
         account = await self._account_repository.update_profile(
             account_id=account_id,
             interests=normalize_interests(interests),
-            gender=normalize_gender(gender),
+            gender=normalized_gender,
         )
         interests = await self._account_repository.list_interests(account.id)
         return AccountProfileView(display_name=account.display_name, interests=interests, gender=account.gender)
