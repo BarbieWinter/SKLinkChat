@@ -2,7 +2,7 @@
 name = "server-py"
 version = "0.1.0"
 description = "Python FastAPI backend scaffold for SKLinkChat"
-license = "SEE LICENSE IN ../LICENSE"
+license = { text = "SKLinkChat Non-Commercial License" }
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.16.0,<2.0.0",
