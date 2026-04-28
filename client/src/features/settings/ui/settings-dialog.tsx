@@ -100,7 +100,7 @@ const SettingsDialog = () => {
                     <FormControl>
                       <Input
                         placeholder={t('settings.keywordsPlaceholder')}
-                        className="h-10 rounded-md border-border bg-input terminal-prefix pl-8 focus:border-primary transition-all"
+                        className="h-10 rounded-md border-border bg-input px-4 focus:border-primary transition-all"
                         {...field}
                       />
                     </FormControl>

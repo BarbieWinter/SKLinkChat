@@ -1,8 +1,33 @@
+# Environment and secrets
 .env
 .env.*
-.run/
+!.env.example
+!deploy/.env.production.example
 server-py/.env
 server-py/.env.*
 client/.env
 client/.env.*
+
+# Dependencies
+node_modules/
+client/node_modules/
+server-py/.venv/
+.venv/
+
+# Build and cache output
+dist/
+build/
+coverage/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.vite/
 __pycache__/
+*.py[cod]
+
+# Local tooling and OS files
+.DS_Store
+*.code-workspace
+.idea/
+.vscode/
+.run/

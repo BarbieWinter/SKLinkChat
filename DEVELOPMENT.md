@@ -2,6 +2,21 @@
 
 本文档记录从零搭建到日常开发所需的全部命令。
 
+## 常用入口
+
+优先使用根目录 `Makefile` 中的统一命令：
+
+```bash
+make setup   # 安装前后端依赖
+make install # 创建 .env 并安装依赖
+make dev     # 使用 Docker Compose 启动整套服务
+make lint    # 前后端代码检查
+make test    # 当前后端基础验证
+make build   # 前端生产构建
+```
+
+如果只想调试某一端，也可以使用下面的分项命令。
+
 ## 前置依赖
 
 | 组件 | 最低版本 | 说明 |

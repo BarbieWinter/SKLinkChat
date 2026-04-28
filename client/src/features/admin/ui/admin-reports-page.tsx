@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type {
   AdminReportDetail,
@@ -100,53 +100,59 @@ export const AdminReportsPage = () => {
   const [submittingAccountAction, setSubmittingAccountAction] = useState(false)
   const [restoringAccountId, setRestoringAccountId] = useState<string | null>(null)
 
-  const runWithAdminRetry = async <T,>(task: () => Promise<T>) => {
-    try {
-      return await task()
-    } catch (error) {
-      const apiError = error as Error & { code?: string; status?: number }
-      const shouldRetry =
-        apiError.code === 'ADMIN_FORBIDDEN' ||
-        apiError.code === 'UNAUTHENTICATED' ||
-        apiError.status === 401 ||
-        apiError.status === 403
+  const runWithAdminRetry = useCallback(
+    async <T,>(task: () => Promise<T>) => {
+      try {
+        return await task()
+      } catch (error) {
+        const apiError = error as Error & { code?: string; status?: number }
+        const shouldRetry =
+          apiError.code === 'ADMIN_FORBIDDEN' ||
+          apiError.code === 'UNAUTHENTICATED' ||
+          apiError.status === 401 ||
+          apiError.status === 403
 
-      if (!shouldRetry) {
-        throw error
+        if (!shouldRetry) {
+          throw error
+        }
+
+        await refreshSession()
+        return await task()
       }
+    },
+    [refreshSession]
+  )
 
-      await refreshSession()
-      return await task()
-    }
-  }
+  const loadReports = useCallback(
+    async (preferredReportId?: number | null) => {
+      setListLoading(true)
+      setListError(null)
 
-  const loadReports = async (preferredReportId?: number | null) => {
-    setListLoading(true)
-    setListError(null)
+      try {
+        const response = await runWithAdminRetry(() =>
+          listReports({
+            status: statusFilter || undefined,
+            reason: reasonFilter || undefined
+          })
+        )
+        setReports(response.items)
+        const nextSelectedReportId =
+          preferredReportId && response.items.some((report) => report.id === preferredReportId)
+            ? preferredReportId
+            : (response.items[0]?.id ?? null)
+        setSelectedReportId(nextSelectedReportId)
+      } catch (error) {
+        setListError(error instanceof Error ? error.message : '举报列表加载失败。')
+        setReports([])
+        setSelectedReportId(null)
+      } finally {
+        setListLoading(false)
+      }
+    },
+    [reasonFilter, runWithAdminRetry, statusFilter]
+  )
 
-    try {
-      const response = await runWithAdminRetry(() =>
-        listReports({
-          status: statusFilter || undefined,
-          reason: reasonFilter || undefined
-        })
-      )
-      setReports(response.items)
-      const nextSelectedReportId =
-        preferredReportId && response.items.some((report) => report.id === preferredReportId)
-          ? preferredReportId
-          : (response.items[0]?.id ?? null)
-      setSelectedReportId(nextSelectedReportId)
-    } catch (error) {
-      setListError(error instanceof Error ? error.message : '举报列表加载失败。')
-      setReports([])
-      setSelectedReportId(null)
-    } finally {
-      setListLoading(false)
-    }
-  }
-
-  const loadRestrictedAccounts = async () => {
+  const loadRestrictedAccounts = useCallback(async () => {
     setRestrictedLoading(true)
     setRestrictedError(null)
 
@@ -159,26 +165,29 @@ export const AdminReportsPage = () => {
     } finally {
       setRestrictedLoading(false)
     }
-  }
+  }, [runWithAdminRetry])
 
-  const loadReportDetail = async (reportId: number) => {
-    setDetailLoading(true)
-    setDetailError(null)
+  const loadReportDetail = useCallback(
+    async (reportId: number) => {
+      setDetailLoading(true)
+      setDetailError(null)
 
-    try {
-      const detail = await runWithAdminRetry(() => getReportDetail(reportId))
-      setReportDetail(detail)
-      setReviewNote(detail.review_note ?? '')
-      setActionError(null)
-      setActionSuccessMessage(null)
-      setAccountActionReason(detail.reported_account_chat_access_restriction_reason ?? '')
-    } catch (error) {
-      setDetailError(error instanceof Error ? error.message : '举报详情加载失败。')
-      setReportDetail(null)
-    } finally {
-      setDetailLoading(false)
-    }
-  }
+      try {
+        const detail = await runWithAdminRetry(() => getReportDetail(reportId))
+        setReportDetail(detail)
+        setReviewNote(detail.review_note ?? '')
+        setActionError(null)
+        setActionSuccessMessage(null)
+        setAccountActionReason(detail.reported_account_chat_access_restriction_reason ?? '')
+      } catch (error) {
+        setDetailError(error instanceof Error ? error.message : '举报详情加载失败。')
+        setReportDetail(null)
+      } finally {
+        setDetailLoading(false)
+      }
+    },
+    [runWithAdminRetry]
+  )
 
   useEffect(() => {
     void loadReports(selectedReportId)
@@ -187,7 +196,7 @@ export const AdminReportsPage = () => {
 
   useEffect(() => {
     void loadRestrictedAccounts()
-  }, [])
+  }, [loadRestrictedAccounts])
 
   useEffect(() => {
     if (selectedReportId === null) {
@@ -196,7 +205,7 @@ export const AdminReportsPage = () => {
     }
 
     void loadReportDetail(selectedReportId)
-  }, [selectedReportId])
+  }, [loadReportDetail, selectedReportId])
 
   const selectedReportSummary = useMemo(
     () => reports.find((report) => report.id === selectedReportId) ?? null,

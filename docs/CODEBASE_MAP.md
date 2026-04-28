@@ -6,10 +6,20 @@
 
 - `DEVELOPMENT.md`
   本地启动、迁移、构建、lint 命令。
+- `Makefile`
+  统一开发命令入口。优先使用 `make install`、`make setup`、`make dev`、`make lint`、`make test`、`make build`。
 - `docs/CODEBASE_MAP.md`
   改动定位地图。
 - `AGENTS.md`
   仓库级规则和 AI 行为约束。
+- `README.md`
+  项目介绍和快速开始。
+- `CONTRIBUTING.md`
+  贡献流程。
+- `CHANGELOG.md`
+  版本变更记录。
+- `LICENSE`
+  非商业使用许可证。
 - `client/`
   React + Vite 前端。
 - `server-py/`
@@ -208,6 +218,8 @@
 
 - 前端运行时地址：`client/src/shared/config/runtime.ts`
 - 后端环境变量：`server-py/app/shared/config.py`
+- 环境变量示例：`.env.example`、`deploy/.env.production.example`
+- Docker 部署：`docker-compose.yml`、`docker-compose.deploy.yml`
 - 项目级命令说明：`DEVELOPMENT.md`
 
 ## 5. 当前建议工作流

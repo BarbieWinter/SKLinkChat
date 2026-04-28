@@ -2,7 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useQueryClient } from 'react-query'
 
 import { useAppStore } from '@/app/store'
-import { AuthSessionPayload, getAuthSession, logoutAccount, updateAccountSettings } from '@/features/auth/api/auth-client'
+import {
+  AuthSessionPayload,
+  getAuthSession,
+  logoutAccount,
+  updateAccountSettings
+} from '@/features/auth/api/auth-client'
 import { stackClientApp } from '@/features/auth/stack-client'
 import { clearStoredSessionId } from '@/features/chat/api/session-ownership'
 import { ONLINE_USER_COUNT_QUERY_KEY, wsPresenceTracker } from '@/features/presence/api/get-online-count'
@@ -113,7 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       },
       refreshSession
     }),
-    [applySession, authSession, clear, refreshSession, resetSession, saveSettings, setDisplayName, status]
+    [applySession, authSession, clear, queryClient, refreshSession, resetSession, saveSettings, setDisplayName, status]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

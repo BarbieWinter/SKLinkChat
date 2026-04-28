@@ -96,6 +96,7 @@ export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOpt
     }
 
     let cancelled = false
+    const pendingClaims = pendingClaimsRef.current
 
     const bootstrap = async () => {
       setStatus('bootstrapping')
@@ -107,7 +108,7 @@ export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOpt
             candidateSessionId: storedSessionId,
             channel,
             instanceId,
-            pendingClaims: pendingClaimsRef.current
+            pendingClaims
           })
 
           if (cancelled) {
@@ -143,9 +144,9 @@ export const useSessionBootstrap = ({ enabled, onError }: UseSessionBootstrapOpt
 
     return () => {
       cancelled = true
-      pendingClaimsRef.current.clear()
+      pendingClaims.clear()
     }
-  }, [attempt, channel, enabled, instanceId, onError])
+  }, [attempt, channel, enabled, instanceId, onError, sessionId])
 
   return {
     retry: () => {

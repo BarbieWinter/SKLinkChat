@@ -24,11 +24,11 @@ import { useAuth } from '@/features/auth/auth-provider'
 const SC = ['0', '1', '+', '-', '*', ':', '.', '/', '#', '?', '!', '~']
 
 const WORDS: { text: string; color: string }[] = [
-  { text: 'ANON CHAT',  color: '#f472b6' },
-  { text: 'PIXEL NET',  color: '#22c55e' },
-  { text: 'LIVE WIRE',  color: '#3b82f6' },
-  { text: 'SAFE ZONE',  color: '#a855f7' },
-  { text: 'OPEN WORLD', color: '#f59e0b' },
+  { text: 'ANON CHAT', color: '#f472b6' },
+  { text: 'PIXEL NET', color: '#22c55e' },
+  { text: 'LIVE WIRE', color: '#3b82f6' },
+  { text: 'SAFE ZONE', color: '#a855f7' },
+  { text: 'OPEN WORLD', color: '#f59e0b' }
 ]
 
 // ─── Seeded PRNG (LCG) ───────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ const WORDS: { text: string; color: string }[] = [
 function makePrng(seed: number) {
   let s = seed >>> 0
   return () => {
-    s = Math.imul(s, 1664525) + 1013904223 >>> 0
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0
     return s / 0x100000000
   }
 }
@@ -47,7 +47,7 @@ function makePrng(seed: number) {
 
 function useScatterCanvas(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
-  mouseRef: React.MutableRefObject<{ x: number; y: number }>,
+  mouseRef: React.MutableRefObject<{ x: number; y: number }>
 ) {
   useEffect(() => {
     const canvas = canvasRef.current
@@ -57,10 +57,12 @@ function useScatterCanvas(
 
     const SPACING = 18
     const CYAN: [number, number, number] = [34, 211, 238]
-    let W = 0, H = 0, cols = 0, rows = 0
+    let W = 0,
+      H = 0,
+      cols = 0,
+      rows = 0
     let cells: string[] = []
     let rafId = 0
-    let intervalId: ReturnType<typeof setInterval>
     let fontReady = false
 
     // One shared PRNG instance — seeded once, reused for both init and refresh
@@ -109,7 +111,7 @@ function useScatterCanvas(
 
           // Mouse glow
           const mDist = Math.hypot(x - mx, y - my)
-          const glow  = Math.max(0, 1 - mDist / 100)
+          const glow = Math.max(0, 1 - mDist / 100)
 
           const alpha = fade * 0.22 + glow * 0.6
           if (alpha < 0.012) continue
@@ -122,7 +124,9 @@ function useScatterCanvas(
     }
 
     // Wait for DepartureMono to be ready before rendering
-    document.fonts.load(`${SPACING * 0.62}px 'Departure Mono'`).then(() => { fontReady = true })
+    document.fonts.load(`${SPACING * 0.62}px 'Departure Mono'`).then(() => {
+      fontReady = true
+    })
 
     let active = true
     const observer = new IntersectionObserver(([e]) => {
@@ -134,7 +138,7 @@ function useScatterCanvas(
 
     resize()
     rafId = requestAnimationFrame(draw)
-    intervalId = setInterval(refreshCells, 150)
+    const intervalId = setInterval(refreshCells, 150)
     window.addEventListener('resize', resize)
 
     return () => {
@@ -150,7 +154,7 @@ function useScatterCanvas(
 
 function useDotWaveCanvas(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
-  mouseRef: React.MutableRefObject<{ x: number; y: number }>,
+  mouseRef: React.MutableRefObject<{ x: number; y: number }>
 ) {
   useEffect(() => {
     const canvas = canvasRef.current
@@ -159,7 +163,11 @@ function useDotWaveCanvas(
     if (!ctx) return
 
     const SP = 24
-    let W = 0, H = 0, t = 0, frame = 0, rafId = 0
+    let W = 0,
+      H = 0,
+      t = 0,
+      frame = 0,
+      rafId = 0
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
@@ -172,7 +180,7 @@ function useDotWaveCanvas(
 
     const draw = () => {
       rafId = requestAnimationFrame(draw)
-      if (++frame % 2) return  // 2-frame throttle
+      if (++frame % 2) return // 2-frame throttle
 
       t += 0.014
       ctx.clearRect(0, 0, W, H)
@@ -186,7 +194,7 @@ function useDotWaveCanvas(
           const y = r * SP + SP * 0.5
           const wave = Math.sin(x * 0.007 + t * 0.55) * Math.cos(y * 0.005 + t * 0.38)
           let radius = 0.4 + 0.9 * Math.abs(wave)
-          let alpha  = 0.03 + 0.14 * Math.abs(wave)
+          let alpha = 0.03 + 0.14 * Math.abs(wave)
 
           const mDist = Math.hypot(x - mx, y - my)
           if (mDist < 90) {
@@ -230,17 +238,17 @@ function useDotWaveCanvas(
 
 type ScrambleChar = { ch: string; settled: boolean }
 
-const SCRAMBLES  = 5    // random frames per character before settling
-const TICK_MS    = 38   // ms per scramble tick
-const STAGGER_MS = 32   // ms delay between adjacent characters
+const SCRAMBLES = 5 // random frames per character before settling
+const TICK_MS = 38 // ms per scramble tick
+const STAGGER_MS = 32 // ms delay between adjacent characters
 
 function useTextScramble() {
   const [chars, setChars] = useState<ScrambleChar[]>(() =>
-    WORDS[0]!.text.split('').map(ch => ({ ch, settled: true }))
+    WORDS[0]!.text.split('').map((ch) => ({ ch, settled: true }))
   )
   const [color, setColor] = useState(WORDS[0]!.color)
   const wordIdxRef = useRef(0)
-  const timersRef  = useRef<ReturnType<typeof setTimeout>[]>([])
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -250,13 +258,13 @@ function useTextScramble() {
       timersRef.current.forEach(clearTimeout)
       timersRef.current = []
 
-      const next   = (wordIdxRef.current + 1) % WORDS.length
+      const next = (wordIdxRef.current + 1) % WORDS.length
       wordIdxRef.current = next
       const target = WORDS[next]!
       setColor(target.color)
 
       if (reduced) {
-        setChars(target.text.split('').map(ch => ({ ch, settled: true })))
+        setChars(target.text.split('').map((ch) => ({ ch, settled: true })))
         return
       }
 
@@ -264,34 +272,39 @@ function useTextScramble() {
       const N = targetChars.length
 
       // Initialise all positions as scrambling
-      setChars(Array.from({ length: N }, () => ({
-        ch: SC[Math.floor(Math.random() * SC.length)]!,
-        settled: false,
-      })))
+      setChars(
+        Array.from({ length: N }, () => ({
+          ch: SC[Math.floor(Math.random() * SC.length)]!,
+          settled: false
+        }))
+      )
 
       // Each char independently schedules its own scramble sequence
       targetChars.forEach((targetCh, i) => {
         for (let s = 0; s <= SCRAMBLES; s++) {
-          const t = setTimeout(() => {
-            setChars(prev => {
-              const next = [...prev]
-              if (s === SCRAMBLES) {
-                next[i] = { ch: targetCh, settled: true }
-              } else {
-                next[i] = {
-                  ch: SC[Math.floor(Math.random() * SC.length)]!,
-                  settled: false,
+          const t = setTimeout(
+            () => {
+              setChars((prev) => {
+                const next = [...prev]
+                if (s === SCRAMBLES) {
+                  next[i] = { ch: targetCh, settled: true }
+                } else {
+                  next[i] = {
+                    ch: SC[Math.floor(Math.random() * SC.length)]!,
+                    settled: false
+                  }
                 }
-              }
-              return next
-            })
-          }, i * STAGGER_MS + s * TICK_MS)
+                return next
+              })
+            },
+            i * STAGGER_MS + s * TICK_MS
+          )
           timersRef.current.push(t)
         }
       })
     }
 
-    const first    = setTimeout(advance, 2500)
+    const first = setTimeout(advance, 2500)
     const interval = setInterval(advance, 4800)
     return () => {
       clearTimeout(first)
@@ -309,9 +322,9 @@ export default function RetroLandingPage() {
   const navigate = useNavigate()
   const { authSession } = useAuth()
 
-  const dotRef     = useRef<HTMLCanvasElement>(null)
+  const dotRef = useRef<HTMLCanvasElement>(null)
   const scatterRef = useRef<HTMLCanvasElement>(null)
-  const mouseRef   = useRef({ x: -999, y: -999 })
+  const mouseRef = useRef({ x: -999, y: -999 })
   const [scrolled, setScrolled] = useState(false)
 
   // Fixed props — never change on resize so the CanvAscii instance is never
@@ -321,13 +334,17 @@ export default function RetroLandingPage() {
     asciiFontSize: 7,
     textFontSize: 280,
     planeBaseHeight: 18,
-    enableWaves: false,
+    enableWaves: false
   }
 
   // Shared mouse tracker at window level → both canvases use pointer-events: none
   useEffect(() => {
-    const onMove  = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY } }
-    const onLeave = ()              => { mouseRef.current = { x: -999, y: -999 } }
+    const onMove = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX, y: e.clientY }
+    }
+    const onLeave = () => {
+      mouseRef.current = { x: -999, y: -999 }
+    }
     window.addEventListener('mousemove', onMove)
     document.documentElement.addEventListener('mouseleave', onLeave)
     return () => {
@@ -346,12 +363,10 @@ export default function RetroLandingPage() {
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
-
   return (
     <div className="lp-root">
-
       {/* ── Canvas: dot wave (bottom layer) ── */}
-      <canvas ref={dotRef}     className="lp-canvas" style={{ zIndex: 0 }} />
+      <canvas ref={dotRef} className="lp-canvas" style={{ zIndex: 0 }} />
       {/* ── Canvas: scatter chars (above dots) ── */}
       <canvas ref={scatterRef} className="lp-canvas" style={{ zIndex: 1 }} />
       {/* ── LightRays spotlight ── */}
@@ -387,7 +402,7 @@ export default function RetroLandingPage() {
         </div>
 
         <div className="lp-nav-links">
-          {(['Features', 'About', 'Connect'] as const).map(label => (
+          {(['Features', 'About', 'Connect'] as const).map((label) => (
             <a key={label} className="lp-nav-link" href={`#${label.toLowerCase()}`}>
               {label}
             </a>

@@ -28,17 +28,9 @@ const withSuspense = (node: ReactNode) => <Suspense fallback={<RouteFallback />}
 
 // /landing needs its own Providers wrapper (auth context) since it lives
 // outside the main Layout which already wraps Providers internally.
-const LandingWithProviders = () => (
-  <Providers>
-    {withSuspense(<RetroLandingPage />)}
-  </Providers>
-)
+const LandingWithProviders = () => <Providers>{withSuspense(<RetroLandingPage />)}</Providers>
 
-const StackAuthWithProviders = () => (
-  <Providers>
-    {withSuspense(<StackAuthPage />)}
-  </Providers>
-)
+const StackAuthWithProviders = () => <Providers>{withSuspense(<StackAuthPage />)}</Providers>
 
 const StackHandlerWithProviders = () => (
   <Providers>
