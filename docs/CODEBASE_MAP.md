@@ -18,6 +18,8 @@
   贡献流程。
 - `CHANGELOG.md`
   版本变更记录。
+- `SECURITY.md`
+  安全问题报告方式。
 - `LICENSE`
   非商业使用许可证。
 - `client/`
@@ -221,6 +223,7 @@
 - 环境变量示例：`.env.example`、`deploy/.env.production.example`
 - Docker 部署：`docker-compose.yml`、`docker-compose.deploy.yml`
 - 项目级命令说明：`DEVELOPMENT.md`
+- 外部说明文档：`docs/ARCHITECTURE.md`、`docs/ROADMAP.md`、`docs/SCREENSHOTS.md`
 
 ## 5. 当前建议工作流
 

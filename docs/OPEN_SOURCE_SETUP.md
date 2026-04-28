@@ -75,7 +75,6 @@ cp .env.example .env
 
 - `VITE_ENDPOINT`
 - `VITE_WS_ENDPOINT`
-- `VITE_AUTH_MODE`
 - `VITE_STACK_PROJECT_ID`
 - `VITE_STACK_PUBLISHABLE_CLIENT_KEY`
 
@@ -83,9 +82,6 @@ cp .env.example .env
 
 - `SERVER_PY_DATABASE_URL`
 - `SERVER_PY_REDIS_URL`
-- `SERVER_PY_EMAIL_PROVIDER`
-- `SERVER_PY_EMAIL_FROM`
-- `SERVER_PY_RESEND_API_KEY`
 - `SERVER_PY_APP_BASE_URL`
 - `SERVER_PY_STACK_AUTH_ENABLED`
 - `SERVER_PY_STACK_PROJECT_ID`
@@ -151,7 +147,7 @@ docker compose up --build
 注意：
 
 - 根目录 `.env` 需要提前准备好
-- Resend 和 Stack Auth 相关变量不能留空
+- Stack Auth 相关变量不能留空
 
 ## 6. 常见访问地址
 
@@ -244,7 +240,6 @@ mkdir -p database
 同时不要提交这些内容：
 
 - 真实 `.env`
-- 真实 Resend key
 - 真实 Stack secret key
 - 本地数据库数据
 - 本地构建产物

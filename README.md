@@ -1,5 +1,15 @@
 # SKLinkChat
 
+[![CI](https://github.com/BarbieWinter/SKLinkChat/actions/workflows/ci.yml/badge.svg)](https://github.com/BarbieWinter/SKLinkChat/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-non--commercial-red)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![React](https://img.shields.io/badge/react-18-61dafb)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.116%2B-009688)
+![Docker](https://img.shields.io/badge/docker-compose-2496ed)
+![Non Commercial](https://img.shields.io/badge/use-non--commercial_only-red)
+
+![SKLinkChat preview](image/ch.png)
+
 SKLinkChat 是一个匿名随机聊天项目，包含前端、后端、管理后台，以及基于 Stack Auth 的登录链路。
 
 本项目仅允许非商业使用。禁止将本项目或其修改版本用于销售、付费托管、商业项目交付、广告变现、订阅服务或其他营利场景。详细条款见 [LICENSE](LICENSE)。
@@ -27,6 +37,20 @@ SKLinkChat 是一个匿名随机聊天项目，包含前端、后端、管理后
   贡献流程和提交规范
 - `CHANGELOG.md`
   版本变更记录
+
+## 架构概览
+
+```mermaid
+flowchart TD
+    client["React + Vite Client"] --> api["FastAPI Backend"]
+    client --> ws["WebSocket Chat"]
+    api --> postgres["PostgreSQL"]
+    api --> redis["Redis"]
+    api --> stack["Stack Auth"]
+    ws --> redis
+```
+
+更完整的说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ## 运行环境
 
@@ -70,7 +94,6 @@ cp .env.example .env
 
 - `VITE_STACK_PROJECT_ID`
 - `VITE_STACK_PUBLISHABLE_CLIENT_KEY`
-- `SERVER_PY_RESEND_API_KEY`
 - `SERVER_PY_STACK_PROJECT_ID`
 - `SERVER_PY_STACK_SECRET_SERVER_KEY`
 
@@ -135,10 +158,7 @@ docker compose up --build
 - FastAPI: `8000`
 - 前端预览: `4173`
 
-注意：
-
-- Docker Compose 启动前，请先准备好根目录 `.env`
-- `SERVER_PY_RESEND_API_KEY` 不能为空，否则后端容器不会正常启动
+注意：Docker Compose 启动前，请先准备好根目录 `.env`，并填写 Stack Auth 相关变量。
 
 ## 管理员权限
 
@@ -207,6 +227,10 @@ python -m compileall app
 更完整的安装、启动、环境变量、数据库说明，请看：
 
 - [docs/OPEN_SOURCE_SETUP.md](docs/OPEN_SOURCE_SETUP.md)
+- [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md)
 - [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
 - [CHANGELOG.md](CHANGELOG.md)
