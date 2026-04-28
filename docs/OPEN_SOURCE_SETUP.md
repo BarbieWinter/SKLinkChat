@@ -1,8 +1,10 @@
-# 开源使用手册
+# Open Source Setup / 开源使用手册
 
 这份文档面向第一次接触 SKLinkChat 的开发者，重点说明怎么启动、怎么配置、怎么理解项目结构，以及怎么重新导出数据库结构。
 
-本项目源码公开，但只允许非商业使用。禁止将本项目或其修改版本用于销售、付费托管、商业项目交付、广告变现、订阅服务或其他营利场景。详细条款见 `LICENSE`。
+SKLinkChat is released under the MIT License. You can use, modify, and distribute it under the terms in `LICENSE`.
+
+SKLinkChat 按 MIT License 发布。你可以在 `LICENSE` 条款下使用、修改和分发本项目。
 
 ## 1. 项目简介
 
@@ -32,7 +34,7 @@ SKLinkChat 是一个匿名随机聊天项目，当前仓库包含：
 - `DEVELOPMENT.md`
   偏开发过程的命令记录
 - `LICENSE`
-  非商业使用许可证
+  MIT 开源许可证
 - `CONTRIBUTING.md`
   贡献说明
 - `CHANGELOG.md`

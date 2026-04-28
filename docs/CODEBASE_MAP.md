@@ -21,7 +21,7 @@
 - `SECURITY.md`
   安全问题报告方式。
 - `LICENSE`
-  非商业使用许可证。
+  MIT 开源许可证。
 - `client/`
   React + Vite 前端。
 - `server-py/`

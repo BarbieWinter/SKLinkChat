@@ -1,4 +1,6 @@
-# Roadmap
+# Roadmap / 路线图
+
+This roadmap describes the public direction of SKLinkChat. Priorities may change based on real user feedback.
 
 这份路线图描述 SKLinkChat 的公开版本方向。优先级会随着真实使用反馈调整。
 
@@ -14,7 +16,7 @@
 - 管理后台举报审核
 - 管理后台审计日志
 - Docker Compose 本地启动
-- 非商业使用许可证
+- MIT License
 - 开源贡献、安全和变更文档
 
 ## 正在做
