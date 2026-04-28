@@ -56,6 +56,6 @@ Admin access is controlled by the database. The admin console calls backend APIs
 
 ## Deployment / 部署形态
 
-For local demos, Docker Compose starts PostgreSQL, Redis, the backend, and the frontend together. In production, use Nginx or Caddy as a reverse proxy and expose the frontend, HTTP API, and WebSocket endpoint under the same domain.
+For local previews, Docker Compose starts PostgreSQL, Redis, the backend, and the frontend together. In production, use Nginx or Caddy as a reverse proxy and expose the frontend, HTTP API, and WebSocket endpoint under the same domain.
 
 本地推荐使用 Docker Compose 启动 PostgreSQL、Redis、后端和前端。生产环境可以使用 Nginx 或 Caddy 做反向代理，并把前端、HTTP API 和 WebSocket 暴露到同一域名下。

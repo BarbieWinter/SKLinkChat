@@ -4,13 +4,17 @@ This page collects SKLinkChat previews so first-time visitors can understand the
 
 这页集中展示 SKLinkChat 的界面预览，方便第一次打开仓库的人快速理解项目形态。
 
-[English](#english-preview) · [中文](#中文预览)
+[English](#screenshots-en) · [中文](#screenshots-zh)
+
+<a id="screenshots-en"></a>
 
 ## English Preview
 
 ![SKLinkChat English preview](../image/English.png)
 
 This image is designed for international visitors. It shows the landing page, auth entry, chat workspace, reporting flow, and admin audit console in one visual.
+
+<a id="screenshots-zh"></a>
 
 ## 中文预览
 

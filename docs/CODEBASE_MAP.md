@@ -10,6 +10,8 @@
   统一开发命令入口。优先使用 `make install`、`make setup`、`make dev`、`make lint`、`make test`、`make build`。
 - `docs/CODEBASE_MAP.md`
   改动定位地图。
+- `docs/DEPLOYMENT.md`
+  本地演示、环境变量和生产部署说明。
 - `AGENTS.md`
   仓库级规则和 AI 行为约束。
 - `README.md`
@@ -223,7 +225,7 @@
 - 环境变量示例：`.env.example`、`deploy/.env.production.example`
 - Docker 部署：`docker-compose.yml`、`docker-compose.deploy.yml`
 - 项目级命令说明：`DEVELOPMENT.md`
-- 外部说明文档：`docs/ARCHITECTURE.md`、`docs/ROADMAP.md`、`docs/SCREENSHOTS.md`
+- 外部说明文档：`docs/DEPLOYMENT.md`、`docs/ARCHITECTURE.md`、`docs/ROADMAP.md`、`docs/SCREENSHOTS.md`
 
 ## 5. 当前建议工作流
 

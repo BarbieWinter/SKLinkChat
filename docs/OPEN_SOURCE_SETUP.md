@@ -2,6 +2,8 @@
 
 这份文档面向第一次接触 SKLinkChat 的开发者，重点说明怎么启动、怎么配置、怎么理解项目结构，以及怎么重新导出数据库结构。
 
+运行、部署和环境变量配置请优先查看 [docs/DEPLOYMENT.md](DEPLOYMENT.md)。本文保留开源交付、仓库结构和数据库导出说明。
+
 SKLinkChat is released under the MIT License. You can use, modify, and distribute it under the terms in `LICENSE`.
 
 SKLinkChat 按 MIT License 发布。你可以在 `LICENSE` 条款下使用、修改和分发本项目。
