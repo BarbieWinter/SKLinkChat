@@ -4,6 +4,8 @@ This page collects SKLinkChat previews so first-time visitors can understand the
 
 这页集中展示 SKLinkChat 的界面预览，方便第一次打开仓库的人快速理解项目形态。
 
+[English](#english-preview) · [中文](#中文预览)
+
 ## English Preview
 
 ![SKLinkChat English preview](../image/English.png)

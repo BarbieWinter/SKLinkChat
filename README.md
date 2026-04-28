@@ -1,10 +1,6 @@
 # SKLinkChat
 
 <p align="center">
-  <img src="image/English.png" alt="SKLinkChat English preview" width="920">
-</p>
-
-<p align="center">
   <strong>Anonymous real-time chat with moderation, audit trails, Stack Auth, PostgreSQL, Redis, FastAPI, and React.</strong>
 </p>
 
@@ -33,6 +29,12 @@
 SKLinkChat is a full-stack anonymous chat system for real-time matching, private conversation, reporting, moderation, and admin audit workflows. It is built for developers who want a complete reference project instead of a single chat page.
 
 If this project helps you, please give it a star. Stars help more developers discover the project.
+
+## Preview
+
+<p align="center">
+  <img src="image/English.png" alt="SKLinkChat English preview" width="920">
+</p>
 
 ## Why It Stands Out
 
@@ -71,12 +73,6 @@ make dev
 ```
 
 `make install` creates the root `.env` file from `.env.example` when needed and installs both backend and frontend dependencies.
-
-## Preview
-
-<p align="center">
-  <img src="image/China.png" alt="SKLinkChat Chinese preview" width="920">
-</p>
 
 More screenshots are collected in [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
 
@@ -176,6 +172,12 @@ SKLinkChat is released under the [MIT License](LICENSE).
 SKLinkChat 是一套完整的匿名实时聊天系统，包含随机匹配、私密聊天、举报、审核、审计、登录和本地部署能力。它不是单页聊天 Demo，而是一个可以作为全栈参考项目阅读、运行和继续扩展的开源工程。
 
 如果这个项目对你有帮助，欢迎给一个 star。star 会帮助更多开发者发现这个项目。
+
+## 中文预览
+
+<p align="center">
+  <img src="image/China.png" alt="SKLinkChat 中文预览" width="920">
+</p>
 
 ## 项目亮点
 
