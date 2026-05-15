@@ -1,7 +1,7 @@
 # SKLinkChat
 
 <p align="center">
-  <strong>Anonymous real-time chat system with moderation, audit trails, Stack Auth, FastAPI, React, PostgreSQL, Redis, and Docker.</strong>
+  <strong>Anonymous real-time chat with Stack Auth, FastAPI, React, PostgreSQL, Redis, moderation, and audit trails.</strong>
 </p>
 
 <p align="center">
@@ -17,26 +17,38 @@
 
 <p align="center">
   <a href="#english">English</a> ·
-  <a href="#zh-cn">中文</a> ·
-  <a href="#local-preview">Local Preview</a> ·
-  <a href="docs/DEPLOYMENT.md">Deployment</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="docs/ROADMAP.md">Roadmap</a>
+  <a href="#中文">中文</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="docs/getting-started/quick-start.md">Quick Start</a> ·
+  <a href="docs/architecture/overview.md">Architecture</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 <a id="english"></a>
 
 ## English
 
-SKLinkChat is a full-stack anonymous chat project for real-time matching, private conversation, reporting, moderation, and admin audit workflows. It is useful as a practical reference for building a real-time community product, not just a single chat screen.
+SKLinkChat is a full-stack anonymous chat project for real-time matching, private conversation, reporting, moderation, and admin audit workflows. It is designed as a practical reference for building real-time community products, not only a single chat screen.
 
 <p align="center">
   <img src="image/English.png" alt="SKLinkChat English preview" width="920">
 </p>
 
-**Why this project exists:** anonymous chat products are easy to prototype but hard to operate responsibly. SKLinkChat keeps the fun real-time interaction, while adding login, reports, account restrictions, audit logs, and a maintainable backend boundary.
+## Why It Exists
 
-Quick start:
+Anonymous chat products are easy to prototype but hard to operate responsibly. SKLinkChat keeps the real-time interaction loop while adding login, reports, account restrictions, audit logs, and a maintainable frontend/backend boundary.
+
+## Features
+
+- Anonymous real-time chat over WebSocket.
+- Stack Auth login synchronized into local sessions.
+- PostgreSQL persistence for accounts, chat sessions, reports, restrictions, and audit logs.
+- Redis-backed presence, matching state, and realtime coordination.
+- Admin console for report review, account restriction, account recovery, and audit search.
+- Docker Compose local preview with PostgreSQL, Redis, backend, and frontend.
+- Open-source community files: MIT license, CI, issue templates, PR template, contributing guide, and security policy.
+
+## Quick Start
 
 ```bash
 git clone https://github.com/BarbieWinter/SKLinkChat.git
@@ -45,17 +57,16 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:4173`.
+Open:
 
-More English details:
+- Frontend preview: `http://localhost:4173`
+- API health check: `http://localhost:8000/healthz`
+- Admin reports: `http://localhost:4173/admin/reports`
+- Admin audit: `http://localhost:4173/admin/audit`
 
-- [Deployment guide](docs/DEPLOYMENT.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
+More setup details: [Quick Start](docs/getting-started/quick-start.md), [Development](docs/development/development.md), [Deployment](docs/deployment/deployment.md).
 
-<a id="zh-cn"></a>
+<a id="中文"></a>
 
 ## 中文
 
@@ -67,17 +78,6 @@ SKLinkChat 是一套匿名实时聊天全栈项目，覆盖随机匹配、私密
   <img src="image/China.png" alt="SKLinkChat 中文预览" width="920">
 </p>
 
-## 为什么做这个项目
-
-匿名聊天的核心难点不只是“把消息发出去”，还包括：
-
-- 如何处理登录态和匿名身份之间的边界。
-- 如何让实时匹配、在线状态和 WebSocket 连接保持清晰。
-- 如何给举报、封禁、恢复和审计留下后台治理入口。
-- 如何让新开发者用 Docker 或本地命令快速跑起来。
-
-SKLinkChat 把这些能力放在同一个仓库里，适合作为实时聊天、社区治理、FastAPI 后端和 React 前端组合项目的参考。
-
 ## 项目亮点
 
 - 匿名实时聊天：基于 WebSocket 的会话消息链路。
@@ -88,11 +88,7 @@ SKLinkChat 把这些能力放在同一个仓库里，适合作为实时聊天、
 - 一键本地演示：Docker Compose 拉起 PostgreSQL、Redis、后端和前端。
 - 开源友好：MIT License、CI、Issue 模板、PR 模板、贡献指南和安全说明。
 
-<a id="local-preview"></a>
-
-## 本地演示
-
-最快方式：
+## 本地预览
 
 ```bash
 git clone https://github.com/BarbieWinter/SKLinkChat.git
@@ -101,86 +97,39 @@ cp .env.example .env
 docker compose up --build
 ```
 
-打开：
+访问：
 
 - 前端预览：`http://localhost:4173`
 - API 健康检查：`http://localhost:8000/healthz`
-- Stack Auth 路由：`http://localhost:4173/auth/stack`
 - 管理后台举报页：`http://localhost:4173/admin/reports`
 - 管理后台审计页：`http://localhost:4173/admin/audit`
 
-> 当前没有公开托管演示站。本节是本地演示入口，避免新用户误以为存在在线演示站。
+完整启动、开发和部署说明见：[快速开始](docs/getting-started/quick-start.md)、[开发指南](docs/development/development.md)、[部署指南](docs/deployment/deployment.md)。
 
-## 开发启动
+## Tech Stack / 技术栈
 
-```bash
-make install
-make dev
-```
-
-`make install` 会在需要时从 `.env.example` 创建根目录 `.env`，并安装后端与前端依赖。
-
-常用命令：
-
-```bash
-make lint
-make test
-make build
-make clean
-```
-
-完整部署和配置说明集中在 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
-
-## 技术栈
-
-| 层级 | 技术 |
+| Layer / 层级 | Technology / 技术 |
 | --- | --- |
-| 前端 | React 18, Vite, TypeScript, Zustand |
-| 后端 | FastAPI, SQLAlchemy, Alembic, WebSocket |
-| 数据库 | PostgreSQL 16 |
-| 实时状态 | Redis 7 |
-| 认证 | Stack Auth |
-| 工程化 | Docker Compose, GitHub Actions |
+| Frontend / 前端 | React 18, Vite, TypeScript, Zustand |
+| Backend / 后端 | FastAPI, SQLAlchemy, Alembic, WebSocket |
+| Database / 数据库 | PostgreSQL 16 |
+| Realtime / 实时状态 | Redis 7 |
+| Auth / 认证 | Stack Auth |
+| Tooling / 工程化 | Docker Compose, GitHub Actions |
 
-## 架构概览
+## Documentation / 文档
 
-```mermaid
-flowchart TD
-    browser["Browser"] --> client["React + Vite"]
-    client --> http["FastAPI HTTP API"]
-    client --> ws["FastAPI WebSocket"]
-    http --> postgres["PostgreSQL"]
-    http --> redis["Redis"]
-    ws --> redis
-    http --> stack["Stack Auth"]
-    admin["Admin Console"] --> http
-```
-
-更完整的说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
-## 管理员权限
-
-管理员权限由数据库中的 `accounts.is_admin` 字段控制。
-
-```sql
-UPDATE accounts
-SET is_admin = true
-WHERE email_normalized = 'admin@example.com';
-```
-
-更新后重新请求 `/api/auth/session`，前端会拿到新的管理员状态。
-
-## 文档导航
-
-- [部署与配置](docs/DEPLOYMENT.md)
-- [截图展示](docs/SCREENSHOTS.md)
-- [路线图](docs/ROADMAP.md)
-- [架构说明](docs/ARCHITECTURE.md)
-- [代码地图](docs/CODEBASE_MAP.md)
-- [开发命令](DEVELOPMENT.md)
-- [贡献指南](CONTRIBUTING.md)
-- [安全说明](SECURITY.md)
-- [变更日志](CHANGELOG.md)
+- [Documentation Hub / 文档中心](docs/README.md)
+- [Quick Start / 快速开始](docs/getting-started/quick-start.md)
+- [Development / 开发指南](docs/development/development.md)
+- [Deployment / 部署指南](docs/deployment/deployment.md)
+- [Architecture / 架构说明](docs/architecture/overview.md)
+- [Codebase Map / 代码地图](docs/architecture/codebase-map.md)
+- [Screenshots / 截图展示](docs/product/screenshots.md)
+- [Roadmap / 路线图](docs/product/roadmap.md)
+- [Contributing / 贡献指南](CONTRIBUTING.md)
+- [Security / 安全说明](SECURITY.md)
+- [Changelog / 变更日志](CHANGELOG.md)
 
 ## License
 

@@ -161,7 +161,7 @@ transition: all 0.1s;
 |------|--------|
 | `client/src/pages/retro-landing-page.tsx` | Full rewrite |
 | `client/src/assets/global.css` | Append landing-page-specific utility classes (no existing styles touched) |
-| `docs/LANDING_PAGE_PLAN.md` | This document |
+| `docs/maintenance/landing-page-plan.md` | This document |
 
 **Zero new dependencies.** Uses only: React, framer-motion (already installed), react-router-dom.
 

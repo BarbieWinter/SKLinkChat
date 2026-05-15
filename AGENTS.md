@@ -10,11 +10,11 @@ This repository is currently a clean workspace with no committed source tree yet
 Group code by feature or domain instead of dumping unrelated files at the root. Example: `src/chat/`, `src/auth/`, `docs/api/`.
 
 ## AI Navigation
-Before making changes, read `docs/CODEBASE_MAP.md`.
+Before making changes, read `docs/architecture/codebase-map.md`.
 Use it as the primary locator for entry points, feature ownership, and "change X -> edit Y" mappings.
 
 ## Build, Test, and Development Commands
-Document active commands in `DEVELOPMENT.md`. Do not spread command references across extra markdown files.
+Document active commands in `docs/development/development.md`. Keep the root `Makefile` as the command source of truth.
 
 Expected baseline:
 

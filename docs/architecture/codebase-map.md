@@ -4,13 +4,13 @@
 
 ## 1. 根目录入口
 
-- `DEVELOPMENT.md`
+- `docs/development/development.md`
   本地启动、迁移、构建、lint 命令。
 - `Makefile`
   统一开发命令入口。优先使用 `make install`、`make setup`、`make dev`、`make lint`、`make test`、`make build`。
-- `docs/CODEBASE_MAP.md`
+- `docs/architecture/codebase-map.md`
   改动定位地图。
-- `docs/DEPLOYMENT.md`
+- `docs/deployment/deployment.md`
   本地演示、环境变量和生产部署说明。
 - `AGENTS.md`
   仓库级规则和 AI 行为约束。
@@ -224,12 +224,12 @@
 - 后端环境变量：`server-py/app/shared/config.py`
 - 环境变量示例：`.env.example`、`deploy/.env.production.example`
 - Docker 部署：`docker-compose.yml`、`docker-compose.deploy.yml`
-- 项目级命令说明：`DEVELOPMENT.md`
-- 外部说明文档：`docs/DEPLOYMENT.md`、`docs/ARCHITECTURE.md`、`docs/ROADMAP.md`、`docs/SCREENSHOTS.md`
+- 项目级命令说明：`docs/development/development.md`
+- 外部说明文档：`docs/deployment/deployment.md`、`docs/architecture/overview.md`、`docs/product/roadmap.md`、`docs/product/screenshots.md`
 
 ## 5. 当前建议工作流
 
-1. 先看 `docs/CODEBASE_MAP.md` 确认入口文件。
+1. 先看 `docs/architecture/codebase-map.md` 确认入口文件。
 2. 再打开对应 feature 下的 UI、hook、api、route。
 3. 前端改动完成后至少执行 `cd client && npm run build`。
 4. 后端改动完成后至少执行 `cd server-py && ./.venv/bin/ruff check app`。

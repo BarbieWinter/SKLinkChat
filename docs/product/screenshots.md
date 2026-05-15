@@ -10,7 +10,7 @@ This page collects SKLinkChat previews so first-time visitors can understand the
 
 ## English Preview
 
-![SKLinkChat English preview](../image/English.png)
+![SKLinkChat English preview](../../image/English.png)
 
 This image is designed for international visitors. It shows the landing page, auth entry, chat workspace, reporting flow, and admin audit console in one visual.
 
@@ -18,7 +18,7 @@ This image is designed for international visitors. It shows the landing page, au
 
 ## 中文预览
 
-![SKLinkChat 中文预览](../image/China.png)
+![SKLinkChat 中文预览](../../image/China.png)
 
 这张图展示了项目的主要产品面：落地页、登录入口、实时聊天窗口、用户工作区、举报弹窗和管理后台审计视图。它适合放在 README 顶部，用来快速说明 SKLinkChat 不是单一聊天页面，而是一套包含认证、实时通信和后台治理的完整系统。
 

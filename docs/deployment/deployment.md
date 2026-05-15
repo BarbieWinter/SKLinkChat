@@ -1,10 +1,10 @@
-# Deployment / 部署与配置
+# Deployment Guide / 部署与配置
 
-This document is the single place for running and deploying SKLinkChat.
+This document is the single place for SKLinkChat runtime configuration, Docker behavior, and production deployment notes.
 
-这份文档集中说明 SKLinkChat 的本地演示、开发启动、环境变量和生产部署建议。
+这份文档集中说明 SKLinkChat 的运行配置、Docker 行为和生产部署建议。
 
-## 1. Local Preview / 本地演示
+## Local Preview / 本地演示
 
 Use Docker Compose when you want the fastest complete preview.
 
@@ -33,7 +33,9 @@ Default service ports:
 - FastAPI: `8000`
 - Frontend preview: `4173`
 
-## 2. Development / 开发启动
+For a shorter first-run guide, see [Quick Start](../getting-started/quick-start.md).
+
+## Development Startup / 开发启动
 
 Use split frontend/backend startup when you need hot reload and easier debugging.
 
@@ -41,7 +43,6 @@ Use split frontend/backend startup when you need hot reload and easier debugging
 
 ```bash
 make install
-make dev
 ```
 
 Backend only:
@@ -71,9 +72,13 @@ Development URLs:
 - API: `http://localhost:8000`
 - Health check: `http://localhost:8000/healthz`
 
-## 3. Environment Variables / 环境变量
+For full development commands, see [Development Guide](../development/development.md).
+
+## Environment Variables / 环境变量
 
 Start from the template:
+
+从模板开始：
 
 ```bash
 cp .env.example .env
@@ -96,13 +101,20 @@ Backend variables:
 - `SERVER_PY_STACK_SECRET_SERVER_KEY`
 - `SERVER_PY_STACK_API_BASE_URL`
 
+Production templates:
+
+- [Production env example](../../deploy/.env.production.example)
+- [Nginx reverse proxy example](../../deploy/nginx/sklinkchat.conf)
+
 Never commit real `.env` files, API keys, database passwords, private keys, or user data.
 
 不要提交真实 `.env`、API key、数据库密码、私钥或用户数据。
 
-## 4. Database / 数据库
+## Database / 数据库
 
 Run migrations before using a fresh database:
+
+使用新数据库前先执行迁移：
 
 ```bash
 cd server-py
@@ -116,9 +128,13 @@ The repository includes a schema-only reference:
 
 It contains table definitions, indexes, and constraints, but no business data.
 
-## 5. Admin Access / 管理员权限
+该文件只包含表结构、索引和约束，不包含业务数据。
+
+## Admin Access / 管理员权限
 
 Admin access is controlled by `accounts.is_admin`.
+
+管理员权限由 `accounts.is_admin` 控制。
 
 ```sql
 UPDATE accounts
@@ -128,7 +144,9 @@ WHERE email_normalized = 'admin@example.com';
 
 After updating the database, request `/api/auth/session` again so the frontend can receive the new admin state.
 
-## 6. Production Notes / 生产部署建议
+更新后重新请求 `/api/auth/session`，前端会拿到新的管理员状态。
+
+## Production Shape / 生产部署形态
 
 Recommended production shape:
 
@@ -139,16 +157,27 @@ Recommended production shape:
 - Use Nginx or Caddy as the reverse proxy.
 - Keep Stack Auth server keys only on the backend.
 
-Reverse proxy checklist:
+推荐生产形态：
+
+- React 前端构建后通过 HTTPS 对外提供。
+- FastAPI 通过进程管理器或容器平台运行。
+- PostgreSQL 和 Redis 优先使用托管服务。
+- 前端、HTTP API 和 WebSocket 入口尽量放在同一公开域名下。
+- 使用 Nginx 或 Caddy 作为反向代理。
+- Stack Auth server key 只保存在后端。
+
+## Reverse Proxy Checklist / 反向代理检查
 
 - Forward WebSocket upgrade headers.
 - Preserve `Host` and forwarded protocol headers.
 - Set TLS before exposing the service publicly.
 - Keep `SERVER_PY_APP_BASE_URL`, `VITE_ENDPOINT`, and `VITE_WS_ENDPOINT` aligned with the public domain.
 
-## 7. Verification / 验证
+## Verification / 验证
 
 Before publishing changes, run:
+
+发布前建议执行：
 
 ```bash
 make lint

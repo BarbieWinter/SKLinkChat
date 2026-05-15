@@ -133,4 +133,3 @@ Documentation verification should include:
 - changing Docker, Python, or frontend behavior
 - creating a hosted demo site
 - splitting the repository into English and Chinese documentation trees
-

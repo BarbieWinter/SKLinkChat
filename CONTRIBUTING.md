@@ -6,8 +6,8 @@
 
 ## 开始前
 
-1. 阅读 [README.md](README.md)、[DEVELOPMENT.md](DEVELOPMENT.md) 和 [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md)。
-2. 按 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) 准备 `.env` 和本地服务。
+1. 阅读 [README.md](README.md)、[文档中心](docs/README.md) 和 [代码地图](docs/architecture/codebase-map.md)。
+2. 按 [快速开始](docs/getting-started/quick-start.md) 或 [部署指南](docs/deployment/deployment.md) 准备 `.env` 和本地服务。
 3. 执行 `make install` 创建 `.env` 并安装前后端依赖。
 4. 提交前执行 `make lint`、`make test`，前端相关改动还需要执行 `make build`。
 
@@ -21,7 +21,7 @@
 
 - 优先沿用现有目录结构和命名方式。
 - 前端改动先看 `client/src/features/`，后端改动先看 `server-py/app/`。
-- 涉及运行、部署和环境变量的说明统一写入 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+- 涉及运行、部署和环境变量的说明统一写入 [docs/deployment/deployment.md](docs/deployment/deployment.md)。
 - 涉及用户可见行为的改动，请在 PR 中说明验证方式。
 
 ## Pull Request
